@@ -1,0 +1,19 @@
+# Executables
+*.exe
+*.exe font
+*.dll
+*.so
+*.dylib
+bin/
+
+# Environment variables
+.env
+
+# IDE / Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go test / coverage
+*.out
