@@ -76,10 +76,7 @@ func main() {
 	// Sağlık Kontrolü
 	v1Router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte("OK"))
-		if err != nil {
-			return
-		}
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	// Kullanıcı Rotaları
@@ -112,9 +109,8 @@ func main() {
 	if err != nil {
 		slog.Error("Server kapatılırken hata oluştu", "error", err)
 	}
-	err = conn.Close()
-	if err != nil {
-		return
+	if err := conn.Close(); err != nil {
+		slog.Error("Veritabanı kapatılırken hata oluştu", "error", err)
 	}
 	slog.Info("Server başarıyla kapatıldı")
 }
