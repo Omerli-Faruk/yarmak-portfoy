@@ -19,10 +19,7 @@ func HashPassword(password string) (string, error) {
 
 func CheckPasswordHash(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	if err == nil {
-		return true
-	}
-	return false
+	return err == nil
 }
 
 func MakeJWT(userID int64, tokenSecret string, expiresIn time.Duration) (string, error) {

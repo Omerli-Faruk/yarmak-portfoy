@@ -15,5 +15,9 @@ bin/
 *.swp
 *.swo
 
+# HTTP test files & logs
+*.http
+*.log
+
 # Go test / coverage
 *.out
