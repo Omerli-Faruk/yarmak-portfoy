@@ -20,9 +20,7 @@ jobs:
           cache: true
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.60.3
+        run: go run github.com/golangci/golangci-lint/cmd/golangci-lint@latest run ./...
 
       - name: Build Go binary
         run: go build -v ./...
