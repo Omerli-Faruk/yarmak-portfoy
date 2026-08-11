@@ -20,6 +20,10 @@ func (cfg *ApiConfig) HandlerCreateAsset(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
 		return
 	}
+	if params.Symbol == "" || params.Name == "" || params.AssetType == "" {
+		respondWithError(w, http.StatusBadRequest, "Lütfen tüm alanları doldurun", nil)
+		return
+	}
 	asset, err := cfg.DB.CreateAsset(r.Context(), database.CreateAssetParams{
 		Symbol:       params.Symbol,
 		Name:         params.Name,
@@ -36,7 +40,7 @@ func (cfg *ApiConfig) HandlerCreateAsset(w http.ResponseWriter, r *http.Request)
 func (cfg *ApiConfig) HandlerListAssets(w http.ResponseWriter, r *http.Request) {
 	asset, err := cfg.DB.ListAssets(r.Context())
 	if err != nil {
-		respondWithError(w, http.StatusNotFound, "Asset bulunamadı", err)
+		respondWithError(w, http.StatusInternalServerError, "Varlıklar listelenirken hata oluştu", err)
 		return
 	}
 	respondWithJSON(w, http.StatusOK, asset)

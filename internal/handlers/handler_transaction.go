@@ -22,6 +22,10 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
 		return
 	}
+	if params.Type != "BUY" && params.Type != "SELL" {
+		respondWithError(w, http.StatusBadRequest, "İşlem tipi 'BUY' veya 'SELL' olmalıdır", nil)
+		return
+	}
 	userID, ok := r.Context().Value(UserIDKey).(int64)
 	if !ok {
 		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)

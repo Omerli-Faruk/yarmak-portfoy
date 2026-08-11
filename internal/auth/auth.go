@@ -39,7 +39,12 @@ func MakeJWT(userID int64, tokenSecret string, expiresIn time.Duration) (string,
 
 func ValidateJWT(tokenString, tokenSecret string) (int64, error) {
 	claims := &jwt.RegisteredClaims{}
-	_, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) { return []byte(tokenSecret), nil })
+	_, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("beklenmeyen imzalama yöntemi")
+		}
+		return []byte(tokenSecret), nil
+	})
 	if err != nil {
 		return 0, fmt.Errorf("token doğrulanırken hata oluştu: %w", err)
 	}
