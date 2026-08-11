@@ -84,6 +84,14 @@ func main() {
 	v1Router.Post("/login", apiCFG.HandlerLogin)
 	v1Router.Get("/me", apiCFG.MiddleWareAuth(apiCFG.HandlerGetMe))
 
+	// Asset (Hisse/Fon) Rotaları
+	v1Router.Post("/assets", apiCFG.HandlerCreateAsset)
+	v1Router.Get("/assets", apiCFG.HandlerListAssets)
+	
+	// İşlem ve Portföy Rotaları (JWT Korumalı!)
+	v1Router.Post("/transactions", apiCFG.MiddleWareAuth(apiCFG.HandlerCreateTransaction))
+	v1Router.Get("/portfolio/holdings", apiCFG.MiddleWareAuth(apiCFG.HandlerGetUserHoldings))
+
 	// Alt router'ı ana router'a bağla
 	r.Mount("/v1", v1Router)
 
