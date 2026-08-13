@@ -5,6 +5,7 @@
 package database
 
 import (
+	"database/sql"
 	"time"
 )
 
@@ -33,6 +34,7 @@ type Transaction struct {
 	Price           string
 	TransactionDate time.Time
 	CreatedAt       time.Time
+	DeletedAt       sql.NullTime
 }
 
 type User struct {

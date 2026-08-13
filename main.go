@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/httprate"
 	"github.com/joho/godotenv"
+	"github.com/jub0bs/fcors"
 	_ "github.com/lib/pq"
 )
 
@@ -73,6 +74,19 @@ func main() {
 
 	// Rate Limiter
 	v1Router.Use(httprate.NewRateLimiter(100, 1*time.Minute).Handler)
+
+	// Cors
+	corsMiddleware, err := fcors.AllowAccess(
+		fcors.FromOrigins("http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"),
+		fcors.WithRequestHeaders("Authorization", "Content-Type", "Accept"),
+		fcors.WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS"),
+	)
+	if err != nil {
+		slog.Error("CORS yapılandırma hatası", "error", err)
+		os.Exit(1)
+	}
+
+	v1Router.Use(corsMiddleware)
 
 	// Sağlık Kontrolü
 	v1Router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {

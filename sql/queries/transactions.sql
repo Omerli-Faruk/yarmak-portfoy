@@ -3,12 +3,13 @@ INSERT INTO transactions (user_id, asset_id, type, amount, price, transaction_da
 VALUES ($1, $2, $3, $4, $5, $6)
     RETURNING *;
 
--- name: GetUserTransactions :many
+-- name: GetUserTransactionsPaginated :many
 SELECT t.*, a.symbol, a.name as asset_name, a.asset_type
 FROM transactions t
          JOIN assets a ON t.asset_id = a.id
-WHERE t.user_id = $1
-ORDER BY t.transaction_date DESC;
+WHERE t.user_id = $1 AND t.deleted_at IS NULL
+ORDER BY t.transaction_date DESC
+    LIMIT $2 OFFSET $3;
 
 -- name: GetUserHoldingsSummary :many
 SELECT
@@ -22,10 +23,11 @@ SELECT
     NULLIF(SUM(CASE WHEN t.type = 'BUY' THEN t.amount ELSE 0 END), 0))::text, '0.0000') as average_cost
 FROM transactions t
          JOIN assets a ON t.asset_id = a.id
-WHERE t.user_id = $1
+WHERE t.user_id = $1 AND t.deleted_at IS NULL
 GROUP BY a.id, a.symbol, a.name, a.asset_type, a.current_price
 HAVING SUM(CASE WHEN t.type = 'BUY' THEN t.amount ELSE -t.amount END) > 0;
 
 -- name: DeleteTransaction :exec
-DELETE FROM transactions
-WHERE id = $1 AND user_id = $2;
+UPDATE transactions
+SET deleted_at = NOW()
+WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL;

@@ -7,13 +7,14 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
 const createTransaction = `-- name: CreateTransaction :one
 INSERT INTO transactions (user_id, asset_id, type, amount, price, transaction_date)
 VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING id, user_id, asset_id, type, amount, price, transaction_date, created_at
+    RETURNING id, user_id, asset_id, type, amount, price, transaction_date, created_at, deleted_at
 `
 
 type CreateTransactionParams struct {
@@ -44,13 +45,15 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		&i.Price,
 		&i.TransactionDate,
 		&i.CreatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const deleteTransaction = `-- name: DeleteTransaction :exec
-DELETE FROM transactions
-WHERE id = $1 AND user_id = $2
+UPDATE transactions
+SET deleted_at = NOW()
+WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
 `
 
 type DeleteTransactionParams struct {
@@ -75,7 +78,7 @@ SELECT
     NULLIF(SUM(CASE WHEN t.type = 'BUY' THEN t.amount ELSE 0 END), 0))::text, '0.0000') as average_cost
 FROM transactions t
          JOIN assets a ON t.asset_id = a.id
-WHERE t.user_id = $1
+WHERE t.user_id = $1 AND t.deleted_at IS NULL
 GROUP BY a.id, a.symbol, a.name, a.asset_type, a.current_price
 HAVING SUM(CASE WHEN t.type = 'BUY' THEN t.amount ELSE -t.amount END) > 0
 `
@@ -121,15 +124,22 @@ func (q *Queries) GetUserHoldingsSummary(ctx context.Context, userID int64) ([]G
 	return items, nil
 }
 
-const getUserTransactions = `-- name: GetUserTransactions :many
-SELECT t.id, t.user_id, t.asset_id, t.type, t.amount, t.price, t.transaction_date, t.created_at, a.symbol, a.name as asset_name, a.asset_type
+const getUserTransactionsPaginated = `-- name: GetUserTransactionsPaginated :many
+SELECT t.id, t.user_id, t.asset_id, t.type, t.amount, t.price, t.transaction_date, t.created_at, t.deleted_at, a.symbol, a.name as asset_name, a.asset_type
 FROM transactions t
          JOIN assets a ON t.asset_id = a.id
-WHERE t.user_id = $1
+WHERE t.user_id = $1 AND t.deleted_at IS NULL
 ORDER BY t.transaction_date DESC
+    LIMIT $2 OFFSET $3
 `
 
-type GetUserTransactionsRow struct {
+type GetUserTransactionsPaginatedParams struct {
+	UserID int64
+	Limit  int32
+	Offset int32
+}
+
+type GetUserTransactionsPaginatedRow struct {
 	ID              int64
 	UserID          int64
 	AssetID         int64
@@ -138,20 +148,21 @@ type GetUserTransactionsRow struct {
 	Price           string
 	TransactionDate time.Time
 	CreatedAt       time.Time
+	DeletedAt       sql.NullTime
 	Symbol          string
 	AssetName       string
 	AssetType       string
 }
 
-func (q *Queries) GetUserTransactions(ctx context.Context, userID int64) ([]GetUserTransactionsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getUserTransactions, userID)
+func (q *Queries) GetUserTransactionsPaginated(ctx context.Context, arg GetUserTransactionsPaginatedParams) ([]GetUserTransactionsPaginatedRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUserTransactionsPaginated, arg.UserID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetUserTransactionsRow
+	var items []GetUserTransactionsPaginatedRow
 	for rows.Next() {
-		var i GetUserTransactionsRow
+		var i GetUserTransactionsPaginatedRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
@@ -161,6 +172,7 @@ func (q *Queries) GetUserTransactions(ctx context.Context, userID int64) ([]GetU
 			&i.Price,
 			&i.TransactionDate,
 			&i.CreatedAt,
+			&i.DeletedAt,
 			&i.Symbol,
 			&i.AssetName,
 			&i.AssetType,

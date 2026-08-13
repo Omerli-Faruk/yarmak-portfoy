@@ -29,6 +29,17 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 		respondWithError(w, http.StatusBadRequest, "İşlem tipi 'BUY' veya 'SELL' olmalıdır", nil)
 		return
 	}
+	amountVal, err := strconv.ParseFloat(params.Amount, 64)
+	if err != nil || amountVal <= 0 {
+		respondWithError(w, http.StatusBadRequest, "İşlem miktarı 0'dan büyük olmalıdır", nil)
+		return
+	}
+
+	priceVal, err := strconv.ParseFloat(params.Price, 64)
+	if err != nil || priceVal <= 0 {
+		respondWithError(w, http.StatusBadRequest, "İşlem fiyatı 0'dan büyük olmalıdır", nil)
+		return
+	}
 	userID, ok := r.Context().Value(UserIDKey).(int64)
 	if !ok {
 		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
@@ -93,7 +104,27 @@ func (cfg *ApiConfig) HandlerGetUserTransactions(w http.ResponseWriter, r *http.
 		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
 		return
 	}
-	transactions, err := cfg.DB.GetUserTransactions(r.Context(), userID)
+
+	pageStr := r.URL.Query().Get("page")
+	limitStr := r.URL.Query().Get("limit")
+
+	page, _ := strconv.Atoi(pageStr)
+	if page < 1 {
+		page = 1
+	}
+
+	limit, _ := strconv.Atoi(limitStr)
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	offset := (page - 1) * limit
+
+	transactions, err := cfg.DB.GetUserTransactionsPaginated(r.Context(), database.GetUserTransactionsPaginatedParams{
+		UserID: userID,
+		Limit:  int32(limit),
+		Offset: int32(offset),
+	})
 	if err != nil {
 		respondWithError(w, http.StatusNotFound, "İşlemler bulunamadı", err)
 		return
