@@ -25,3 +25,7 @@ FROM transactions t
 WHERE t.user_id = $1
 GROUP BY a.id, a.symbol, a.name, a.asset_type, a.current_price
 HAVING SUM(CASE WHEN t.type = 'BUY' THEN t.amount ELSE -t.amount END) > 0;
+
+-- name: DeleteTransaction :exec
+DELETE FROM transactions
+WHERE id = $1 AND user_id = $2;

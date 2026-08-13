@@ -48,6 +48,21 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 	return i, err
 }
 
+const deleteTransaction = `-- name: DeleteTransaction :exec
+DELETE FROM transactions
+WHERE id = $1 AND user_id = $2
+`
+
+type DeleteTransactionParams struct {
+	ID     int64
+	UserID int64
+}
+
+func (q *Queries) DeleteTransaction(ctx context.Context, arg DeleteTransactionParams) error {
+	_, err := q.db.ExecContext(ctx, deleteTransaction, arg.ID, arg.UserID)
+	return err
+}
+
 const getUserHoldingsSummary = `-- name: GetUserHoldingsSummary :many
 SELECT
     a.id as asset_id,

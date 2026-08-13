@@ -4,6 +4,9 @@ import (
 	"borsa_portfoy_backend/internal/database"
 	"encoding/json"
 	"net/http"
+	"strconv"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func (cfg *ApiConfig) HandlerCreateAsset(w http.ResponseWriter, r *http.Request) {
@@ -46,4 +49,19 @@ func (cfg *ApiConfig) HandlerListAssets(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	respondWithJSON(w, http.StatusOK, asset)
+}
+
+func (cfg *ApiConfig) HandlerGetAssetPriceHistory(w http.ResponseWriter, r *http.Request) {
+	asset := chi.URLParam(r, "id")
+	assetID, err := strconv.ParseInt(asset, 10, 64)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Geçersiz işlem ID", err)
+		return
+	}
+	price, err := cfg.DB.GetAssetPriceHistory(r.Context(), assetID)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "Fiyat geçmişi bulunamadı", err)
+		return
+	}
+	respondWithJSON(w, http.StatusOK, price)
 }

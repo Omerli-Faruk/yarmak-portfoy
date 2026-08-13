@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Request) {
@@ -97,4 +99,27 @@ func (cfg *ApiConfig) HandlerGetUserTransactions(w http.ResponseWriter, r *http.
 		return
 	}
 	respondWithJSON(w, http.StatusOK, transactions)
+}
+
+func (cfg *ApiConfig) HandlerDeleteTransaction(w http.ResponseWriter, r *http.Request) {
+	urlID := chi.URLParam(r, "id")
+	transactionID, err := strconv.ParseInt(urlID, 10, 64)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Geçersiz işlem ID", err)
+		return
+	}
+	userID, ok := r.Context().Value(UserIDKey).(int64)
+	if !ok {
+		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
+		return
+	}
+	err = cfg.DB.DeleteTransaction(r.Context(), database.DeleteTransactionParams{
+		ID:     transactionID,
+		UserID: userID,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "İşlem silinemedi", err)
+		return
+	}
+	respondWithJSON(w, http.StatusOK, map[string]string{"message": "İşlem başarıyla silindi"})
 }

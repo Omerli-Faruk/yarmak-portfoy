@@ -93,6 +93,8 @@ func main() {
 	v1Router.Post("/transactions", apiCFG.MiddleWareAuth(apiCFG.HandlerCreateTransaction))
 	v1Router.Get("/transactions", apiCFG.MiddleWareAuth(apiCFG.HandlerGetUserTransactions))
 	v1Router.Get("/portfolio/holdings", apiCFG.MiddleWareAuth(apiCFG.HandlerGetUserHoldings))
+	v1Router.Delete("/transactions/{id}", apiCFG.MiddleWareAuth(apiCFG.HandlerDeleteTransaction))
+	v1Router.Get("/assets/{id}/price-history", apiCFG.HandlerGetAssetPriceHistory)
 
 	// Alt router'ı ana router'a bağla
 	r.Mount("/v1", v1Router)
