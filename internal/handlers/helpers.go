@@ -22,6 +22,10 @@ func respondWithJSON(w http.ResponseWriter, code int, payload any) {
 }
 
 func respondWithError(w http.ResponseWriter, code int, msg string, err error) {
-	slog.Error(msg, "err", err)
+	if code > 499 {
+		slog.Error(msg, "err", err)
+	} else {
+		slog.Warn(msg, "err", err)
+	}
 	respondWithJSON(w, code, map[string]string{"error": msg})
 }

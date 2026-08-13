@@ -5,9 +5,11 @@
 *.so
 *.dylib
 bin/
+borsa_portfoy_backend.exe
 
 # Environment variables
 .env
+cookie.txt
 
 # IDE / Editor files
 .idea/

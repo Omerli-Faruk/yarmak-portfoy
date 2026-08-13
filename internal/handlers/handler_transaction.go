@@ -4,6 +4,7 @@ import (
 	"borsa_portfoy_backend/internal/database"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -30,6 +31,30 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 	if !ok {
 		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
 		return
+	}
+
+	if params.Type == "SELL" {
+		holdings, err := cfg.DB.GetUserHoldingsSummary(r.Context(), userID)
+		if err != nil {
+			respondWithError(w, http.StatusBadRequest, "Satış yapmak için portföyünüzde varlık bulunmalıdır", err)
+			return
+		}
+		sellAmount, err := strconv.ParseFloat(params.Amount, 64)
+		if err != nil || sellAmount <= 0 {
+			respondWithError(w, http.StatusBadRequest, "Geçersiz satış miktarı", err)
+			return
+		}
+		var currentHolding float64
+		for _, h := range holdings {
+			if h.AssetID == params.AssetID {
+				currentHolding, _ = strconv.ParseFloat(h.TotalAmount, 64)
+				break
+			}
+		}
+		if sellAmount > currentHolding {
+			respondWithError(w, http.StatusBadRequest, "Yetersiz bakiye: Elinizdeki miktardan fazlasını satamazsınız", nil)
+			return
+		}
 	}
 	transaction, err := cfg.DB.CreateTransaction(r.Context(), database.CreateTransactionParams{
 		UserID:          userID,
@@ -58,4 +83,18 @@ func (cfg *ApiConfig) HandlerGetUserHoldings(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	respondWithJSON(w, http.StatusOK, holdings)
+}
+
+func (cfg *ApiConfig) HandlerGetUserTransactions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(UserIDKey).(int64)
+	if !ok {
+		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
+		return
+	}
+	transactions, err := cfg.DB.GetUserTransactions(r.Context(), userID)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "İşlemler bulunamadı", err)
+		return
+	}
+	respondWithJSON(w, http.StatusOK, transactions)
 }

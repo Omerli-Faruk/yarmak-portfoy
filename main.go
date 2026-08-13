@@ -3,6 +3,7 @@ package main
 import (
 	"borsa_portfoy_backend/internal/database"
 	"borsa_portfoy_backend/internal/handlers"
+	"borsa_portfoy_backend/internal/scraper"
 	"context"
 	"database/sql"
 	"errors"
@@ -85,15 +86,19 @@ func main() {
 	v1Router.Get("/me", apiCFG.MiddleWareAuth(apiCFG.HandlerGetMe))
 
 	// Asset (Hisse/Fon) Rotaları
-	v1Router.Post("/assets", apiCFG.HandlerCreateAsset)
+	v1Router.Post("/assets", apiCFG.MiddleWareAuth(apiCFG.HandlerCreateAsset))
 	v1Router.Get("/assets", apiCFG.HandlerListAssets)
-	
+
 	// İşlem ve Portföy Rotaları (JWT Korumalı!)
 	v1Router.Post("/transactions", apiCFG.MiddleWareAuth(apiCFG.HandlerCreateTransaction))
+	v1Router.Get("/transactions", apiCFG.MiddleWareAuth(apiCFG.HandlerGetUserTransactions))
 	v1Router.Get("/portfolio/holdings", apiCFG.MiddleWareAuth(apiCFG.HandlerGetUserHoldings))
 
 	// Alt router'ı ana router'a bağla
 	r.Mount("/v1", v1Router)
+
+	// Arka Plan Scraper Worker'ı Başlat (1 dakikada bir çalışacak)
+	scraper.StartScraperWorker(apiCFG, 1*time.Minute)
 
 	srv := &http.Server{
 		Handler: r,

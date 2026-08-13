@@ -1,0 +1,11 @@
+-- +goose Up
+ALTER TABLE assets ALTER COLUMN current_price TYPE NUMERIC(18, 6);
+ALTER TABLE transactions ALTER COLUMN amount TYPE NUMERIC(18, 6);
+ALTER TABLE transactions ALTER COLUMN price TYPE NUMERIC(18, 6);
+ALTER TABLE price_history ALTER COLUMN price TYPE NUMERIC(18, 6);
+
+-- +goose Down
+ALTER TABLE price_history ALTER COLUMN price TYPE NUMERIC(15, 4);
+ALTER TABLE transactions ALTER COLUMN price TYPE NUMERIC(15, 4);
+ALTER TABLE transactions ALTER COLUMN amount TYPE NUMERIC(15, 4);
+ALTER TABLE assets ALTER COLUMN current_price TYPE NUMERIC(15, 4);

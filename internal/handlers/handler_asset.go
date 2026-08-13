@@ -8,10 +8,9 @@ import (
 
 func (cfg *ApiConfig) HandlerCreateAsset(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Symbol       string `json:"symbol"`
-		Name         string `json:"name"`
-		AssetType    string `json:"asset_type"`
-		CurrentPrice string `json:"current_price"`
+		Symbol    string `json:"symbol"`
+		Name      string `json:"name"`
+		AssetType string `json:"asset_type"`
 	}
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
@@ -20,15 +19,18 @@ func (cfg *ApiConfig) HandlerCreateAsset(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
 		return
 	}
-	if params.Symbol == "" || params.Name == "" || params.AssetType == "" {
-		respondWithError(w, http.StatusBadRequest, "Lütfen tüm alanları doldurun", nil)
+	if params.Symbol == "" || params.AssetType == "" {
+		respondWithError(w, http.StatusBadRequest, "Symbol ve AssetType zorunludur", nil)
 		return
+	}
+	if params.Name == "" {
+		params.Name = params.Symbol
 	}
 	asset, err := cfg.DB.CreateAsset(r.Context(), database.CreateAssetParams{
 		Symbol:       params.Symbol,
 		Name:         params.Name,
 		AssetType:    params.AssetType,
-		CurrentPrice: params.CurrentPrice,
+		CurrentPrice: "0.000000",
 	})
 	if err != nil {
 		respondWithError(w, http.StatusConflict, "Asset oluşturulamadı", err)
