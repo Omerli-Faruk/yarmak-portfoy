@@ -17,9 +17,26 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 		respondWithError(w, http.StatusNotFound, "Portföyünüzde varlık bulunamadı", err)
 		return
 	}
+	totalDividendsStr, _ := cfg.DB.GetTotalDividendsSummary(r.Context(), userID)
+	totalDividends, _ := strconv.ParseFloat(totalDividendsStr, 64)
 	var totalPortfolioValue float64
 	var totalPortfolioCost float64
-	var profitLossPercentage float64
+	type AssetCategorySummary struct {
+		Value      float64 `json:"value"`
+		Cost       float64 `json:"cost"`
+		ProfitLoss float64 `json:"profit_loss"`
+	}
+	breakdown := map[string]*AssetCategorySummary{
+		"HISSE": {},
+		"FON":   {},
+		"ALTIN": {},
+		"DOVIZ": {},
+		"TEMETTU": {
+			Value:      totalDividends,
+			Cost:       0,
+			ProfitLoss: totalDividends,
+		},
+	}
 	for _, h := range holdings {
 		currentPrice, _ := strconv.ParseFloat(h.CurrentPrice, 64)
 		totalAmount, _ := strconv.ParseFloat(h.TotalAmount, 64)
@@ -29,20 +46,34 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 		if currentPrice <= 0 {
 			currentPrice = averageCost
 		}
+		if cat, ok := breakdown[h.AssetType]; ok {
+			cat.Value += currentPrice * totalAmount
+			cat.Cost += averageCost * totalAmount
+			cat.ProfitLoss = cat.Value - cat.Cost
+		}
+
 		totalPortfolioValue += currentPrice * totalAmount
 		totalPortfolioCost += averageCost * totalAmount
 	}
-	totalProfitLoss := totalPortfolioValue - totalPortfolioCost
+	capitalProfitLoss := totalPortfolioValue - totalPortfolioCost
+	totalCombinedProfit := capitalProfitLoss + totalDividends
+	var capitalProfitLossPercentage float64
+	var totalReturnPercentage float64
 	if totalPortfolioCost > 0 {
-		profitLossPercentage = (totalProfitLoss / totalPortfolioCost) * 100
+		capitalProfitLossPercentage = (capitalProfitLoss / totalPortfolioCost) * 100
+		totalReturnPercentage = (totalCombinedProfit / totalPortfolioCost) * 100
 	} else {
-		totalProfitLoss = 0
+		totalCombinedProfit = 0
 	}
 	respondWithJSON(w, http.StatusOK, map[string]interface{}{
-		"total_value":            totalPortfolioValue,
-		"total_cost":             totalPortfolioCost,
-		"total_profit_loss":      totalProfitLoss,
-		"profit_loss_percentage": profitLossPercentage,
-		"holdings_count":         len(holdings),
+		"total_value":                    totalPortfolioValue,
+		"total_cost":                     totalPortfolioCost,
+		"capital_profit_loss":            capitalProfitLoss,
+		"capital_profit_loss_percentage": capitalProfitLossPercentage,
+		"total_dividends":                totalDividends,
+		"total_combined_profit":          totalCombinedProfit,
+		"total_return_percentage":        totalReturnPercentage,
+		"holdings_count":                 len(holdings),
+		"breakdown":                      breakdown,
 	})
 }

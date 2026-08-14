@@ -18,6 +18,16 @@ type Asset struct {
 	UpdatedAt    time.Time
 }
 
+type Dividend struct {
+	ID          int64
+	UserID      int64
+	AssetID     int64
+	Amount      string
+	PaymentDate time.Time
+	CreatedAt   time.Time
+	DeletedAt   sql.NullTime
+}
+
 type PriceHistory struct {
 	ID         int64
 	AssetID    int64
