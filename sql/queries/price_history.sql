@@ -6,4 +6,5 @@ VALUES ($1, $2, $3)
 -- name: GetAssetPriceHistory :many
 SELECT * FROM price_history
 WHERE asset_id = $1
-ORDER BY recorded_at DESC;
+ORDER BY recorded_at DESC
+    LIMIT 500;

@@ -52,11 +52,6 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 			respondWithError(w, http.StatusBadRequest, "Satış yapmak için portföyünüzde varlık bulunmalıdır", err)
 			return
 		}
-		sellAmount, err := strconv.ParseFloat(params.Amount, 64)
-		if err != nil || sellAmount <= 0 {
-			respondWithError(w, http.StatusBadRequest, "Geçersiz satış miktarı", err)
-			return
-		}
 		var currentHolding float64
 		for _, h := range holdings {
 			if h.AssetID == params.AssetID {
@@ -64,7 +59,7 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 				break
 			}
 		}
-		if sellAmount > currentHolding {
+		if amountVal > currentHolding {
 			respondWithError(w, http.StatusBadRequest, "Yetersiz bakiye: Elinizdeki miktardan fazlasını satamazsınız", nil)
 			return
 		}

@@ -17,7 +17,10 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 		respondWithError(w, http.StatusNotFound, "Portföyünüzde varlık bulunamadı", err)
 		return
 	}
-	totalDividendsStr, _ := cfg.DB.GetTotalDividendsSummary(r.Context(), userID)
+	totalDividendsStr, err := cfg.DB.GetTotalDividendsSummary(r.Context(), userID)
+	if err != nil {
+		totalDividendsStr = "0.000000"
+	}
 	totalDividends, _ := strconv.ParseFloat(totalDividendsStr, 64)
 	var totalPortfolioValue float64
 	var totalPortfolioCost float64

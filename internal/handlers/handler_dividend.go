@@ -11,16 +11,26 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Temettü Oluştur
+func getUserHoldingLot(holdings []database.GetUserHoldingsSummaryRow, assetID int64) float64 {
+	for _, h := range holdings {
+		if h.AssetID == assetID {
+			lot, _ := strconv.ParseFloat(h.TotalAmount, 64)
+			return lot
+		}
+	}
+	return 0
+}
+
+// HandlerCreateDividend Temettü Oluştur
 func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Request) {
-	type resp struct {
+	type parameters struct {
 		AssetID        int64     `json:"asset_id"`
 		Amount         string    `json:"amount"`
 		PaymentDate    time.Time `json:"payment_date"`
 		AmountPerShare string    `json:"amount_per_share"`
 	}
 	decoder := json.NewDecoder(r.Body)
-	params := resp{}
+	params := parameters{}
 	err := decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
@@ -34,21 +44,20 @@ func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Reque
 	if params.AmountPerShare != "" {
 		holdings, err := cfg.DB.GetUserHoldingsSummary(r.Context(), userID)
 		if err != nil {
-			respondWithError(w, http.StatusBadRequest, "Temettü oluşturulamadı", err)
+			respondWithError(w, http.StatusBadRequest, "Portföy bilgileri alınamadı", err)
 			return
 		}
-		var userHoldingLot float64
-		for _, h := range holdings {
-			if h.AssetID == params.AssetID {
-				userHoldingLot, _ = strconv.ParseFloat(h.TotalAmount, 64)
-				break
-			}
-		}
+		userHoldingLot := getUserHoldingLot(holdings, params.AssetID)
+
 		if userHoldingLot <= 0 {
 			respondWithError(w, http.StatusBadRequest, "Portföyünüzde bu hisseye ait lot bulunamadı", nil)
 			return
 		}
-		perShare, _ := strconv.ParseFloat(params.AmountPerShare, 64)
+		perShare, err := strconv.ParseFloat(params.AmountPerShare, 64)
+		if err != nil || perShare <= 0 {
+			respondWithError(w, http.StatusBadRequest, "Geçersiz hisse başı temettü miktarı", err)
+			return
+		}
 		totalAmount := userHoldingLot * perShare
 		params.Amount = fmt.Sprintf("%.6f", totalAmount)
 	}
@@ -56,25 +65,24 @@ func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Reque
 		params.PaymentDate = time.Now().UTC()
 	}
 	amount, _ := strconv.ParseFloat(params.Amount, 64)
-	if amount > 0 && params.AssetID > 0 {
-		userDividend, err := cfg.DB.CreateDividend(r.Context(), database.CreateDividendParams{
-			UserID:      userID,
-			AssetID:     params.AssetID,
-			Amount:      params.Amount,
-			PaymentDate: params.PaymentDate,
-		})
-		if err != nil {
-			respondWithError(w, http.StatusBadRequest, "Temettü oluşturulamadı", err)
-			return
-		}
-		respondWithJSON(w, http.StatusCreated, userDividend)
-	} else {
+	if amount <= 0 || params.AssetID <= 0 {
 		respondWithError(w, http.StatusBadRequest, "Miktar veya Asset ID geçersiz", nil)
 		return
 	}
+	userDividend, err := cfg.DB.CreateDividend(r.Context(), database.CreateDividendParams{
+		UserID:      userID,
+		AssetID:     params.AssetID,
+		Amount:      params.Amount,
+		PaymentDate: params.PaymentDate,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Temettü oluşturulamadı", err)
+		return
+	}
+	respondWithJSON(w, http.StatusCreated, userDividend)
 }
 
-// Temettü görüntüle
+// HandlerGetUserDividends Temettü görüntüle
 func (cfg *ApiConfig) HandlerGetUserDividends(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
 	if !ok {
@@ -89,7 +97,7 @@ func (cfg *ApiConfig) HandlerGetUserDividends(w http.ResponseWriter, r *http.Req
 	respondWithJSON(w, http.StatusOK, dividends)
 }
 
-// Temettü Sil
+// HandlerDeleteDividend Temettü Sil
 func (cfg *ApiConfig) HandlerDeleteDividend(w http.ResponseWriter, r *http.Request) {
 	urlID := chi.URLParam(r, "id")
 	dividendID, err := strconv.ParseInt(urlID, 10, 64)

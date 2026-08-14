@@ -38,6 +38,7 @@ const getAssetPriceHistory = `-- name: GetAssetPriceHistory :many
 SELECT id, asset_id, price, recorded_at FROM price_history
 WHERE asset_id = $1
 ORDER BY recorded_at DESC
+    LIMIT 500
 `
 
 func (q *Queries) GetAssetPriceHistory(ctx context.Context, assetID int64) ([]PriceHistory, error) {

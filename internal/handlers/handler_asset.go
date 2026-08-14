@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -28,6 +29,12 @@ func (cfg *ApiConfig) HandlerCreateAsset(w http.ResponseWriter, r *http.Request)
 	}
 	if params.Name == "" {
 		params.Name = params.Symbol
+	}
+	params.Symbol = strings.ToUpper(strings.TrimSpace(params.Symbol))
+	params.AssetType = strings.ToUpper(strings.TrimSpace(params.AssetType))
+	if params.AssetType != "HISSE" && params.AssetType != "FON" && params.AssetType != "ALTIN" && params.AssetType != "DOVIZ" {
+		respondWithError(w, http.StatusBadRequest, "Varlık tipi 'HISSE', 'FON', 'ALTIN' veya 'DOVIZ' olmalıdır", nil)
+		return
 	}
 	asset, err := cfg.DB.CreateAsset(r.Context(), database.CreateAssetParams{
 		Symbol:       params.Symbol,

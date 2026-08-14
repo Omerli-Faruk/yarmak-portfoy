@@ -40,7 +40,7 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusUnauthorized, "Geçersiz e-posta veya şifre", nil)
 		return
 	}
-	token, err := auth.MakeJWT(user.ID, cfg.JWTSecret, 24*time.Hour)
+	token, err := auth.MakeJWT(user.ID, cfg.JWTSecret, 15*time.Minute)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Token oluşturulurken hata oluştu", err)
 		return

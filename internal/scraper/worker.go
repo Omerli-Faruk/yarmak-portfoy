@@ -68,5 +68,6 @@ func runScrapeCycle(ctx context.Context, cfg *handlers.ApiConfig) {
 		} else {
 			slog.Info("Fiyat başarıyla güncellendi", "symbol", asset.Symbol, "price", priceStr)
 		}
+		time.Sleep(200 * time.Millisecond)
 	}
 }
