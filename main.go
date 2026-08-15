@@ -113,6 +113,9 @@ func main() {
 	v1Router.Post("/dividends", apiCFG.MiddleWareAuth(apiCFG.HandlerCreateDividend))
 	v1Router.Get("/dividends", apiCFG.MiddleWareAuth(apiCFG.HandlerGetUserDividends))
 	v1Router.Delete("/dividends/{id}", apiCFG.MiddleWareAuth(apiCFG.HandlerDeleteDividend))
+	v1Router.Post("/alerts", apiCFG.MiddleWareAuth(apiCFG.HandlerCreatePriceAlert))
+	v1Router.Get("/alerts", apiCFG.MiddleWareAuth(apiCFG.HandlerGetUserPriceAlerts))
+	v1Router.Delete("/alerts/{id}", apiCFG.MiddleWareAuth(apiCFG.HandlerDeletePriceAlert))
 
 	// Alt router'ı ana router'a bağla
 	r.Mount("/v1", v1Router)

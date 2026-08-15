@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 )
 
@@ -67,6 +68,28 @@ func runScrapeCycle(ctx context.Context, cfg *handlers.ApiConfig) {
 			slog.Error("Fiyat geçmişi kaydedilemedi", "symbol", asset.Symbol, "error", err)
 		} else {
 			slog.Info("Fiyat başarıyla güncellendi", "symbol", asset.Symbol, "price", priceStr)
+		}
+
+		alerts, err := cfg.DB.GetPendingAlertsForAsset(ctx, asset.ID)
+		if err != nil {
+			slog.Error("Fiyat alarmı sorgulanırken hata oluştu", "symbol", asset.Symbol, "error", err)
+		}
+
+		for _, alert := range alerts {
+			targetPrice, _ := strconv.ParseFloat(alert.TargetPrice, 64)
+			if alert.Direction == "ABOVE" && newPrice >= targetPrice || alert.Direction == "BELOW" && newPrice <= targetPrice {
+				err = cfg.DB.MarkAlertTriggered(ctx, alert.ID)
+				if err != nil {
+					slog.Error("Fiyat alarmı durumu güncellenirken hata oluştu", "symbol", asset.Symbol, "error", err)
+				}
+				slog.Warn("🚨 FİYAT ALARMI TETİKLENDİ!",
+					"symbol", asset.Symbol,
+					"direction", alert.Direction,
+					"target_price", alert.TargetPrice,
+					"current_price", priceStr,
+					"user_id", alert.UserID,
+				)
+			}
 		}
 		time.Sleep(200 * time.Millisecond)
 	}

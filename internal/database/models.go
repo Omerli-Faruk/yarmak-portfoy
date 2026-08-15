@@ -28,6 +28,18 @@ type Dividend struct {
 	DeletedAt   sql.NullTime
 }
 
+type PriceAlert struct {
+	ID          int64
+	UserID      int64
+	AssetID     int64
+	TargetPrice string
+	Direction   string
+	IsTriggered bool
+	TriggeredAt sql.NullTime
+	CreatedAt   time.Time
+	DeletedAt   sql.NullTime
+}
+
 type PriceHistory struct {
 	ID         int64
 	AssetID    int64
