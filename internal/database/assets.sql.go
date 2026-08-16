@@ -139,3 +139,29 @@ func (q *Queries) UpdateAssetPrice(ctx context.Context, arg UpdateAssetPricePara
 	)
 	return i, err
 }
+
+const updateAssetType = `-- name: UpdateAssetType :one
+UPDATE assets
+SET asset_type = $2, updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+    RETURNING id, symbol, name, asset_type, current_price, updated_at
+`
+
+type UpdateAssetTypeParams struct {
+	ID        int64
+	AssetType string
+}
+
+func (q *Queries) UpdateAssetType(ctx context.Context, arg UpdateAssetTypeParams) (Asset, error) {
+	row := q.db.QueryRowContext(ctx, updateAssetType, arg.ID, arg.AssetType)
+	var i Asset
+	err := row.Scan(
+		&i.ID,
+		&i.Symbol,
+		&i.Name,
+		&i.AssetType,
+		&i.CurrentPrice,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

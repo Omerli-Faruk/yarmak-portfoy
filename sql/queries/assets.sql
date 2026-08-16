@@ -20,3 +20,9 @@ UPDATE assets
 SET current_price = $2, updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
     RETURNING *;
+
+-- name: UpdateAssetType :one
+UPDATE assets
+SET asset_type = $2, updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+    RETURNING *;

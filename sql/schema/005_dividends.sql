@@ -12,4 +12,6 @@ CREATE TABLE dividends
 CREATE INDEX idx_dividends_user_id ON dividends (user_id);
 CREATE INDEX idx_dividends_asset_id ON dividends (asset_id);
 -- +goose Down
+DROP INDEX IF EXISTS idx_dividends_user_id;
+DROP INDEX IF EXISTS idx_dividends_asset_id;
 DROP TABLE dividends;

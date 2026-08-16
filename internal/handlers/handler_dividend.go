@@ -38,7 +38,7 @@ func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Reque
 	}
 	userID, ok := r.Context().Value(UserIDKey).(int64)
 	if !ok {
-		respondWithError(w, http.StatusBadRequest, "Yetkisiz erişim", nil)
+		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
 		return
 	}
 	if params.AmountPerShare != "" {

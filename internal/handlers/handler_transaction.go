@@ -7,10 +7,19 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 )
+
+var userLocks [256]sync.Mutex
+
+func lockUser(userID int64) func() {
+	idx := uint64(userID) % 256
+	userLocks[idx].Lock()
+	return userLocks[idx].Unlock
+}
 
 type createTransactionParams struct {
 	AssetID         int64     `json:"asset_id"`
@@ -30,6 +39,9 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
 		return
+	}
+	if params.TransactionDate.IsZero() {
+		params.TransactionDate = time.Now().UTC()
 	}
 	if err := cfg.resolveAssetID(r.Context(), &params); err != nil {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
@@ -56,19 +68,24 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	unlock := lockUser(userID)
+	defer unlock()
+
 	if params.Type == "SELL" {
 		err = cfg.validateSellHolding(r.Context(), userID, params.AssetID, amountVal)
 		if err != nil {
-			respondWithError(w, http.StatusBadRequest, "hata", err)
+			respondWithError(w, http.StatusBadRequest, "Yetersiz bakiye: Elinizdeki miktardan fazlasını satamazsınız", err)
 			return
 		}
 	}
+	cleanAmount := fmt.Sprintf("%.6f", amountVal)
+	cleanPrice := fmt.Sprintf("%.6f", priceVal)
 	transaction, err := cfg.DB.CreateTransaction(r.Context(), database.CreateTransactionParams{
 		UserID:          userID,
 		AssetID:         params.AssetID,
 		Type:            params.Type,
-		Amount:          params.Amount,
-		Price:           params.Price,
+		Amount:          cleanAmount,
+		Price:           cleanPrice,
 		TransactionDate: params.TransactionDate,
 	})
 	if err != nil {
@@ -76,6 +93,18 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 		return
 	}
 	respondWithJSON(w, http.StatusCreated, transaction)
+}
+
+type userHoldingResponse struct {
+	AssetID      int64   `json:"asset_id"`
+	Symbol       string  `json:"symbol"`
+	AssetName    string  `json:"asset_name"`
+	AssetType    string  `json:"asset_type"`
+	CurrentPrice float64 `json:"current_price"`
+	TotalAmount  float64 `json:"total_amount"`
+	AverageCost  float64 `json:"average_cost"`
+	TotalValue   float64 `json:"total_value"`
+	ProfitLoss   float64 `json:"profit_loss"`
 }
 
 func (cfg *ApiConfig) HandlerGetUserHoldings(w http.ResponseWriter, r *http.Request) {
@@ -86,10 +115,38 @@ func (cfg *ApiConfig) HandlerGetUserHoldings(w http.ResponseWriter, r *http.Requ
 	}
 	holdings, err := cfg.DB.GetUserHoldingsSummary(r.Context(), userID)
 	if err != nil {
-		respondWithError(w, http.StatusNotFound, "Portföyünüzde varlık bulunamadı", err)
+		respondWithJSON(w, http.StatusOK, []userHoldingResponse{})
 		return
 	}
-	respondWithJSON(w, http.StatusOK, holdings)
+	res := make([]userHoldingResponse, 0, len(holdings))
+	for _, h := range holdings {
+		currentPrice, _ := strconv.ParseFloat(h.CurrentPrice, 64)
+		totalAmount, _ := strconv.ParseFloat(h.TotalAmount, 64)
+		var avgCostStr string
+		switch v := h.AverageCost.(type) {
+		case string:
+			avgCostStr = v
+		case []byte:
+			avgCostStr = string(v)
+		default:
+			avgCostStr = fmt.Sprintf("%v", v)
+		}
+		averageCost, _ := strconv.ParseFloat(avgCostStr, 64)
+		totalValue := currentPrice * totalAmount
+		costValue := averageCost * totalAmount
+		res = append(res, userHoldingResponse{
+			AssetID:      h.AssetID,
+			Symbol:       h.Symbol,
+			AssetName:    h.AssetName,
+			AssetType:    h.AssetType,
+			CurrentPrice: currentPrice,
+			TotalAmount:  totalAmount,
+			AverageCost:  averageCost,
+			TotalValue:   totalValue,
+			ProfitLoss:   totalValue - costValue,
+		})
+	}
+	respondWithJSON(w, http.StatusOK, res)
 }
 
 func (cfg *ApiConfig) HandlerGetUserTransactions(w http.ResponseWriter, r *http.Request) {
@@ -138,6 +195,29 @@ func (cfg *ApiConfig) HandlerDeleteTransaction(w http.ResponseWriter, r *http.Re
 		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
 		return
 	}
+	unlock := lockUser(userID)
+	defer unlock()
+	tx, err := cfg.DB.GetTransactionByIDAndUser(r.Context(), database.GetTransactionByIDAndUserParams{
+		ID:     transactionID,
+		UserID: userID,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "İşlem bulunamadı veya yetkiniz yok", err)
+		return
+	}
+	if tx.Type == "BUY" {
+		amountVal, _ := strconv.ParseFloat(tx.Amount, 64)
+		holdings, err := cfg.DB.GetUserHoldingsSummary(r.Context(), userID)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Portföy kontrol edilemedi", err)
+			return
+		}
+		currentHolding := getUserHoldingLot(holdings, tx.AssetID)
+		if currentHolding < amountVal {
+			respondWithError(w, http.StatusBadRequest, "Bu alım işlemini silemezsiniz, portföyünüz eksiye düşer. Lütfen önce bu varlığa ait satış işlemlerinizi silin.", nil)
+			return
+		}
+	}
 	err = cfg.DB.DeleteTransaction(r.Context(), database.DeleteTransactionParams{
 		ID:     transactionID,
 		UserID: userID,
@@ -147,18 +227,6 @@ func (cfg *ApiConfig) HandlerDeleteTransaction(w http.ResponseWriter, r *http.Re
 		return
 	}
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "İşlem başarıyla silindi"})
-}
-
-func (cfg *ApiConfig) validateSellHolding(ctx context.Context, userID int64, assetID int64, sellAmount float64) error {
-	holdings, err := cfg.DB.GetUserHoldingsSummary(ctx, userID)
-	if err != nil {
-		return err
-	}
-	currentHolding := getUserHoldingLot(holdings, assetID)
-	if sellAmount > currentHolding {
-		return fmt.Errorf("yetersiz bakiye: elinizdeki miktardan fazlasını satamazsınız")
-	}
-	return nil
 }
 
 func (cfg *ApiConfig) resolveAssetID(ctx context.Context, params *createTransactionParams) error {
@@ -176,5 +244,17 @@ func (cfg *ApiConfig) resolveAssetID(ctx context.Context, params *createTransact
 		return err
 	}
 	params.AssetID = asset.ID
+	return nil
+}
+
+func (cfg *ApiConfig) validateSellHolding(ctx context.Context, userID int64, assetID int64, sellAmount float64) error {
+	holdings, err := cfg.DB.GetUserHoldingsSummary(ctx, userID)
+	if err != nil {
+		return err
+	}
+	currentHolding := getUserHoldingLot(holdings, assetID)
+	if sellAmount > currentHolding {
+		return fmt.Errorf("yetersiz bakiye: elinizdeki miktardan fazlasını satamazsınız")
+	}
 	return nil
 }

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"borsa_portfoy_backend/internal/database"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -14,8 +15,7 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 	}
 	holdings, err := cfg.DB.GetUserHoldingsSummary(r.Context(), userID)
 	if err != nil {
-		respondWithError(w, http.StatusNotFound, "Portföyünüzde varlık bulunamadı", err)
-		return
+		holdings = []database.GetUserHoldingsSummaryRow{}
 	}
 	totalDividendsStr, err := cfg.DB.GetTotalDividendsSummary(r.Context(), userID)
 	if err != nil {
@@ -43,7 +43,15 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 	for _, h := range holdings {
 		currentPrice, _ := strconv.ParseFloat(h.CurrentPrice, 64)
 		totalAmount, _ := strconv.ParseFloat(h.TotalAmount, 64)
-		avgCostStr := fmt.Sprintf("%v", h.AverageCost)
+		var avgCostStr string
+		switch v := h.AverageCost.(type) {
+		case string:
+			avgCostStr = v
+		case []byte:
+			avgCostStr = string(v)
+		default:
+			avgCostStr = fmt.Sprintf("%v", v)
+		}
 		averageCost, _ := strconv.ParseFloat(avgCostStr, 64)
 
 		if currentPrice <= 0 {
@@ -65,8 +73,6 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 	if totalPortfolioCost > 0 {
 		capitalProfitLossPercentage = (capitalProfitLoss / totalPortfolioCost) * 100
 		totalReturnPercentage = (totalCombinedProfit / totalPortfolioCost) * 100
-	} else {
-		totalCombinedProfit = 0
 	}
 	respondWithJSON(w, http.StatusOK, map[string]interface{}{
 		"total_value":                    totalPortfolioValue,

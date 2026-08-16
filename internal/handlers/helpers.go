@@ -52,8 +52,11 @@ func (cfg *ApiConfig) GetOrCreateAssetBySymbol(ctx context.Context, symbol strin
 	} else {
 		return database.Asset{}, fmt.Errorf("varlık piyasada bulunamadı: %s", symbol)
 	}
-	if fetchErr != nil || livePrice <= 0 {
-		return database.Asset{}, fmt.Errorf("varlık piyasada bulunamadı: %s", symbol)
+	if fetchErr != nil {
+		return database.Asset{}, fmt.Errorf("varlık fiyatı çekilemedi (%s): %w", symbol, fetchErr)
+	}
+	if livePrice <= 0 {
+		return database.Asset{}, fmt.Errorf("varlık fiyatı 0 veya negatif (%s)", symbol)
 	}
 	priceStr := fmt.Sprintf("%.6f", livePrice)
 	newAsset, err := cfg.DB.CreateAsset(ctx, database.CreateAssetParams{
@@ -63,7 +66,11 @@ func (cfg *ApiConfig) GetOrCreateAssetBySymbol(ctx context.Context, symbol strin
 		CurrentPrice: priceStr,
 	})
 	if err != nil {
-		return database.Asset{}, fmt.Errorf("varlık piyasada bulunamadı: %s", symbol)
+		assetBySymbol, err := cfg.DB.GetAssetBySymbol(ctx, symbol)
+		if err != nil {
+			return database.Asset{}, fmt.Errorf("varlık veritabanına kaydedilemedi (%s): %w", symbol, err)
+		}
+		return assetBySymbol, nil
 	}
 	_, _ = cfg.DB.CreatePriceHistory(ctx, database.CreatePriceHistoryParams{
 		AssetID:    newAsset.ID,

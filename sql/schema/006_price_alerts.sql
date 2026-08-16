@@ -16,4 +16,7 @@ CREATE INDEX idx_priceAlerts_user_id ON price_alerts (user_id);
 CREATE INDEX idx_priceAlerts_asset_id ON price_alerts (asset_id);
 CREATE INDEX idx_priceAlerts_is_triggered ON price_alerts (is_triggered);
 -- +goose Down
+DROP INDEX IF EXISTS idx_priceAlerts_user_id;
+DROP INDEX IF EXISTS idx_priceAlerts_asset_id;
+DROP INDEX IF EXISTS idx_priceAlerts_is_triggered;
 DROP TABLE price_alerts;

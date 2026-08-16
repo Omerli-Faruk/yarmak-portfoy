@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -48,11 +49,11 @@ func main() {
 
 	conn, err := sql.Open("postgres", dbUrl)
 	if err != nil {
-		slog.Error("Can't connect to database", "error", err)
+		slog.Error("Veritabanına bağlanılamadı", "error", err)
 		os.Exit(1)
 	}
 	if err = conn.Ping(); err != nil {
-		slog.Error("The database is inaccessible", "error", err)
+		slog.Error("Veritabanına erişilemiyor", "error", err)
 		os.Exit(1)
 	}
 
@@ -75,9 +76,21 @@ func main() {
 	// Rate Limiter
 	v1Router.Use(httprate.NewRateLimiter(100, 1*time.Minute).Handler)
 
-	// Cors
+	allowedOriginsStr := os.Getenv("ALLOWED_ORIGINS")
+	var allowedOrigins []string
+	if allowedOriginsStr != "" {
+		for _, o := range strings.Split(allowedOriginsStr, ",") {
+			trimmed := strings.TrimSpace(o)
+			if trimmed != "" {
+				allowedOrigins = append(allowedOrigins, trimmed)
+			}
+		}
+	}
+	if len(allowedOrigins) == 0 {
+		allowedOrigins = []string{"http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"}
+	}
 	corsMiddleware, err := fcors.AllowAccess(
-		fcors.FromOrigins("http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"),
+		fcors.FromOrigins(allowedOrigins[0], allowedOrigins[1:]...),
 		fcors.WithRequestHeaders("Authorization", "Content-Type", "Accept"),
 		fcors.WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS"),
 	)
@@ -85,7 +98,6 @@ func main() {
 		slog.Error("CORS yapılandırma hatası", "error", err)
 		os.Exit(1)
 	}
-
 	v1Router.Use(corsMiddleware)
 
 	// Sağlık Kontrolü
@@ -94,9 +106,10 @@ func main() {
 		_, _ = w.Write([]byte("OK"))
 	})
 
-	// Kullanıcı Rotaları
-	v1Router.Post("/register", apiCFG.HandlerRegister)
-	v1Router.Post("/login", apiCFG.HandlerLogin)
+	// Kullanıcı Rotaları (Özel Brute-Force Korumalı Rate Limiter: 5 istek / dakika)
+	authRateLimiter := httprate.NewRateLimiter(5, 1*time.Minute).Handler
+	v1Router.With(authRateLimiter).Post("/register", apiCFG.HandlerRegister)
+	v1Router.With(authRateLimiter).Post("/login", apiCFG.HandlerLogin)
 	v1Router.Get("/me", apiCFG.MiddleWareAuth(apiCFG.HandlerGetMe))
 
 	// Asset (Hisse/Fon) Rotaları
@@ -121,23 +134,24 @@ func main() {
 	// Alt router'ı ana router'a bağla
 	r.Mount("/v1", v1Router)
 
-	// Arka Plan Scraper Worker'ı Başlat (1 dakikada bir çalışacak)
-	scraper.StartScraperWorker(queries, 1*time.Minute)
+	// 1. Sinyal dinleyicisini (Ctrl+C / SIGTERM) oluştur
+	serverCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
+	// 2. Arka Plan Scraper Worker'ı context ile Başlat
+	scraper.StartScraperWorker(serverCtx, queries, 1*time.Minute)
 	srv := &http.Server{
 		Handler: r,
 		Addr:    ":" + port,
 	}
 	slog.Info("Server Başlatılıyor...", "port", port)
-
 	go func() {
 		err = srv.ListenAndServe()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("Server hata verdi", "error", err)
 		}
 	}()
-	serverCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	// Sunucunun kapanmasını bekle
 	<-serverCtx.Done()
 	slog.Info("Server kapatılıyor...")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/mail"
+	"strings"
 )
 
 func (cfg *ApiConfig) HandlerRegister(w http.ResponseWriter, r *http.Request) {
@@ -25,8 +26,9 @@ func (cfg *ApiConfig) HandlerRegister(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Lütfen geçerli bir e-posta adresi girin", err)
 		return
 	}
-	if len(req.Password) < 8 {
-		respondWithError(w, http.StatusBadRequest, "Şifre en az 8 karakter uzunluğunda olmalıdır", nil)
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	if len(req.Password) < 8 || len(req.Password) > 72 {
+		respondWithError(w, http.StatusBadRequest, "Şifre 8 ile 72 karakter arasında olmalıdır", nil)
 		return
 	}
 	hashedPassword, err := auth.HashPassword(req.Password)

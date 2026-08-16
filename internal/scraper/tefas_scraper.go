@@ -25,7 +25,6 @@ func FetchTEFASPrice(symbol string) (float64, error) {
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 
-	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return 0, fmt.Errorf("bilgileri çekerken hata oluştu: %w", err)
@@ -45,19 +44,34 @@ func FetchTEFASPrice(symbol string) (float64, error) {
 
 	// Regexp for Google Finance price element
 	if matches := priceAttrRegex.FindStringSubmatch(body); len(matches) >= 2 {
-		priceStr := strings.ReplaceAll(matches[1], ",", "")
-		return strconv.ParseFloat(priceStr, 64)
+		return parseLocalizedPrice(matches[1])
 	}
 	if matches2 := priceClassRegex.FindStringSubmatch(body); len(matches2) >= 2 {
 		slog.Warn("TEFAS scraper: data-last-price bulunamadı, 2. yedek regex kullanıldı", "symbol", symbol)
-		priceStr := strings.ReplaceAll(matches2[1], ",", "")
-		return strconv.ParseFloat(priceStr, 64)
+		return parseLocalizedPrice(matches2[1])
 	}
 	if matches3 := priceGenericRegex.FindStringSubmatch(body); len(matches3) >= 2 {
 		slog.Warn("TEFAS scraper: 3. yedek generic regex kullanıldı", "symbol", symbol)
-		priceStr := strings.ReplaceAll(matches3[1], ",", "")
-		return strconv.ParseFloat(priceStr, 64)
+		return parseLocalizedPrice(matches3[1])
 	}
-
 	return 0, fmt.Errorf("TEFAS fon verisi bulunamadı: %s", symbol)
+}
+
+func parseLocalizedPrice(raw string) (float64, error) {
+	raw = strings.TrimSpace(raw)
+	raw = strings.TrimPrefix(raw, "₺")
+	raw = strings.TrimSpace(raw)
+	if strings.Contains(raw, ".") && strings.Contains(raw, ",") {
+		lastDot := strings.LastIndex(raw, ".")
+		lastComma := strings.LastIndex(raw, ",")
+		if lastComma > lastDot {
+			raw = strings.ReplaceAll(raw, ".", "")
+			raw = strings.ReplaceAll(raw, ",", ".")
+		} else {
+			raw = strings.ReplaceAll(raw, ",", "")
+		}
+	} else if strings.Contains(raw, ",") {
+		raw = strings.ReplaceAll(raw, ",", ".")
+	}
+	return strconv.ParseFloat(raw, 64)
 }

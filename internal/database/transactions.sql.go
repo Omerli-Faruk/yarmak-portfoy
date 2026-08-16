@@ -66,6 +66,33 @@ func (q *Queries) DeleteTransaction(ctx context.Context, arg DeleteTransactionPa
 	return err
 }
 
+const getTransactionByIDAndUser = `-- name: GetTransactionByIDAndUser :one
+SELECT id, user_id, asset_id, type, amount, price, transaction_date, created_at, deleted_at FROM transactions
+WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+`
+
+type GetTransactionByIDAndUserParams struct {
+	ID     int64
+	UserID int64
+}
+
+func (q *Queries) GetTransactionByIDAndUser(ctx context.Context, arg GetTransactionByIDAndUserParams) (Transaction, error) {
+	row := q.db.QueryRowContext(ctx, getTransactionByIDAndUser, arg.ID, arg.UserID)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.AssetID,
+		&i.Type,
+		&i.Amount,
+		&i.Price,
+		&i.TransactionDate,
+		&i.CreatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
 const getUserHoldingsSummary = `-- name: GetUserHoldingsSummary :many
 SELECT
     a.id as asset_id,

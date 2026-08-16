@@ -9,7 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Create Price Alert
+// Fiyat alarmı oluştur
 func (cfg *ApiConfig) HandlerCreatePriceAlert(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		AssetID     int64  `json:"asset_id"`
@@ -23,14 +23,18 @@ func (cfg *ApiConfig) HandlerCreatePriceAlert(w http.ResponseWriter, r *http.Req
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
 		return
 	}
-	targetPrice, _ := strconv.ParseFloat(params.TargetPrice, 64)
+	targetPrice, err := strconv.ParseFloat(params.TargetPrice, 64)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Hedef fiyat geçerli bir sayı olmalıdır.", err)
+		return
+	}
 	if targetPrice <= 0 || params.AssetID <= 0 || (params.Direction != "ABOVE" && params.Direction != "BELOW") {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz parametreler: Hedef fiyat 0'dan büyük, varlık ID geçerli ve yön 'ABOVE' veya 'BELOW' olmalıdır", err)
 		return
 	}
 	userID, ok := r.Context().Value(UserIDKey).(int64)
 	if !ok {
-		respondWithError(w, http.StatusBadRequest, "Yetkisiz erişim", nil)
+		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
 		return
 	}
 	priceAlert, err := cfg.DB.CreatePriceAlert(r.Context(), database.CreatePriceAlertParams{
@@ -46,11 +50,11 @@ func (cfg *ApiConfig) HandlerCreatePriceAlert(w http.ResponseWriter, r *http.Req
 	respondWithJSON(w, http.StatusCreated, priceAlert)
 }
 
-// List Price Alert
+// Fiyat alarmı listele
 func (cfg *ApiConfig) HandlerGetUserPriceAlerts(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
 	if !ok {
-		respondWithError(w, http.StatusBadRequest, "Yetkisiz erişim", nil)
+		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
 		return
 	}
 	priceAlert, err := cfg.DB.GetUserPriceAlert(r.Context(), userID)
@@ -61,7 +65,7 @@ func (cfg *ApiConfig) HandlerGetUserPriceAlerts(w http.ResponseWriter, r *http.R
 	respondWithJSON(w, http.StatusOK, priceAlert)
 }
 
-// Delete Price Alert
+// Fiyat alarmı sil
 func (cfg *ApiConfig) HandlerDeletePriceAlert(w http.ResponseWriter, r *http.Request) {
 	urlID := chi.URLParam(r, "id")
 	priceAlertID, err := strconv.ParseInt(urlID, 10, 64)

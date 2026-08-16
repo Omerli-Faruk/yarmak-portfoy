@@ -12,7 +12,6 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 	type reqLogin struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
-		Role     string `json:"role"`
 	}
 	type loginResponse struct {
 		Token string       `json:"token"`
@@ -25,10 +24,14 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
 		return
 	}
-	email := strings.TrimSpace(params.Email)
+	email := strings.ToLower(strings.TrimSpace(params.Email))
 	password := strings.TrimSpace(params.Password)
 	if email == "" || password == "" {
 		respondWithError(w, http.StatusBadRequest, "Lütfen tüm alanları doldurun", nil)
+		return
+	}
+	if len(password) > 72 {
+		respondWithError(w, http.StatusBadRequest, "Şifre en fazla 72 karakter olabilir", nil)
 		return
 	}
 	user, err := cfg.DB.GetUserByEmail(r.Context(), email)

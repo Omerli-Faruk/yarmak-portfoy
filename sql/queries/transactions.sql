@@ -31,3 +31,7 @@ HAVING SUM(CASE WHEN t.type = 'BUY' THEN t.amount ELSE -t.amount END) > 0;
 UPDATE transactions
 SET deleted_at = NOW()
 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL;
+
+-- name: GetTransactionByIDAndUser :one
+SELECT * FROM transactions
+WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL;

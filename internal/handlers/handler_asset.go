@@ -62,7 +62,7 @@ func (cfg *ApiConfig) HandlerGetAssetPriceHistory(w http.ResponseWriter, r *http
 	asset := chi.URLParam(r, "id")
 	assetID, err := strconv.ParseInt(asset, 10, 64)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Geçersiz işlem ID", err)
+		respondWithError(w, http.StatusBadRequest, "Geçersiz varlık ID", err)
 		return
 	}
 	price, err := cfg.DB.GetAssetPriceHistory(r.Context(), assetID)
