@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"borsa_portfoy_backend/internal/database"
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -10,18 +12,26 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+type createTransactionParams struct {
+	AssetID         int64     `json:"asset_id"`
+	Type            string    `json:"type"`
+	Amount          string    `json:"amount"`
+	Price           string    `json:"price"`
+	TransactionDate time.Time `json:"transaction_date"`
+	Symbol          string    `json:"symbol"`
+	AssetType       string    `json:"asset_type"`
+}
+
 func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Request) {
-	type parameters struct {
-		AssetID         int64     `json:"asset_id"`
-		Type            string    `json:"type"`
-		Amount          string    `json:"amount"`
-		Price           string    `json:"price"`
-		TransactionDate time.Time `json:"transaction_date"`
-	}
+
 	decoder := json.NewDecoder(r.Body)
-	params := parameters{}
+	params := createTransactionParams{}
 	err := decoder.Decode(&params)
 	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
+		return
+	}
+	if err := cfg.resolveAssetID(r.Context(), &params); err != nil {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
 		return
 	}
@@ -47,20 +57,9 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 	}
 
 	if params.Type == "SELL" {
-		holdings, err := cfg.DB.GetUserHoldingsSummary(r.Context(), userID)
+		err = cfg.validateSellHolding(r.Context(), userID, params.AssetID, amountVal)
 		if err != nil {
-			respondWithError(w, http.StatusBadRequest, "Satış yapmak için portföyünüzde varlık bulunmalıdır", err)
-			return
-		}
-		var currentHolding float64
-		for _, h := range holdings {
-			if h.AssetID == params.AssetID {
-				currentHolding, _ = strconv.ParseFloat(h.TotalAmount, 64)
-				break
-			}
-		}
-		if amountVal > currentHolding {
-			respondWithError(w, http.StatusBadRequest, "Yetersiz bakiye: Elinizdeki miktardan fazlasını satamazsınız", nil)
+			respondWithError(w, http.StatusBadRequest, "hata", err)
 			return
 		}
 	}
@@ -148,4 +147,34 @@ func (cfg *ApiConfig) HandlerDeleteTransaction(w http.ResponseWriter, r *http.Re
 		return
 	}
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "İşlem başarıyla silindi"})
+}
+
+func (cfg *ApiConfig) validateSellHolding(ctx context.Context, userID int64, assetID int64, sellAmount float64) error {
+	holdings, err := cfg.DB.GetUserHoldingsSummary(ctx, userID)
+	if err != nil {
+		return err
+	}
+	currentHolding := getUserHoldingLot(holdings, assetID)
+	if sellAmount > currentHolding {
+		return fmt.Errorf("yetersiz bakiye: elinizdeki miktardan fazlasını satamazsınız")
+	}
+	return nil
+}
+
+func (cfg *ApiConfig) resolveAssetID(ctx context.Context, params *createTransactionParams) error {
+	if params.AssetID > 0 {
+		return nil
+	}
+	if params.Symbol == "" {
+		return fmt.Errorf("varlık ID veya Sembol zorunludur")
+	}
+	if params.AssetType == "" {
+		params.AssetType = "HISSE"
+	}
+	asset, err := cfg.GetOrCreateAssetBySymbol(ctx, params.Symbol, params.AssetType)
+	if err != nil {
+		return err
+	}
+	params.AssetID = asset.ID
+	return nil
 }

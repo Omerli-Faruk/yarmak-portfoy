@@ -2,7 +2,6 @@ package scraper
 
 import (
 	"borsa_portfoy_backend/internal/database"
-	"borsa_portfoy_backend/internal/handlers"
 	"context"
 	"fmt"
 	"log/slog"
@@ -10,22 +9,22 @@ import (
 	"time"
 )
 
-func StartScraperWorker(cfg *handlers.ApiConfig, interval time.Duration) {
+func StartScraperWorker(db *database.Queries, interval time.Duration) {
 	go func() {
 		ctx := context.Background()
 
-		runScrapeCycle(ctx, cfg)
+		runScrapeCycle(ctx, db)
 
 		ticker := time.NewTicker(interval)
 		for range ticker.C {
-			runScrapeCycle(ctx, cfg)
+			runScrapeCycle(ctx, db)
 		}
 	}()
 }
 
-func runScrapeCycle(ctx context.Context, cfg *handlers.ApiConfig) {
+func runScrapeCycle(ctx context.Context, db *database.Queries) {
 	slog.Info("Canlı fiyat taraması başlatılıyor...")
-	assets, err := cfg.DB.ListAssets(ctx)
+	assets, err := db.ListAssets(ctx)
 	if err != nil {
 		slog.Error("Hisseler çekilemedi", "error", err)
 		return
@@ -50,7 +49,7 @@ func runScrapeCycle(ctx context.Context, cfg *handlers.ApiConfig) {
 
 		priceStr := fmt.Sprintf("%.6f", newPrice)
 
-		_, err = cfg.DB.UpdateAssetPrice(ctx, database.UpdateAssetPriceParams{
+		_, err = db.UpdateAssetPrice(ctx, database.UpdateAssetPriceParams{
 			ID:           asset.ID,
 			CurrentPrice: priceStr,
 		})
@@ -59,7 +58,7 @@ func runScrapeCycle(ctx context.Context, cfg *handlers.ApiConfig) {
 			continue
 		}
 
-		_, err = cfg.DB.CreatePriceHistory(ctx, database.CreatePriceHistoryParams{
+		_, err = db.CreatePriceHistory(ctx, database.CreatePriceHistoryParams{
 			AssetID:    asset.ID,
 			Price:      priceStr,
 			RecordedAt: time.Now().UTC(),
@@ -70,7 +69,7 @@ func runScrapeCycle(ctx context.Context, cfg *handlers.ApiConfig) {
 			slog.Info("Fiyat başarıyla güncellendi", "symbol", asset.Symbol, "price", priceStr)
 		}
 
-		alerts, err := cfg.DB.GetPendingAlertsForAsset(ctx, asset.ID)
+		alerts, err := db.GetPendingAlertsForAsset(ctx, asset.ID)
 		if err != nil {
 			slog.Error("Fiyat alarmı sorgulanırken hata oluştu", "symbol", asset.Symbol, "error", err)
 		}
@@ -78,7 +77,7 @@ func runScrapeCycle(ctx context.Context, cfg *handlers.ApiConfig) {
 		for _, alert := range alerts {
 			targetPrice, _ := strconv.ParseFloat(alert.TargetPrice, 64)
 			if alert.Direction == "ABOVE" && newPrice >= targetPrice || alert.Direction == "BELOW" && newPrice <= targetPrice {
-				err = cfg.DB.MarkAlertTriggered(ctx, alert.ID)
+				err = db.MarkAlertTriggered(ctx, alert.ID)
 				if err != nil {
 					slog.Error("Fiyat alarmı durumu güncellenirken hata oluştu", "symbol", asset.Symbol, "error", err)
 				}

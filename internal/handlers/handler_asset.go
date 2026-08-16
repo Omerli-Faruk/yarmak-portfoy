@@ -72,3 +72,21 @@ func (cfg *ApiConfig) HandlerGetAssetPriceHistory(w http.ResponseWriter, r *http
 	}
 	respondWithJSON(w, http.StatusOK, price)
 }
+
+func (cfg *ApiConfig) HandlerLookupAsset(w http.ResponseWriter, r *http.Request) {
+	symbol := r.URL.Query().Get("symbol")
+	assetType := r.URL.Query().Get("type")
+	if symbol == "" {
+		respondWithError(w, http.StatusBadRequest, "Sembol parametresi zorunludur", nil)
+		return
+	}
+	if assetType == "" {
+		assetType = "HISSE"
+	}
+	asset, err := cfg.GetOrCreateAssetBySymbol(r.Context(), symbol, assetType)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Varlık bulunamadı", err)
+		return
+	}
+	respondWithJSON(w, http.StatusOK, asset)
+}

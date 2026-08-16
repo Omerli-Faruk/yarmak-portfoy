@@ -102,6 +102,7 @@ func main() {
 	// Asset (Hisse/Fon) Rotaları
 	v1Router.Post("/assets", apiCFG.MiddleWareAuth(apiCFG.MiddleWareAdmin(apiCFG.HandlerCreateAsset)))
 	v1Router.Get("/assets", apiCFG.HandlerListAssets)
+	v1Router.Get("/assets/lookup", apiCFG.HandlerLookupAsset)
 
 	// İşlem ve Portföy Rotaları (JWT Korumalı!)
 	v1Router.Post("/transactions", apiCFG.MiddleWareAuth(apiCFG.HandlerCreateTransaction))
@@ -121,7 +122,7 @@ func main() {
 	r.Mount("/v1", v1Router)
 
 	// Arka Plan Scraper Worker'ı Başlat (1 dakikada bir çalışacak)
-	scraper.StartScraperWorker(apiCFG, 1*time.Minute)
+	scraper.StartScraperWorker(queries, 1*time.Minute)
 
 	srv := &http.Server{
 		Handler: r,
