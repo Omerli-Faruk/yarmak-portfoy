@@ -17,5 +17,6 @@ func (cfg *ApiConfig) HandlerGetMe(w http.ResponseWriter, r *http.Request) {
 		ID:        dbUser.ID,
 		Email:     dbUser.Email,
 		CreatedAt: dbUser.CreatedAt,
+		Role:      dbUser.Role,
 	})
 }

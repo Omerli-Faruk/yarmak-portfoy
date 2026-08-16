@@ -14,3 +14,9 @@ WHERE id = $1;
 -- name: DeleteUser :exec
 DELETE FROM users
 WHERE id = $1;
+
+-- name: UpdateUserRole :one
+UPDATE users
+SET role = $2
+WHERE id = $1
+    RETURNING *;

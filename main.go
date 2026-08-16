@@ -100,7 +100,7 @@ func main() {
 	v1Router.Get("/me", apiCFG.MiddleWareAuth(apiCFG.HandlerGetMe))
 
 	// Asset (Hisse/Fon) Rotaları
-	v1Router.Post("/assets", apiCFG.MiddleWareAuth(apiCFG.HandlerCreateAsset))
+	v1Router.Post("/assets", apiCFG.MiddleWareAuth(apiCFG.MiddleWareAdmin(apiCFG.HandlerCreateAsset)))
 	v1Router.Get("/assets", apiCFG.HandlerListAssets)
 
 	// İşlem ve Portföy Rotaları (JWT Korumalı!)

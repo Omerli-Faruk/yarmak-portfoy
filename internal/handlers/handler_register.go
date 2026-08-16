@@ -13,7 +13,7 @@ func (cfg *ApiConfig) HandlerRegister(w http.ResponseWriter, r *http.Request) {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
-	
+
 	var req reqRegister
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -39,5 +39,5 @@ func (cfg *ApiConfig) HandlerRegister(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Bu e-posta adresi zaten kullanımda", err)
 		return
 	}
-	respondWithJSON(w, http.StatusCreated, userResponse{ID: user.ID, Email: user.Email, CreatedAt: user.CreatedAt})
+	respondWithJSON(w, http.StatusCreated, userResponse{ID: user.ID, Email: user.Email, CreatedAt: user.CreatedAt, Role: user.Role})
 }

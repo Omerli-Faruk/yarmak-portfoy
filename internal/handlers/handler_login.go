@@ -12,6 +12,7 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 	type reqLogin struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
+		Role     string `json:"role"`
 	}
 	type loginResponse struct {
 		Token string       `json:"token"`
@@ -45,5 +46,5 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusInternalServerError, "Token oluşturulurken hata oluştu", err)
 		return
 	}
-	respondWithJSON(w, http.StatusOK, loginResponse{Token: token, User: userResponse{ID: user.ID, Email: user.Email, CreatedAt: user.CreatedAt}})
+	respondWithJSON(w, http.StatusOK, loginResponse{Token: token, User: userResponse{ID: user.ID, Email: user.Email, CreatedAt: user.CreatedAt, Role: user.Role}})
 }

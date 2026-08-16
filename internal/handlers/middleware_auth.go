@@ -26,3 +26,23 @@ func (cfg *ApiConfig) MiddleWareAuth(next http.HandlerFunc) http.HandlerFunc {
 		next(w, r.WithContext(ctx))
 	}
 }
+
+func (cfg *ApiConfig) MiddleWareAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := r.Context().Value(UserIDKey).(int64)
+		if !ok {
+			respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
+			return
+		}
+		user, err := cfg.DB.GetUserByID(r.Context(), userID)
+		if err != nil {
+			respondWithError(w, http.StatusNotFound, "Kullanıcı bulunamadı", err)
+			return
+		}
+		if user.Role != "ADMIN" {
+			respondWithError(w, http.StatusForbidden, "Bu işlem için yönetici yetkisi gereklidir", nil)
+			return
+		}
+		next(w, r)
+	}
+}
