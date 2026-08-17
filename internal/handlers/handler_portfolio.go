@@ -74,6 +74,18 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 		capitalProfitLossPercentage = (capitalProfitLoss / totalPortfolioCost) * 100
 		totalReturnPercentage = (totalCombinedProfit / totalPortfolioCost) * 100
 	}
+
+	var usdRate float64
+	usdAsset, err := cfg.DB.GetAssetBySymbol(r.Context(), "USDTRY")
+	if err == nil {
+		usdRate, _ = strconv.ParseFloat(usdAsset.CurrentPrice, 64)
+	}
+	var totalValueUSD float64
+	var totalProfitUSD float64
+	if usdRate > 0 {
+		totalValueUSD = totalPortfolioValue / usdRate
+		totalProfitUSD = totalCombinedProfit / usdRate
+	}
 	respondWithJSON(w, http.StatusOK, map[string]interface{}{
 		"total_value":                    totalPortfolioValue,
 		"total_cost":                     totalPortfolioCost,
@@ -84,5 +96,8 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 		"total_return_percentage":        totalReturnPercentage,
 		"holdings_count":                 len(holdings),
 		"breakdown":                      breakdown,
+		"usd_rate":                       usdRate,
+		"total_value_usd":                totalValueUSD,
+		"total_combined_profit_usd":      totalProfitUSD,
 	})
 }
