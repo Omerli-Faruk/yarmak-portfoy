@@ -47,6 +47,15 @@ type PriceHistory struct {
 	RecordedAt time.Time
 }
 
+type Split struct {
+	ID         int64
+	AssetID    int64
+	SplitRatio string
+	SplitDate  time.Time
+	CreatedAt  time.Time
+	DeletedAt  sql.NullTime
+}
+
 type Transaction struct {
 	ID              int64
 	UserID          int64
