@@ -10,6 +10,13 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// @Summary Bedelsiz/Ters Bölünme Uygula (Admin)
+// @Description Hissede bölünme uygular ve tüm kullanıcıların geçmiş işlemlerini günceller
+// @Tags Splits
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Router /splits [post]
 func (cfg *ApiConfig) HandlerCreateSplit(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		AssetID    int64     `json:"asset_id"`
@@ -61,6 +68,12 @@ func (cfg *ApiConfig) HandlerCreateSplit(w http.ResponseWriter, r *http.Request)
 	respondWithJSON(w, http.StatusCreated, split)
 }
 
+// @Summary Hissenin Bölünme Geçmişi
+// @Description Belirli bir hissenin geçmişte yaşadığı tüm bedelsiz bölünmeleri listeler
+// @Tags Splits
+// @Security BearerAuth
+// @Produce json
+// @Router /assets/{id}/splits [get]
 func (cfg *ApiConfig) HandlerListSplitsByAsset(w http.ResponseWriter, r *http.Request) {
 	assetIDStr := chi.URLParam(r, "id")
 	assetID, err := strconv.ParseInt(assetIDStr, 10, 64)

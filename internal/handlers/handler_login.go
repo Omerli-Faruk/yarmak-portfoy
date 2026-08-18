@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+// @Summary Kullanıcı Girişi
+// @Description Email ve şifre ile giriş yapıp JWT token üretir
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Router /auth/login [post]
 func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 	type reqLogin struct {
 		Email    string `json:"email"`

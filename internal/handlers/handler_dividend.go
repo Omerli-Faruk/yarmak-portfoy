@@ -21,7 +21,13 @@ func getUserHoldingLot(holdings []database.GetUserHoldingsSummaryRow, assetID in
 	return 0
 }
 
-// HandlerCreateDividend Temettü Oluştur
+// @Summary Temettü Geliri Kaydet
+// @Description Kullanıcının aldığı nakit temettü ödemesini kaydeder
+// @Tags Dividends
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Router /dividends [post]
 func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		AssetID        int64     `json:"asset_id"`
@@ -82,7 +88,12 @@ func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Reque
 	respondWithJSON(w, http.StatusCreated, userDividend)
 }
 
-// HandlerGetUserDividends Temettü görüntüle
+// @Summary Kullanıcının Temettü Geçmişi
+// @Description Kullanıcının aldığı tüm temettü ödemelerini listeler
+// @Tags Dividends
+// @Security BearerAuth
+// @Produce json
+// @Router /dividends [get]
 func (cfg *ApiConfig) HandlerGetUserDividends(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
 	if !ok {
@@ -97,7 +108,12 @@ func (cfg *ApiConfig) HandlerGetUserDividends(w http.ResponseWriter, r *http.Req
 	respondWithJSON(w, http.StatusOK, dividends)
 }
 
-// HandlerDeleteDividend Temettü Sil
+// @Summary Temettü Kaydını Sil
+// @Description Kullanıcının kaydettiği bir temettü gelirini siler
+// @Tags Dividends
+// @Security BearerAuth
+// @Produce json
+// @Router /dividends/{id} [delete]
 func (cfg *ApiConfig) HandlerDeleteDividend(w http.ResponseWriter, r *http.Request) {
 	urlID := chi.URLParam(r, "id")
 	dividendID, err := strconv.ParseInt(urlID, 10, 64)

@@ -31,6 +31,13 @@ type createTransactionParams struct {
 	AssetType       string    `json:"asset_type"`
 }
 
+// @Summary Alım/Satım İşlemi Yap
+// @Description Kullanıcı portföyüne yeni bir alım (BUY) veya satım (SELL) işlemi kaydeder
+// @Tags Transactions
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Router /transactions [post]
 func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
@@ -107,6 +114,12 @@ type userHoldingResponse struct {
 	ProfitLoss   float64 `json:"profit_loss"`
 }
 
+// @Summary Kullanıcının Varlıklarını (Holdings) Listele
+// @Description Kullanıcının sahip olduğu tüm varlıkları, lot sayılarını ve kâr/zararlarını döner
+// @Tags Portfolio
+// @Security BearerAuth
+// @Produce json
+// @Router /portfolio/holdings [get]
 func (cfg *ApiConfig) HandlerGetUserHoldings(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
 	if !ok {
@@ -149,6 +162,12 @@ func (cfg *ApiConfig) HandlerGetUserHoldings(w http.ResponseWriter, r *http.Requ
 	respondWithJSON(w, http.StatusOK, res)
 }
 
+// @Summary İşlem Geçmişi (Pagination)
+// @Description Kullanıcının geçmiş alım/satım işlemlerini sayfalanmış olarak listeler
+// @Tags Transactions
+// @Security BearerAuth
+// @Produce json
+// @Router /transactions [get]
 func (cfg *ApiConfig) HandlerGetUserTransactions(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
 	if !ok {
@@ -183,6 +202,12 @@ func (cfg *ApiConfig) HandlerGetUserTransactions(w http.ResponseWriter, r *http.
 	respondWithJSON(w, http.StatusOK, transactions)
 }
 
+// @Summary Alım/Satım İşlemini Sil
+// @Description Kullanıcının gerçekleştirdiği bir alım veya satım işlemini siler
+// @Tags Transactions
+// @Security BearerAuth
+// @Produce json
+// @Router /transactions/{id} [delete]
 func (cfg *ApiConfig) HandlerDeleteTransaction(w http.ResponseWriter, r *http.Request) {
 	urlID := chi.URLParam(r, "id")
 	transactionID, err := strconv.ParseInt(urlID, 10, 64)

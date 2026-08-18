@@ -7,6 +7,12 @@ import (
 	"strconv"
 )
 
+// @Summary Portföy Özeti (TL ve Dolar)
+// @Description Toplam portföy değeri, toplam maliyet, kâr/zarar, dolar karşılığı ve kategori dağılımını döner
+// @Tags Portfolio
+// @Security BearerAuth
+// @Produce json
+// @Router /portfolio/summary [get]
 func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
 	if !ok {
@@ -102,6 +108,12 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 	})
 }
 
+// @Summary Portföy Tarihsel Grafik Geçmişi
+// @Description Kullanıcının portföyünün zaman içindeki gelişimini grafik için döner
+// @Tags Portfolio
+// @Security BearerAuth
+// @Produce json
+// @Router /portfolio/history [get]
 func (cfg *ApiConfig) HandlerGetUserPortfolioHistory(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
 	if !ok {

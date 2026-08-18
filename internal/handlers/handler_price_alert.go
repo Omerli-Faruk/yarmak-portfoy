@@ -9,7 +9,13 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Fiyat alarmı oluştur
+// @Summary Fiyat Alarmı Kur
+// @Description Belirli bir hisse veya fon hedef fiyata ulaştığında tetiklenecek alarm kurar
+// @Tags Alerts
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Router /alerts [post]
 func (cfg *ApiConfig) HandlerCreatePriceAlert(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		AssetID     int64  `json:"asset_id"`
@@ -50,7 +56,12 @@ func (cfg *ApiConfig) HandlerCreatePriceAlert(w http.ResponseWriter, r *http.Req
 	respondWithJSON(w, http.StatusCreated, priceAlert)
 }
 
-// Fiyat alarmı listele
+// @Summary Kullanıcının Alarmlarını Listele
+// @Description Kullanıcının aktif ve tetiklenmiş tüm fiyat alarmlarını listeler
+// @Tags Alerts
+// @Security BearerAuth
+// @Produce json
+// @Router /alerts [get]
 func (cfg *ApiConfig) HandlerGetUserPriceAlerts(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
 	if !ok {
@@ -65,7 +76,12 @@ func (cfg *ApiConfig) HandlerGetUserPriceAlerts(w http.ResponseWriter, r *http.R
 	respondWithJSON(w, http.StatusOK, priceAlert)
 }
 
-// Fiyat alarmı sil
+// @Summary Fiyat Alarmını Sil
+// @Description Kullanıcının kurduğu bir fiyat alarmını iptal eder/siler
+// @Tags Alerts
+// @Security BearerAuth
+// @Produce json
+// @Router /alerts/{id} [delete]
 func (cfg *ApiConfig) HandlerDeletePriceAlert(w http.ResponseWriter, r *http.Request) {
 	urlID := chi.URLParam(r, "id")
 	priceAlertID, err := strconv.ParseInt(urlID, 10, 64)

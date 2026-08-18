@@ -9,6 +9,12 @@ import (
 	"strings"
 )
 
+// @Summary Yeni Kullanıcı Kaydı
+// @Description Sisteme yeni bir kullanıcı kaydeder
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Router /auth/register [post]
 func (cfg *ApiConfig) HandlerRegister(w http.ResponseWriter, r *http.Request) {
 	type reqRegister struct {
 		Email    string `json:"email"`

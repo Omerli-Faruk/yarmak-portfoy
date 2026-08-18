@@ -15,13 +15,25 @@ import (
 	"syscall"
 	"time"
 
+	_ "borsa_portfoy_backend/docs"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/httprate"
 	"github.com/joho/godotenv"
 	"github.com/jub0bs/fcors"
 	_ "github.com/lib/pq"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
+// @title Midas Borsa & Portföy Takip API
+// @version 1.0
+// @description BIST 100 hisseleri, TEFAS yatırım fonları, altın ve döviz portföy takip sistemi REST API dokümantasyonu.
+// @host localhost:8080
+// @BasePath /v1
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description JWT Token'ınızı 'Bearer <token>' formatında giriniz.
 func main() {
 	err := godotenv.Load(".env")
 	if err != nil {
@@ -136,6 +148,7 @@ func main() {
 
 	// Alt router'ı ana router'a bağla
 	r.Mount("/v1", v1Router)
+	r.Get("/swagger/*", httpSwagger.WrapHandler)
 
 	// 1. Sinyal dinleyicisini (Ctrl+C / SIGTERM) oluştur
 	serverCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

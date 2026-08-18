@@ -1,0 +1,256 @@
+basePath: /v1
+host: localhost:8080
+info:
+  contact: {}
+  description: BIST 100 hisseleri, TEFAS yatırım fonları, altın ve döviz portföy takip
+    sistemi REST API dokümantasyonu.
+  title: Midas Borsa & Portföy Takip API
+  version: "1.0"
+paths:
+  /alerts:
+    get:
+      description: Kullanıcının aktif ve tetiklenmiş tüm fiyat alarmlarını listeler
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Kullanıcının Alarmlarını Listele
+      tags:
+      - Alerts
+    post:
+      consumes:
+      - application/json
+      description: Belirli bir hisse veya fon hedef fiyata ulaştığında tetiklenecek
+        alarm kurar
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Fiyat Alarmı Kur
+      tags:
+      - Alerts
+  /alerts/{id}:
+    delete:
+      description: Kullanıcının kurduğu bir fiyat alarmını iptal eder/siler
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Fiyat Alarmını Sil
+      tags:
+      - Alerts
+  /assets:
+    get:
+      description: Sistemde kayıtlı tüm BIST hisseleri, TEFAS fonları ve altınları
+        anlık fiyatlarıyla döner
+      produces:
+      - application/json
+      responses: {}
+      summary: Tüm Varlıkları Listele
+      tags:
+      - Assets
+    post:
+      consumes:
+      - application/json
+      description: Sisteme yeni bir hisse, fon, altın veya döviz varlığı ekler
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Yeni Varlık Tanımla (Admin)
+      tags:
+      - Assets
+  /assets/{id}/price-history:
+    get:
+      description: Belirli bir varlığın tarihsel fiyat değişim geçmişini listeler
+      produces:
+      - application/json
+      responses: {}
+      summary: Varlık Fiyat Geçmişi
+      tags:
+      - Assets
+  /assets/{id}/splits:
+    get:
+      description: Belirli bir hissenin geçmişte yaşadığı tüm bedelsiz bölünmeleri
+        listeler
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Hissenin Bölünme Geçmişi
+      tags:
+      - Splits
+  /assets/lookup:
+    get:
+      description: Sembol ve türe göre varlık arar, sistemde yoksa piyasadan anında
+        çeker
+      produces:
+      - application/json
+      responses: {}
+      summary: Akıllı Varlık Arama & Keşif
+      tags:
+      - Assets
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Email ve şifre ile giriş yapıp JWT token üretir
+      produces:
+      - application/json
+      responses: {}
+      summary: Kullanıcı Girişi
+      tags:
+      - Auth
+  /auth/me:
+    get:
+      description: JWT token ile doğrulanmış kullanıcının profil bilgilerini döner
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Giriş Yapmış Kullanıcı Bilgisi
+      tags:
+      - Auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Sisteme yeni bir kullanıcı kaydeder
+      produces:
+      - application/json
+      responses: {}
+      summary: Yeni Kullanıcı Kaydı
+      tags:
+      - Auth
+  /dividends:
+    get:
+      description: Kullanıcının aldığı tüm temettü ödemelerini listeler
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Kullanıcının Temettü Geçmişi
+      tags:
+      - Dividends
+    post:
+      consumes:
+      - application/json
+      description: Kullanıcının aldığı nakit temettü ödemesini kaydeder
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Temettü Geliri Kaydet
+      tags:
+      - Dividends
+  /dividends/{id}:
+    delete:
+      description: Kullanıcının kaydettiği bir temettü gelirini siler
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Temettü Kaydını Sil
+      tags:
+      - Dividends
+  /portfolio/history:
+    get:
+      description: Kullanıcının portföyünün zaman içindeki gelişimini grafik için
+        döner
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Portföy Tarihsel Grafik Geçmişi
+      tags:
+      - Portfolio
+  /portfolio/holdings:
+    get:
+      description: Kullanıcının sahip olduğu tüm varlıkları, lot sayılarını ve kâr/zararlarını
+        döner
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Kullanıcının Varlıklarını (Holdings) Listele
+      tags:
+      - Portfolio
+  /portfolio/summary:
+    get:
+      description: Toplam portföy değeri, toplam maliyet, kâr/zarar, dolar karşılığı
+        ve kategori dağılımını döner
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Portföy Özeti (TL ve Dolar)
+      tags:
+      - Portfolio
+  /splits:
+    post:
+      consumes:
+      - application/json
+      description: Hissede bölünme uygular ve tüm kullanıcıların geçmiş işlemlerini
+        günceller
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Bedelsiz/Ters Bölünme Uygula (Admin)
+      tags:
+      - Splits
+  /transactions:
+    get:
+      description: Kullanıcının geçmiş alım/satım işlemlerini sayfalanmış olarak listeler
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: İşlem Geçmişi (Pagination)
+      tags:
+      - Transactions
+    post:
+      consumes:
+      - application/json
+      description: Kullanıcı portföyüne yeni bir alım (BUY) veya satım (SELL) işlemi
+        kaydeder
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Alım/Satım İşlemi Yap
+      tags:
+      - Transactions
+  /transactions/{id}:
+    delete:
+      description: Kullanıcının gerçekleştirdiği bir alım veya satım işlemini siler
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Alım/Satım İşlemini Sil
+      tags:
+      - Transactions
+securityDefinitions:
+  BearerAuth:
+    description: JWT Token'ınızı 'Bearer <token>' formatında giriniz.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

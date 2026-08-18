@@ -10,6 +10,13 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// @Summary Yeni Varlık Tanımla (Admin)
+// @Description Sisteme yeni bir hisse, fon, altın veya döviz varlığı ekler
+// @Tags Assets
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Router /assets [post]
 func (cfg *ApiConfig) HandlerCreateAsset(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Symbol    string `json:"symbol"`
@@ -49,6 +56,11 @@ func (cfg *ApiConfig) HandlerCreateAsset(w http.ResponseWriter, r *http.Request)
 	respondWithJSON(w, http.StatusCreated, asset)
 }
 
+// @Summary Tüm Varlıkları Listele
+// @Description Sistemde kayıtlı tüm BIST hisseleri, TEFAS fonları ve altınları anlık fiyatlarıyla döner
+// @Tags Assets
+// @Produce json
+// @Router /assets [get]
 func (cfg *ApiConfig) HandlerListAssets(w http.ResponseWriter, r *http.Request) {
 	asset, err := cfg.DB.ListAssets(r.Context())
 	if err != nil {
@@ -58,6 +70,11 @@ func (cfg *ApiConfig) HandlerListAssets(w http.ResponseWriter, r *http.Request) 
 	respondWithJSON(w, http.StatusOK, asset)
 }
 
+// @Summary Varlık Fiyat Geçmişi
+// @Description Belirli bir varlığın tarihsel fiyat değişim geçmişini listeler
+// @Tags Assets
+// @Produce json
+// @Router /assets/{id}/price-history [get]
 func (cfg *ApiConfig) HandlerGetAssetPriceHistory(w http.ResponseWriter, r *http.Request) {
 	asset := chi.URLParam(r, "id")
 	assetID, err := strconv.ParseInt(asset, 10, 64)
@@ -73,6 +90,11 @@ func (cfg *ApiConfig) HandlerGetAssetPriceHistory(w http.ResponseWriter, r *http
 	respondWithJSON(w, http.StatusOK, price)
 }
 
+// @Summary Akıllı Varlık Arama & Keşif
+// @Description Sembol ve türe göre varlık arar, sistemde yoksa piyasadan anında çeker
+// @Tags Assets
+// @Produce json
+// @Router /assets/lookup [get]
 func (cfg *ApiConfig) HandlerLookupAsset(w http.ResponseWriter, r *http.Request) {
 	symbol := r.URL.Query().Get("symbol")
 	assetType := r.URL.Query().Get("type")
