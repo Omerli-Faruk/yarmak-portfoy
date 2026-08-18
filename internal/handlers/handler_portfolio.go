@@ -101,3 +101,20 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 		"total_combined_profit_usd":      totalProfitUSD,
 	})
 }
+
+func (cfg *ApiConfig) HandlerGetUserPortfolioHistory(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(UserIDKey).(int64)
+	if !ok {
+		respondWithError(w, http.StatusUnauthorized, "Kullanıcı bulunamadı", nil)
+		return
+	}
+	history, err := cfg.DB.GetUserPortfolioHistory(r.Context(), userID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Portföy geçmişi getirilirken hata oluştu", err)
+		return
+	}
+	if history == nil {
+		history = []database.PortfolioSnapshot{}
+	}
+	respondWithJSON(w, http.StatusOK, history)
+}

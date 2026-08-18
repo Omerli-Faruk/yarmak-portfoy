@@ -132,6 +132,7 @@ func main() {
 	v1Router.Post("/alerts", apiCFG.MiddleWareAuth(apiCFG.HandlerCreatePriceAlert))
 	v1Router.Get("/alerts", apiCFG.MiddleWareAuth(apiCFG.HandlerGetUserPriceAlerts))
 	v1Router.Delete("/alerts/{id}", apiCFG.MiddleWareAuth(apiCFG.HandlerDeletePriceAlert))
+	v1Router.Get("/portfolio/history", apiCFG.MiddleWareAuth(apiCFG.HandlerGetUserPortfolioHistory))
 
 	// Alt router'ı ana router'a bağla
 	r.Mount("/v1", v1Router)

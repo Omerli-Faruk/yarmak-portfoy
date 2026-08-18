@@ -28,6 +28,15 @@ type Dividend struct {
 	DeletedAt   sql.NullTime
 }
 
+type PortfolioSnapshot struct {
+	ID         int64
+	UserID     int64
+	TotalValue string
+	TotalCost  string
+	ProfitLoss string
+	RecordedAt time.Time
+}
+
 type PriceAlert struct {
 	ID          int64
 	UserID      int64

@@ -18,7 +18,7 @@ func (cfg *ApiConfig) MiddleWareAuth(next http.HandlerFunc) http.HandlerFunc {
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		userID, err := auth.ValidateJWT(tokenString, cfg.JWTSecret)
 		if err != nil {
-			respondWithError(w, http.StatusUnauthorized, "Geçersiz veya süresi dolmuş token", err)
+			respondWithError(w, http.StatusUnauthorized, "Geçersiz veya süresi dolmuş token", nil)
 			return
 		}
 
@@ -36,7 +36,7 @@ func (cfg *ApiConfig) MiddleWareAdmin(next http.HandlerFunc) http.HandlerFunc {
 		}
 		user, err := cfg.DB.GetUserByID(r.Context(), userID)
 		if err != nil {
-			respondWithError(w, http.StatusNotFound, "Kullanıcı bulunamadı", err)
+			respondWithError(w, http.StatusInternalServerError, "Kullanıcı bulunamadı", nil)
 			return
 		}
 		if user.Role != "ADMIN" {
