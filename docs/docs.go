@@ -231,45 +231,7 @@ const docTemplate = `{
                     "Assets"
                 ],
                 "summary": "Akıllı Varlık Arama \u0026 Keşif",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Varlık Sembolü (örn: THYAO, TLY, CEYREK, USDTRY)",
-                        "name": "symbol",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "enum": [
-                            "HISSE",
-                            "FON",
-                            "ALTIN",
-                            "DOVIZ"
-                        ],
-                        "type": "string",
-                        "description": "Varlık Tipi",
-                        "name": "type",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/database.Asset"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
+                "responses": {}
             }
         },
         "/assets/{id}/price-history": {
@@ -282,44 +244,7 @@ const docTemplate = `{
                     "Assets"
                 ],
                 "summary": "Varlık Fiyat Geçmişi",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Varlık ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/database.PriceHistory"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
+                "responses": {}
             }
         },
         "/assets/{id}/splits": {
@@ -1102,25 +1027,6 @@ const docTemplate = `{
                 "userID": {
                     "type": "integer",
                     "format": "int64"
-                }
-            }
-        },
-        "database.PriceHistory": {
-            "type": "object",
-            "properties": {
-                "assetID": {
-                    "type": "integer",
-                    "format": "int64"
-                },
-                "id": {
-                    "type": "integer",
-                    "format": "int64"
-                },
-                "price": {
-                    "type": "string"
-                },
-                "recordedAt": {
-                    "type": "string"
                 }
             }
         },

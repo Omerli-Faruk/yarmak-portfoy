@@ -10,6 +10,12 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+type createAssetRequest struct {
+	Symbol    string `json:"symbol" example:"THYAO"`
+	Name      string `json:"name" example:"Türk Hava Yolları"`
+	AssetType string `json:"asset_type" example:"HISSE" enums:"HISSE,FON,ALTIN,DOVIZ"`
+}
+
 // @Summary Yeni Varlık Tanımla (Admin)
 // @Description Sisteme yeni bir hisse, fon, altın veya döviz varlığı ekler
 // @Tags Assets
@@ -17,15 +23,12 @@ import (
 // @Accept json
 // @Produce json
 // @Param request body createAssetRequest true "Varlık Bilgileri"
+// @Success 201 {object} database.Asset
+// @Failure 400 {object} map[string]string
 // @Router /assets [post]
 func (cfg *ApiConfig) HandlerCreateAsset(w http.ResponseWriter, r *http.Request) {
-	type parameters struct {
-		Symbol    string `json:"symbol"`
-		Name      string `json:"name"`
-		AssetType string `json:"asset_type"`
-	}
 	decoder := json.NewDecoder(r.Body)
-	params := parameters{}
+	params := createAssetRequest{}
 	err := decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)

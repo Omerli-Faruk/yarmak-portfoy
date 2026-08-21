@@ -53,11 +53,6 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 	totalDividends, _ := strconv.ParseFloat(totalDividendsStr, 64)
 	var totalPortfolioValue float64
 	var totalPortfolioCost float64
-	type AssetCategorySummary struct {
-		Value      float64 `json:"value"`
-		Cost       float64 `json:"cost"`
-		ProfitLoss float64 `json:"profit_loss"`
-	}
 	breakdown := map[string]*AssetCategorySummary{
 		"HISSE": {},
 		"FON":   {},
@@ -115,19 +110,19 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 		totalValueUSD = totalPortfolioValue / usdRate
 		totalProfitUSD = totalCombinedProfit / usdRate
 	}
-	respondWithJSON(w, http.StatusOK, map[string]interface{}{
-		"total_value":                    totalPortfolioValue,
-		"total_cost":                     totalPortfolioCost,
-		"capital_profit_loss":            capitalProfitLoss,
-		"capital_profit_loss_percentage": capitalProfitLossPercentage,
-		"total_dividends":                totalDividends,
-		"total_combined_profit":          totalCombinedProfit,
-		"total_return_percentage":        totalReturnPercentage,
-		"holdings_count":                 len(holdings),
-		"breakdown":                      breakdown,
-		"usd_rate":                       usdRate,
-		"total_value_usd":                totalValueUSD,
-		"total_combined_profit_usd":      totalProfitUSD,
+	respondWithJSON(w, http.StatusOK, portfolioSummaryResponse{
+		TotalValue:                  totalPortfolioValue,
+		TotalCost:                   totalPortfolioCost,
+		CapitalProfitLoss:           capitalProfitLoss,
+		CapitalProfitLossPercentage: capitalProfitLossPercentage,
+		TotalDividends:              totalDividends,
+		TotalCombinedProfit:         totalCombinedProfit,
+		TotalReturnPercentage:       totalReturnPercentage,
+		HoldingsCount:               len(holdings),
+		Breakdown:                   breakdown,
+		USDRate:                     usdRate,
+		TotalValueUSD:               totalValueUSD,
+		TotalCombinedProfitUSD:      totalProfitUSD,
 	})
 }
 
