@@ -10,12 +10,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-type createSplitParams struct {
-	AssetID    int64     `json:"asset_id" example:"1"`
-	SplitRatio string    `json:"split_ratio" example:"4.000000"`
-	SplitDate  time.Time `json:"split_date" example:"2026-08-21T00:00:00Z"`
-}
-
 // @Summary Bedelsiz/Ters Bölünme Uygula (Admin)
 // @Description Hissede bölünme uygular ve tüm kullanıcıların geçmiş işlemlerini günceller
 // @Tags Splits

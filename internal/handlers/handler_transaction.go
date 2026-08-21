@@ -21,16 +21,6 @@ func lockUser(userID int64) func() {
 	return userLocks[idx].Unlock
 }
 
-type createTransactionParams struct {
-	AssetID         int64     `json:"asset_id" example:"1"`
-	Type            string    `json:"type" example:"BUY" enums:"BUY,SELL"`
-	Amount          string    `json:"amount" example:"10.0"`
-	Price           string    `json:"price" example:"305.50"`
-	TransactionDate time.Time `json:"transaction_date" example:"2026-08-21T12:00:00Z"`
-	Symbol          string    `json:"symbol" example:"THYAO"`
-	AssetType       string    `json:"asset_type" example:"HISSE" enums:"HISSE,FON,ALTIN,DOVIZ"`
-}
-
 // @Summary Alım/Satım İşlemi Yap
 // @Description Kullanıcı portföyüne yeni bir alım (BUY) veya satım (SELL) işlemi kaydeder
 // @Tags Transactions
@@ -104,18 +94,6 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 		return
 	}
 	respondWithJSON(w, http.StatusCreated, transaction)
-}
-
-type userHoldingResponse struct {
-	AssetID      int64   `json:"asset_id"`
-	Symbol       string  `json:"symbol"`
-	AssetName    string  `json:"asset_name"`
-	AssetType    string  `json:"asset_type"`
-	CurrentPrice float64 `json:"current_price"`
-	TotalAmount  float64 `json:"total_amount"`
-	AverageCost  float64 `json:"average_cost"`
-	TotalValue   float64 `json:"total_value"`
-	ProfitLoss   float64 `json:"profit_loss"`
 }
 
 // @Summary Kullanıcının Varlıklarını (Holdings) Listele

@@ -10,12 +10,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-type createAssetRequest struct {
-	Symbol    string `json:"symbol" example:"THYAO"`
-	Name      string `json:"name" example:"Türk Hava Yolları"`
-	AssetType string `json:"asset_type" example:"HISSE" enums:"HISSE,FON,ALTIN,DOVIZ"`
-}
-
 // @Summary Yeni Varlık Tanımla (Admin)
 // @Description Sisteme yeni bir hisse, fon, altın veya döviz varlığı ekler
 // @Tags Assets

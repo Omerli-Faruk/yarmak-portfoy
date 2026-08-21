@@ -8,28 +8,18 @@ import (
 	"time"
 )
 
-type reqLogin struct {
-	Email    string `json:"email" example:"user@example.com"`
-	Password string `json:"password" example:"Secret1234"`
-}
-
-type loginResponse struct {
-	Token string       `json:"token"`
-	User  userResponse `json:"user"`
-}
-
 // @Summary Kullanıcı Girişi
 // @Description Email ve şifre ile giriş yapıp JWT token üretir
 // @Tags Auth
 // @Accept json
 // @Produce json
-// @Param request body reqLogin true "Kullanıcı Giriş Bilgileri"
+// @Param request body authRequest true "Kullanıcı Giriş Bilgileri"
 // @Success 200 {object} loginResponse
 // @Failure 400 {object} map[string]string
 // @Router /login [post]
 func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
-	params := reqLogin{}
+	params := authRequest{}
 	err := decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)

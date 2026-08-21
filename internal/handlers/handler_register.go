@@ -9,22 +9,17 @@ import (
 	"strings"
 )
 
-type reqRegister struct {
-	Email    string `json:"email" example:"user@example.com"`
-	Password string `json:"password" example:"Secret1234"`
-}
-
 // @Summary Yeni Kullanıcı Kaydı
 // @Description Sisteme yeni bir kullanıcı kaydeder
 // @Tags Auth
 // @Accept json
 // @Produce json
-// @Param request body reqRegister true "Kullanıcı Kayıt Bilgileri"
+// @Param request body authRequest true "Kullanıcı Kayıt Bilgileri"
 // @Success 201 {object} userResponse
 // @Failure 400 {object} map[string]string
 // @Router /register [post]
 func (cfg *ApiConfig) HandlerRegister(w http.ResponseWriter, r *http.Request) {
-	var req reqRegister
+	var req authRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)

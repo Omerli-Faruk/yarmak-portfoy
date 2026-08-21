@@ -469,7 +469,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.reqLogin"
+                            "$ref": "#/definitions/handlers.authRequest"
                         }
                     }
                 ],
@@ -663,7 +663,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.reqRegister"
+                            "$ref": "#/definitions/handlers.authRequest"
                         }
                     }
                 ],
@@ -1104,6 +1104,19 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.authRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "user@example.com"
+                },
+                "password": {
+                    "type": "string",
+                    "example": "Secret1234"
+                }
+            }
+        },
         "handlers.createAssetRequest": {
             "type": "object",
             "properties": {
@@ -1281,32 +1294,6 @@ const docTemplate = `{
                 },
                 "usd_rate": {
                     "type": "number"
-                }
-            }
-        },
-        "handlers.reqLogin": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "user@example.com"
-                },
-                "password": {
-                    "type": "string",
-                    "example": "Secret1234"
-                }
-            }
-        },
-        "handlers.reqRegister": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "user@example.com"
-                },
-                "password": {
-                    "type": "string",
-                    "example": "Secret1234"
                 }
             }
         },

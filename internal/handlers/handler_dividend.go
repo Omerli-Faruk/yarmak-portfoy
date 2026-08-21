@@ -21,13 +21,6 @@ func getUserHoldingLot(holdings []database.GetUserHoldingsSummaryRow, assetID in
 	return 0
 }
 
-type createDividendParams struct {
-	AssetID        int64     `json:"asset_id" example:"1"`
-	Amount         string    `json:"amount" example:"500.00"`
-	PaymentDate    time.Time `json:"payment_date" example:"2026-08-21T12:00:00Z"`
-	AmountPerShare string    `json:"amount_per_share" example:"5.0"`
-}
-
 // @Summary Temettü Geliri Kaydet
 // @Description Kullanıcının aldığı nakit temettü ödemesini kaydeder
 // @Tags Dividends

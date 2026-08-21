@@ -127,6 +127,15 @@ definitions:
       value:
         type: number
     type: object
+  handlers.authRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      password:
+        example: Secret1234
+        type: string
+    type: object
   handlers.createAssetRequest:
     properties:
       asset_type:
@@ -253,24 +262,6 @@ definitions:
         type: number
       usd_rate:
         type: number
-    type: object
-  handlers.reqLogin:
-    properties:
-      email:
-        example: user@example.com
-        type: string
-      password:
-        example: Secret1234
-        type: string
-    type: object
-  handlers.reqRegister:
-    properties:
-      email:
-        example: user@example.com
-        type: string
-      password:
-        example: Secret1234
-        type: string
     type: object
   handlers.userHoldingResponse:
     properties:
@@ -612,7 +603,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handlers.reqLogin'
+          $ref: '#/definitions/handlers.authRequest'
       produces:
       - application/json
       responses:
@@ -737,7 +728,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handlers.reqRegister'
+          $ref: '#/definitions/handlers.authRequest'
       produces:
       - application/json
       responses:

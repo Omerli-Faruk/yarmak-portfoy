@@ -9,12 +9,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-type createPriceAlertRequest struct {
-	AssetID     int64  `json:"asset_id" example:"1"`
-	TargetPrice string `json:"target_price" example:"350.00"`
-	Direction   string `json:"direction" example:"ABOVE" enums:"ABOVE,BELOW"`
-}
-
 // @Summary Fiyat Alarmı Kur
 // @Description Belirli bir hisse veya fon hedef fiyata ulaştığında tetiklenecek alarm kurar
 // @Tags Alerts
