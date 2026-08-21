@@ -24,7 +24,26 @@
                     "Alerts"
                 ],
                 "summary": "Kullanıcının Alarmlarını Listele",
-                "responses": {}
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/database.PriceAlert"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             },
             "post": {
                 "security": [
@@ -43,7 +62,43 @@
                     "Alerts"
                 ],
                 "summary": "Fiyat Alarmı Kur",
-                "responses": {}
+                "parameters": [
+                    {
+                        "description": "Alarm Bilgileri",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.createPriceAlertRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/database.PriceAlert"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/alerts/{id}": {
@@ -61,7 +116,44 @@
                     "Alerts"
                 ],
                 "summary": "Fiyat Alarmını Sil",
-                "responses": {}
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Alarm ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/assets": {
@@ -93,7 +185,34 @@
                     "Assets"
                 ],
                 "summary": "Yeni Varlık Tanımla (Admin)",
-                "responses": {}
+                "parameters": [
+                    {
+                        "description": "Varlık Bilgileri",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.createAssetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/database.Asset"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/assets/lookup": {
@@ -106,7 +225,45 @@
                     "Assets"
                 ],
                 "summary": "Akıllı Varlık Arama \u0026 Keşif",
-                "responses": {}
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Varlık Sembolü (örn: THYAO, TLY, CEYREK, USDTRY)",
+                        "name": "symbol",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "HISSE",
+                            "FON",
+                            "ALTIN",
+                            "DOVIZ"
+                        ],
+                        "type": "string",
+                        "description": "Varlık Tipi",
+                        "name": "type",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/database.Asset"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/assets/{id}/price-history": {
@@ -119,7 +276,44 @@
                     "Assets"
                 ],
                 "summary": "Varlık Fiyat Geçmişi",
-                "responses": {}
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Varlık ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/database.PriceHistory"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/assets/{id}/splits": {
@@ -137,57 +331,44 @@
                     "Splits"
                 ],
                 "summary": "Hissenin Bölünme Geçmişi",
-                "responses": {}
-            }
-        },
-        "/auth/login": {
-            "post": {
-                "description": "Email ve şifre ile giriş yapıp JWT token üretir",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Auth"
-                ],
-                "summary": "Kullanıcı Girişi",
-                "responses": {}
-            }
-        },
-        "/auth/me": {
-            "get": {
-                "security": [
+                "parameters": [
                     {
-                        "BearerAuth": []
+                        "type": "integer",
+                        "description": "Varlık ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
                     }
                 ],
-                "description": "JWT token ile doğrulanmış kullanıcının profil bilgilerini döner",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Auth"
-                ],
-                "summary": "Giriş Yapmış Kullanıcı Bilgisi",
-                "responses": {}
-            }
-        },
-        "/auth/register": {
-            "post": {
-                "description": "Sisteme yeni bir kullanıcı kaydeder",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Auth"
-                ],
-                "summary": "Yeni Kullanıcı Kaydı",
-                "responses": {}
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/database.Split"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/dividends": {
@@ -205,7 +386,26 @@
                     "Dividends"
                 ],
                 "summary": "Kullanıcının Temettü Geçmişi",
-                "responses": {}
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/database.Dividend"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             },
             "post": {
                 "security": [
@@ -224,7 +424,43 @@
                     "Dividends"
                 ],
                 "summary": "Temettü Geliri Kaydet",
-                "responses": {}
+                "parameters": [
+                    {
+                        "description": "Temettü Bilgileri",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.createDividendParams"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/database.Dividend"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/dividends/{id}": {
@@ -242,7 +478,121 @@
                     "Dividends"
                 ],
                 "summary": "Temettü Kaydını Sil",
-                "responses": {}
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Temettü ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/login": {
+            "post": {
+                "description": "Email ve şifre ile giriş yapıp JWT token üretir",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Kullanıcı Girişi",
+                "parameters": [
+                    {
+                        "description": "Kullanıcı Giriş Bilgileri",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.reqLogin"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.loginResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "JWT token ile doğrulanmış kullanıcının profil bilgilerini döner",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Giriş Yapmış Kullanıcı Bilgisi",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.userResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/portfolio/history": {
@@ -260,7 +610,35 @@
                     "Portfolio"
                 ],
                 "summary": "Portföy Tarihsel Grafik Geçmişi",
-                "responses": {}
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/database.PortfolioSnapshot"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/portfolio/holdings": {
@@ -278,7 +656,26 @@
                     "Portfolio"
                 ],
                 "summary": "Kullanıcının Varlıklarını (Holdings) Listele",
-                "responses": {}
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.userHoldingResponse"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/portfolio/summary": {
@@ -296,7 +693,66 @@
                     "Portfolio"
                 ],
                 "summary": "Portföy Özeti (TL ve Dolar)",
-                "responses": {}
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.portfolioSummaryResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/register": {
+            "post": {
+                "description": "Sisteme yeni bir kullanıcı kaydeder",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Yeni Kullanıcı Kaydı",
+                "parameters": [
+                    {
+                        "description": "Kullanıcı Kayıt Bilgileri",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.reqRegister"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.userResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/splits": {
@@ -317,7 +773,43 @@
                     "Splits"
                 ],
                 "summary": "Bedelsiz/Ters Bölünme Uygula (Admin)",
-                "responses": {}
+                "parameters": [
+                    {
+                        "description": "Bölünme Parametreleri",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.createSplitParams"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/database.Split"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/transactions": {
@@ -335,7 +827,42 @@
                     "Transactions"
                 ],
                 "summary": "İşlem Geçmişi (Pagination)",
-                "responses": {}
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Sayfa Numarası",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Sayfa Başına Kayıt Sayısı",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/database.Transaction"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             },
             "post": {
                 "security": [
@@ -354,7 +881,43 @@
                     "Transactions"
                 ],
                 "summary": "Alım/Satım İşlemi Yap",
-                "responses": {}
+                "parameters": [
+                    {
+                        "description": "İşlem Bilgileri",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.createTransactionParams"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/database.Transaction"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/transactions/{id}": {
@@ -372,7 +935,528 @@
                     "Transactions"
                 ],
                 "summary": "Alım/Satım İşlemini Sil",
-                "responses": {}
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "İşlem ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "database.Asset": {
+            "type": "object",
+            "properties": {
+                "assetType": {
+                    "type": "string"
+                },
+                "currentPrice": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "symbol": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
+        "database.Dividend": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "assetID": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "deletedAt": {
+                    "$ref": "#/definitions/sql.NullTime"
+                },
+                "id": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "paymentDate": {
+                    "type": "string"
+                },
+                "userID": {
+                    "type": "integer",
+                    "format": "int64"
+                }
+            }
+        },
+        "database.PortfolioSnapshot": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "profitLoss": {
+                    "type": "string"
+                },
+                "recordedAt": {
+                    "type": "string"
+                },
+                "totalCost": {
+                    "type": "string"
+                },
+                "totalValue": {
+                    "type": "string"
+                },
+                "userID": {
+                    "type": "integer",
+                    "format": "int64"
+                }
+            }
+        },
+        "database.PriceAlert": {
+            "type": "object",
+            "properties": {
+                "assetID": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "deletedAt": {
+                    "$ref": "#/definitions/sql.NullTime"
+                },
+                "direction": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "isTriggered": {
+                    "type": "boolean"
+                },
+                "targetPrice": {
+                    "type": "string"
+                },
+                "triggeredAt": {
+                    "$ref": "#/definitions/sql.NullTime"
+                },
+                "userID": {
+                    "type": "integer",
+                    "format": "int64"
+                }
+            }
+        },
+        "database.PriceHistory": {
+            "type": "object",
+            "properties": {
+                "assetID": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "id": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "price": {
+                    "type": "string"
+                },
+                "recordedAt": {
+                    "type": "string"
+                }
+            }
+        },
+        "database.Split": {
+            "type": "object",
+            "properties": {
+                "assetID": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "deletedAt": {
+                    "$ref": "#/definitions/sql.NullTime"
+                },
+                "id": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "splitDate": {
+                    "type": "string"
+                },
+                "splitRatio": {
+                    "type": "string"
+                }
+            }
+        },
+        "database.Transaction": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "assetID": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "deletedAt": {
+                    "$ref": "#/definitions/sql.NullTime"
+                },
+                "id": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "price": {
+                    "type": "string"
+                },
+                "transactionDate": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "userID": {
+                    "type": "integer",
+                    "format": "int64"
+                }
+            }
+        },
+        "handlers.AssetCategorySummary": {
+            "type": "object",
+            "properties": {
+                "cost": {
+                    "type": "number"
+                },
+                "profit_loss": {
+                    "type": "number"
+                },
+                "value": {
+                    "type": "number"
+                }
+            }
+        },
+        "handlers.createAssetRequest": {
+            "type": "object",
+            "properties": {
+                "asset_type": {
+                    "type": "string",
+                    "enum": [
+                        "HISSE",
+                        "FON",
+                        "ALTIN",
+                        "DOVIZ"
+                    ],
+                    "example": "HISSE"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Türk Hava Yolları"
+                },
+                "symbol": {
+                    "type": "string",
+                    "example": "THYAO"
+                }
+            }
+        },
+        "handlers.createDividendParams": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string",
+                    "example": "500.00"
+                },
+                "amount_per_share": {
+                    "type": "string",
+                    "example": "5.0"
+                },
+                "asset_id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "payment_date": {
+                    "type": "string",
+                    "example": "2026-08-21T12:00:00Z"
+                }
+            }
+        },
+        "handlers.createPriceAlertRequest": {
+            "type": "object",
+            "properties": {
+                "asset_id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "direction": {
+                    "type": "string",
+                    "enum": [
+                        "ABOVE",
+                        "BELOW"
+                    ],
+                    "example": "ABOVE"
+                },
+                "target_price": {
+                    "type": "string",
+                    "example": "350.00"
+                }
+            }
+        },
+        "handlers.createSplitParams": {
+            "type": "object",
+            "properties": {
+                "asset_id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "split_date": {
+                    "type": "string",
+                    "example": "2026-08-21T00:00:00Z"
+                },
+                "split_ratio": {
+                    "type": "string",
+                    "example": "4.000000"
+                }
+            }
+        },
+        "handlers.createTransactionParams": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string",
+                    "example": "10.0"
+                },
+                "asset_id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "asset_type": {
+                    "type": "string",
+                    "enum": [
+                        "HISSE",
+                        "FON",
+                        "ALTIN",
+                        "DOVIZ"
+                    ],
+                    "example": "HISSE"
+                },
+                "price": {
+                    "type": "string",
+                    "example": "305.50"
+                },
+                "symbol": {
+                    "type": "string",
+                    "example": "THYAO"
+                },
+                "transaction_date": {
+                    "type": "string",
+                    "example": "2026-08-21T12:00:00Z"
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "BUY",
+                        "SELL"
+                    ],
+                    "example": "BUY"
+                }
+            }
+        },
+        "handlers.loginResponse": {
+            "type": "object",
+            "properties": {
+                "token": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/handlers.userResponse"
+                }
+            }
+        },
+        "handlers.portfolioSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "breakdown": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/handlers.AssetCategorySummary"
+                    }
+                },
+                "capital_profit_loss": {
+                    "type": "number"
+                },
+                "capital_profit_loss_percentage": {
+                    "type": "number"
+                },
+                "holdings_count": {
+                    "type": "integer"
+                },
+                "total_combined_profit": {
+                    "type": "number"
+                },
+                "total_combined_profit_usd": {
+                    "type": "number"
+                },
+                "total_cost": {
+                    "type": "number"
+                },
+                "total_dividends": {
+                    "type": "number"
+                },
+                "total_return_percentage": {
+                    "type": "number"
+                },
+                "total_value": {
+                    "type": "number"
+                },
+                "total_value_usd": {
+                    "type": "number"
+                },
+                "usd_rate": {
+                    "type": "number"
+                }
+            }
+        },
+        "handlers.reqLogin": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "user@example.com"
+                },
+                "password": {
+                    "type": "string",
+                    "example": "Secret1234"
+                }
+            }
+        },
+        "handlers.reqRegister": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "user@example.com"
+                },
+                "password": {
+                    "type": "string",
+                    "example": "Secret1234"
+                }
+            }
+        },
+        "handlers.userHoldingResponse": {
+            "type": "object",
+            "properties": {
+                "asset_id": {
+                    "type": "integer"
+                },
+                "asset_name": {
+                    "type": "string"
+                },
+                "asset_type": {
+                    "type": "string"
+                },
+                "average_cost": {
+                    "type": "number"
+                },
+                "current_price": {
+                    "type": "number"
+                },
+                "profit_loss": {
+                    "type": "number"
+                },
+                "symbol": {
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "total_value": {
+                    "type": "number"
+                }
+            }
+        },
+        "handlers.userResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "role": {
+                    "type": "string"
+                }
+            }
+        },
+        "sql.NullTime": {
+            "type": "object",
+            "properties": {
+                "time": {
+                    "type": "string"
+                },
+                "valid": {
+                    "description": "Valid is true if Time is not NULL",
+                    "type": "boolean"
+                }
             }
         }
     },

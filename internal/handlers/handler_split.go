@@ -10,21 +10,26 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+type createSplitParams struct {
+	AssetID    int64     `json:"asset_id" example:"1"`
+	SplitRatio string    `json:"split_ratio" example:"4.000000"`
+	SplitDate  time.Time `json:"split_date" example:"2026-08-21T00:00:00Z"`
+}
+
 // @Summary Bedelsiz/Ters Bölünme Uygula (Admin)
 // @Description Hissede bölünme uygular ve tüm kullanıcıların geçmiş işlemlerini günceller
 // @Tags Splits
 // @Security BearerAuth
 // @Accept json
 // @Produce json
+// @Param request body createSplitParams true "Bölünme Parametreleri"
+// @Success 201 {object} database.Split
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
 // @Router /splits [post]
 func (cfg *ApiConfig) HandlerCreateSplit(w http.ResponseWriter, r *http.Request) {
-	type parameters struct {
-		AssetID    int64     `json:"asset_id"`
-		SplitRatio string    `json:"split_ratio"`
-		SplitDate  time.Time `json:"split_date"`
-	}
 	decoder := json.NewDecoder(r.Body)
-	params := parameters{}
+	params := createSplitParams{}
 	err := decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
@@ -73,6 +78,10 @@ func (cfg *ApiConfig) HandlerCreateSplit(w http.ResponseWriter, r *http.Request)
 // @Tags Splits
 // @Security BearerAuth
 // @Produce json
+// @Param id path int true "Varlık ID"
+// @Success 200 {array} database.Split
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /assets/{id}/splits [get]
 func (cfg *ApiConfig) HandlerListSplitsByAsset(w http.ResponseWriter, r *http.Request) {
 	assetIDStr := chi.URLParam(r, "id")

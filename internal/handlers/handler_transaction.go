@@ -22,13 +22,13 @@ func lockUser(userID int64) func() {
 }
 
 type createTransactionParams struct {
-	AssetID         int64     `json:"asset_id"`
-	Type            string    `json:"type"`
-	Amount          string    `json:"amount"`
-	Price           string    `json:"price"`
-	TransactionDate time.Time `json:"transaction_date"`
-	Symbol          string    `json:"symbol"`
-	AssetType       string    `json:"asset_type"`
+	AssetID         int64     `json:"asset_id" example:"1"`
+	Type            string    `json:"type" example:"BUY" enums:"BUY,SELL"`
+	Amount          string    `json:"amount" example:"10.0"`
+	Price           string    `json:"price" example:"305.50"`
+	TransactionDate time.Time `json:"transaction_date" example:"2026-08-21T12:00:00Z"`
+	Symbol          string    `json:"symbol" example:"THYAO"`
+	AssetType       string    `json:"asset_type" example:"HISSE" enums:"HISSE,FON,ALTIN,DOVIZ"`
 }
 
 // @Summary Alım/Satım İşlemi Yap
@@ -37,6 +37,10 @@ type createTransactionParams struct {
 // @Security BearerAuth
 // @Accept json
 // @Produce json
+// @Param request body createTransactionParams true "İşlem Bilgileri"
+// @Success 201 {object} database.Transaction
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
 // @Router /transactions [post]
 func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Request) {
 
@@ -119,6 +123,8 @@ type userHoldingResponse struct {
 // @Tags Portfolio
 // @Security BearerAuth
 // @Produce json
+// @Success 200 {array} userHoldingResponse
+// @Failure 401 {object} map[string]string
 // @Router /portfolio/holdings [get]
 func (cfg *ApiConfig) HandlerGetUserHoldings(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
@@ -167,6 +173,10 @@ func (cfg *ApiConfig) HandlerGetUserHoldings(w http.ResponseWriter, r *http.Requ
 // @Tags Transactions
 // @Security BearerAuth
 // @Produce json
+// @Param page query int false "Sayfa Numarası" default(1)
+// @Param limit query int false "Sayfa Başına Kayıt Sayısı" default(10)
+// @Success 200 {array} database.Transaction
+// @Failure 401 {object} map[string]string
 // @Router /transactions [get]
 func (cfg *ApiConfig) HandlerGetUserTransactions(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
@@ -207,6 +217,11 @@ func (cfg *ApiConfig) HandlerGetUserTransactions(w http.ResponseWriter, r *http.
 // @Tags Transactions
 // @Security BearerAuth
 // @Produce json
+// @Param id path int true "İşlem ID"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
 // @Router /transactions/{id} [delete]
 func (cfg *ApiConfig) HandlerDeleteTransaction(w http.ResponseWriter, r *http.Request) {
 	urlID := chi.URLParam(r, "id")

@@ -9,21 +9,26 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+type createPriceAlertRequest struct {
+	AssetID     int64  `json:"asset_id" example:"1"`
+	TargetPrice string `json:"target_price" example:"350.00"`
+	Direction   string `json:"direction" example:"ABOVE" enums:"ABOVE,BELOW"`
+}
+
 // @Summary Fiyat Alarmı Kur
 // @Description Belirli bir hisse veya fon hedef fiyata ulaştığında tetiklenecek alarm kurar
 // @Tags Alerts
 // @Security BearerAuth
 // @Accept json
 // @Produce json
+// @Param request body createPriceAlertRequest true "Alarm Bilgileri"
+// @Success 201 {object} database.PriceAlert
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
 // @Router /alerts [post]
 func (cfg *ApiConfig) HandlerCreatePriceAlert(w http.ResponseWriter, r *http.Request) {
-	type parameters struct {
-		AssetID     int64  `json:"asset_id"`
-		TargetPrice string `json:"target_price"`
-		Direction   string `json:"direction"`
-	}
 	decoder := json.NewDecoder(r.Body)
-	params := parameters{}
+	params := createPriceAlertRequest{}
 	err := decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
@@ -61,6 +66,8 @@ func (cfg *ApiConfig) HandlerCreatePriceAlert(w http.ResponseWriter, r *http.Req
 // @Tags Alerts
 // @Security BearerAuth
 // @Produce json
+// @Success 200 {array} database.PriceAlert
+// @Failure 401 {object} map[string]string
 // @Router /alerts [get]
 func (cfg *ApiConfig) HandlerGetUserPriceAlerts(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
@@ -81,6 +88,10 @@ func (cfg *ApiConfig) HandlerGetUserPriceAlerts(w http.ResponseWriter, r *http.R
 // @Tags Alerts
 // @Security BearerAuth
 // @Produce json
+// @Param id path int true "Alarm ID"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
 // @Router /alerts/{id} [delete]
 func (cfg *ApiConfig) HandlerDeletePriceAlert(w http.ResponseWriter, r *http.Request) {
 	urlID := chi.URLParam(r, "id")

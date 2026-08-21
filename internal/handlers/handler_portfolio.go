@@ -7,11 +7,34 @@ import (
 	"strconv"
 )
 
+type portfolioSummaryResponse struct {
+	TotalValue                  float64                          `json:"total_value"`
+	TotalCost                   float64                          `json:"total_cost"`
+	CapitalProfitLoss           float64                          `json:"capital_profit_loss"`
+	CapitalProfitLossPercentage float64                          `json:"capital_profit_loss_percentage"`
+	TotalDividends              float64                          `json:"total_dividends"`
+	TotalCombinedProfit         float64                          `json:"total_combined_profit"`
+	TotalReturnPercentage       float64                          `json:"total_return_percentage"`
+	HoldingsCount               int                              `json:"holdings_count"`
+	Breakdown                   map[string]*AssetCategorySummary `json:"breakdown"`
+	USDRate                     float64                          `json:"usd_rate"`
+	TotalValueUSD               float64                          `json:"total_value_usd"`
+	TotalCombinedProfitUSD      float64                          `json:"total_combined_profit_usd"`
+}
+
+type AssetCategorySummary struct {
+	Value      float64 `json:"value"`
+	Cost       float64 `json:"cost"`
+	ProfitLoss float64 `json:"profit_loss"`
+}
+
 // @Summary Portföy Özeti (TL ve Dolar)
 // @Description Toplam portföy değeri, toplam maliyet, kâr/zarar, dolar karşılığı ve kategori dağılımını döner
 // @Tags Portfolio
 // @Security BearerAuth
 // @Produce json
+// @Success 200 {object} portfolioSummaryResponse
+// @Failure 401 {object} map[string]string
 // @Router /portfolio/summary [get]
 func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
@@ -113,6 +136,9 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 // @Tags Portfolio
 // @Security BearerAuth
 // @Produce json
+// @Success 200 {array} database.PortfolioSnapshot
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /portfolio/history [get]
 func (cfg *ApiConfig) HandlerGetUserPortfolioHistory(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)

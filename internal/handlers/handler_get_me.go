@@ -7,7 +7,9 @@ import "net/http"
 // @Tags Auth
 // @Security BearerAuth
 // @Produce json
-// @Router /auth/me [get]
+// @Success 200 {object} userResponse
+// @Failure 401 {object} map[string]string
+// @Router /me [get]
 func (cfg *ApiConfig) HandlerGetMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
 	if !ok {

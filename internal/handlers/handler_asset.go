@@ -16,6 +16,7 @@ import (
 // @Security BearerAuth
 // @Accept json
 // @Produce json
+// @Param request body createAssetRequest true "Varlık Bilgileri"
 // @Router /assets [post]
 func (cfg *ApiConfig) HandlerCreateAsset(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {

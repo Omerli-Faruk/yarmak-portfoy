@@ -1,4 +1,330 @@
 basePath: /v1
+definitions:
+  database.Asset:
+    properties:
+      assetType:
+        type: string
+      currentPrice:
+        type: string
+      id:
+        format: int64
+        type: integer
+      name:
+        type: string
+      symbol:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  database.Dividend:
+    properties:
+      amount:
+        type: string
+      assetID:
+        format: int64
+        type: integer
+      createdAt:
+        type: string
+      deletedAt:
+        $ref: '#/definitions/sql.NullTime'
+      id:
+        format: int64
+        type: integer
+      paymentDate:
+        type: string
+      userID:
+        format: int64
+        type: integer
+    type: object
+  database.PortfolioSnapshot:
+    properties:
+      id:
+        format: int64
+        type: integer
+      profitLoss:
+        type: string
+      recordedAt:
+        type: string
+      totalCost:
+        type: string
+      totalValue:
+        type: string
+      userID:
+        format: int64
+        type: integer
+    type: object
+  database.PriceAlert:
+    properties:
+      assetID:
+        format: int64
+        type: integer
+      createdAt:
+        type: string
+      deletedAt:
+        $ref: '#/definitions/sql.NullTime'
+      direction:
+        type: string
+      id:
+        format: int64
+        type: integer
+      isTriggered:
+        type: boolean
+      targetPrice:
+        type: string
+      triggeredAt:
+        $ref: '#/definitions/sql.NullTime'
+      userID:
+        format: int64
+        type: integer
+    type: object
+  database.PriceHistory:
+    properties:
+      assetID:
+        format: int64
+        type: integer
+      id:
+        format: int64
+        type: integer
+      price:
+        type: string
+      recordedAt:
+        type: string
+    type: object
+  database.Split:
+    properties:
+      assetID:
+        format: int64
+        type: integer
+      createdAt:
+        type: string
+      deletedAt:
+        $ref: '#/definitions/sql.NullTime'
+      id:
+        format: int64
+        type: integer
+      splitDate:
+        type: string
+      splitRatio:
+        type: string
+    type: object
+  database.Transaction:
+    properties:
+      amount:
+        type: string
+      assetID:
+        format: int64
+        type: integer
+      createdAt:
+        type: string
+      deletedAt:
+        $ref: '#/definitions/sql.NullTime'
+      id:
+        format: int64
+        type: integer
+      price:
+        type: string
+      transactionDate:
+        type: string
+      type:
+        type: string
+      userID:
+        format: int64
+        type: integer
+    type: object
+  handlers.AssetCategorySummary:
+    properties:
+      cost:
+        type: number
+      profit_loss:
+        type: number
+      value:
+        type: number
+    type: object
+  handlers.createAssetRequest:
+    properties:
+      asset_type:
+        enum:
+        - HISSE
+        - FON
+        - ALTIN
+        - DOVIZ
+        example: HISSE
+        type: string
+      name:
+        example: Türk Hava Yolları
+        type: string
+      symbol:
+        example: THYAO
+        type: string
+    type: object
+  handlers.createDividendParams:
+    properties:
+      amount:
+        example: "500.00"
+        type: string
+      amount_per_share:
+        example: "5.0"
+        type: string
+      asset_id:
+        example: 1
+        type: integer
+      payment_date:
+        example: "2026-08-21T12:00:00Z"
+        type: string
+    type: object
+  handlers.createPriceAlertRequest:
+    properties:
+      asset_id:
+        example: 1
+        type: integer
+      direction:
+        enum:
+        - ABOVE
+        - BELOW
+        example: ABOVE
+        type: string
+      target_price:
+        example: "350.00"
+        type: string
+    type: object
+  handlers.createSplitParams:
+    properties:
+      asset_id:
+        example: 1
+        type: integer
+      split_date:
+        example: "2026-08-21T00:00:00Z"
+        type: string
+      split_ratio:
+        example: "4.000000"
+        type: string
+    type: object
+  handlers.createTransactionParams:
+    properties:
+      amount:
+        example: "10.0"
+        type: string
+      asset_id:
+        example: 1
+        type: integer
+      asset_type:
+        enum:
+        - HISSE
+        - FON
+        - ALTIN
+        - DOVIZ
+        example: HISSE
+        type: string
+      price:
+        example: "305.50"
+        type: string
+      symbol:
+        example: THYAO
+        type: string
+      transaction_date:
+        example: "2026-08-21T12:00:00Z"
+        type: string
+      type:
+        enum:
+        - BUY
+        - SELL
+        example: BUY
+        type: string
+    type: object
+  handlers.loginResponse:
+    properties:
+      token:
+        type: string
+      user:
+        $ref: '#/definitions/handlers.userResponse'
+    type: object
+  handlers.portfolioSummaryResponse:
+    properties:
+      breakdown:
+        additionalProperties:
+          $ref: '#/definitions/handlers.AssetCategorySummary'
+        type: object
+      capital_profit_loss:
+        type: number
+      capital_profit_loss_percentage:
+        type: number
+      holdings_count:
+        type: integer
+      total_combined_profit:
+        type: number
+      total_combined_profit_usd:
+        type: number
+      total_cost:
+        type: number
+      total_dividends:
+        type: number
+      total_return_percentage:
+        type: number
+      total_value:
+        type: number
+      total_value_usd:
+        type: number
+      usd_rate:
+        type: number
+    type: object
+  handlers.reqLogin:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      password:
+        example: Secret1234
+        type: string
+    type: object
+  handlers.reqRegister:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      password:
+        example: Secret1234
+        type: string
+    type: object
+  handlers.userHoldingResponse:
+    properties:
+      asset_id:
+        type: integer
+      asset_name:
+        type: string
+      asset_type:
+        type: string
+      average_cost:
+        type: number
+      current_price:
+        type: number
+      profit_loss:
+        type: number
+      symbol:
+        type: string
+      total_amount:
+        type: number
+      total_value:
+        type: number
+    type: object
+  handlers.userResponse:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      role:
+        type: string
+    type: object
+  sql.NullTime:
+    properties:
+      time:
+        type: string
+      valid:
+        description: Valid is true if Time is not NULL
+        type: boolean
+    type: object
 host: localhost:8080
 info:
   contact: {}
@@ -12,7 +338,19 @@ paths:
       description: Kullanıcının aktif ve tetiklenmiş tüm fiyat alarmlarını listeler
       produces:
       - application/json
-      responses: {}
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/database.PriceAlert'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
       summary: Kullanıcının Alarmlarını Listele
@@ -23,9 +361,32 @@ paths:
       - application/json
       description: Belirli bir hisse veya fon hedef fiyata ulaştığında tetiklenecek
         alarm kurar
+      parameters:
+      - description: Alarm Bilgileri
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.createPriceAlertRequest'
       produces:
       - application/json
-      responses: {}
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/database.PriceAlert'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
       summary: Fiyat Alarmı Kur
@@ -34,9 +395,33 @@ paths:
   /alerts/{id}:
     delete:
       description: Kullanıcının kurduğu bir fiyat alarmını iptal eder/siler
+      parameters:
+      - description: Alarm ID
+        in: path
+        name: id
+        required: true
+        type: integer
       produces:
       - application/json
-      responses: {}
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
       summary: Fiyat Alarmını Sil
@@ -56,9 +441,26 @@ paths:
       consumes:
       - application/json
       description: Sisteme yeni bir hisse, fon, altın veya döviz varlığı ekler
+      parameters:
+      - description: Varlık Bilgileri
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.createAssetRequest'
       produces:
       - application/json
-      responses: {}
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/database.Asset'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
       summary: Yeni Varlık Tanımla (Admin)
@@ -67,9 +469,33 @@ paths:
   /assets/{id}/price-history:
     get:
       description: Belirli bir varlığın tarihsel fiyat değişim geçmişini listeler
+      parameters:
+      - description: Varlık ID
+        in: path
+        name: id
+        required: true
+        type: integer
       produces:
       - application/json
-      responses: {}
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/database.PriceHistory'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       summary: Varlık Fiyat Geçmişi
       tags:
       - Assets
@@ -77,9 +503,33 @@ paths:
     get:
       description: Belirli bir hissenin geçmişte yaşadığı tüm bedelsiz bölünmeleri
         listeler
+      parameters:
+      - description: Varlık ID
+        in: path
+        name: id
+        required: true
+        type: integer
       produces:
       - application/json
-      responses: {}
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/database.Split'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
       summary: Hissenin Bölünme Geçmişi
@@ -89,51 +539,56 @@ paths:
     get:
       description: Sembol ve türe göre varlık arar, sistemde yoksa piyasadan anında
         çeker
+      parameters:
+      - description: 'Varlık Sembolü (örn: THYAO, TLY, CEYREK, USDTRY)'
+        in: query
+        name: symbol
+        required: true
+        type: string
+      - description: Varlık Tipi
+        enum:
+        - HISSE
+        - FON
+        - ALTIN
+        - DOVIZ
+        in: query
+        name: type
+        required: true
+        type: string
       produces:
       - application/json
-      responses: {}
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/database.Asset'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       summary: Akıllı Varlık Arama & Keşif
       tags:
       - Assets
-  /auth/login:
-    post:
-      consumes:
-      - application/json
-      description: Email ve şifre ile giriş yapıp JWT token üretir
-      produces:
-      - application/json
-      responses: {}
-      summary: Kullanıcı Girişi
-      tags:
-      - Auth
-  /auth/me:
-    get:
-      description: JWT token ile doğrulanmış kullanıcının profil bilgilerini döner
-      produces:
-      - application/json
-      responses: {}
-      security:
-      - BearerAuth: []
-      summary: Giriş Yapmış Kullanıcı Bilgisi
-      tags:
-      - Auth
-  /auth/register:
-    post:
-      consumes:
-      - application/json
-      description: Sisteme yeni bir kullanıcı kaydeder
-      produces:
-      - application/json
-      responses: {}
-      summary: Yeni Kullanıcı Kaydı
-      tags:
-      - Auth
   /dividends:
     get:
       description: Kullanıcının aldığı tüm temettü ödemelerini listeler
       produces:
       - application/json
-      responses: {}
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/database.Dividend'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
       summary: Kullanıcının Temettü Geçmişi
@@ -143,9 +598,32 @@ paths:
       consumes:
       - application/json
       description: Kullanıcının aldığı nakit temettü ödemesini kaydeder
+      parameters:
+      - description: Temettü Bilgileri
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.createDividendParams'
       produces:
       - application/json
-      responses: {}
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/database.Dividend'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
       summary: Temettü Geliri Kaydet
@@ -154,21 +632,112 @@ paths:
   /dividends/{id}:
     delete:
       description: Kullanıcının kaydettiği bir temettü gelirini siler
+      parameters:
+      - description: Temettü ID
+        in: path
+        name: id
+        required: true
+        type: integer
       produces:
       - application/json
-      responses: {}
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
       summary: Temettü Kaydını Sil
       tags:
       - Dividends
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: Email ve şifre ile giriş yapıp JWT token üretir
+      parameters:
+      - description: Kullanıcı Giriş Bilgileri
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.reqLogin'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.loginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Kullanıcı Girişi
+      tags:
+      - Auth
+  /me:
+    get:
+      description: JWT token ile doğrulanmış kullanıcının profil bilgilerini döner
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.userResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Giriş Yapmış Kullanıcı Bilgisi
+      tags:
+      - Auth
   /portfolio/history:
     get:
       description: Kullanıcının portföyünün zaman içindeki gelişimini grafik için
         döner
       produces:
       - application/json
-      responses: {}
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/database.PortfolioSnapshot'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
       summary: Portföy Tarihsel Grafik Geçmişi
@@ -180,7 +749,19 @@ paths:
         döner
       produces:
       - application/json
-      responses: {}
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.userHoldingResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
       summary: Kullanıcının Varlıklarını (Holdings) Listele
@@ -192,21 +773,82 @@ paths:
         ve kategori dağılımını döner
       produces:
       - application/json
-      responses: {}
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.portfolioSummaryResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
       summary: Portföy Özeti (TL ve Dolar)
       tags:
       - Portfolio
+  /register:
+    post:
+      consumes:
+      - application/json
+      description: Sisteme yeni bir kullanıcı kaydeder
+      parameters:
+      - description: Kullanıcı Kayıt Bilgileri
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.reqRegister'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.userResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Yeni Kullanıcı Kaydı
+      tags:
+      - Auth
   /splits:
     post:
       consumes:
       - application/json
       description: Hissede bölünme uygular ve tüm kullanıcıların geçmiş işlemlerini
         günceller
+      parameters:
+      - description: Bölünme Parametreleri
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.createSplitParams'
       produces:
       - application/json
-      responses: {}
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/database.Split'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
       summary: Bedelsiz/Ters Bölünme Uygula (Admin)
@@ -215,9 +857,32 @@ paths:
   /transactions:
     get:
       description: Kullanıcının geçmiş alım/satım işlemlerini sayfalanmış olarak listeler
+      parameters:
+      - default: 1
+        description: Sayfa Numarası
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Sayfa Başına Kayıt Sayısı
+        in: query
+        name: limit
+        type: integer
       produces:
       - application/json
-      responses: {}
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/database.Transaction'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
       summary: İşlem Geçmişi (Pagination)
@@ -228,9 +893,32 @@ paths:
       - application/json
       description: Kullanıcı portföyüne yeni bir alım (BUY) veya satım (SELL) işlemi
         kaydeder
+      parameters:
+      - description: İşlem Bilgileri
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.createTransactionParams'
       produces:
       - application/json
-      responses: {}
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/database.Transaction'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
       summary: Alım/Satım İşlemi Yap
@@ -239,9 +927,39 @@ paths:
   /transactions/{id}:
     delete:
       description: Kullanıcının gerçekleştirdiği bir alım veya satım işlemini siler
+      parameters:
+      - description: İşlem ID
+        in: path
+        name: id
+        required: true
+        type: integer
       produces:
       - application/json
-      responses: {}
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
       summary: Alım/Satım İşlemini Sil

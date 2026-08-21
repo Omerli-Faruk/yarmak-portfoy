@@ -21,22 +21,27 @@ func getUserHoldingLot(holdings []database.GetUserHoldingsSummaryRow, assetID in
 	return 0
 }
 
+type createDividendParams struct {
+	AssetID        int64     `json:"asset_id" example:"1"`
+	Amount         string    `json:"amount" example:"500.00"`
+	PaymentDate    time.Time `json:"payment_date" example:"2026-08-21T12:00:00Z"`
+	AmountPerShare string    `json:"amount_per_share" example:"5.0"`
+}
+
 // @Summary Temettü Geliri Kaydet
 // @Description Kullanıcının aldığı nakit temettü ödemesini kaydeder
 // @Tags Dividends
 // @Security BearerAuth
 // @Accept json
 // @Produce json
+// @Param request body createDividendParams true "Temettü Bilgileri"
+// @Success 201 {object} database.Dividend
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
 // @Router /dividends [post]
 func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Request) {
-	type parameters struct {
-		AssetID        int64     `json:"asset_id"`
-		Amount         string    `json:"amount"`
-		PaymentDate    time.Time `json:"payment_date"`
-		AmountPerShare string    `json:"amount_per_share"`
-	}
 	decoder := json.NewDecoder(r.Body)
-	params := parameters{}
+	params := createDividendParams{}
 	err := decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
@@ -93,6 +98,8 @@ func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Reque
 // @Tags Dividends
 // @Security BearerAuth
 // @Produce json
+// @Success 200 {array} database.Dividend
+// @Failure 401 {object} map[string]string
 // @Router /dividends [get]
 func (cfg *ApiConfig) HandlerGetUserDividends(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(UserIDKey).(int64)
@@ -113,6 +120,10 @@ func (cfg *ApiConfig) HandlerGetUserDividends(w http.ResponseWriter, r *http.Req
 // @Tags Dividends
 // @Security BearerAuth
 // @Produce json
+// @Param id path int true "Temettü ID"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
 // @Router /dividends/{id} [delete]
 func (cfg *ApiConfig) HandlerDeleteDividend(w http.ResponseWriter, r *http.Request) {
 	urlID := chi.URLParam(r, "id")
