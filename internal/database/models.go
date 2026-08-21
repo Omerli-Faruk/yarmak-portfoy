@@ -56,6 +56,15 @@ type PriceHistory struct {
 	RecordedAt time.Time
 }
 
+type RefreshToken struct {
+	Token     string
+	UserID    int64
+	ExpiresAt time.Time
+	RevokedAt sql.NullTime
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type Split struct {
 	ID         int64
 	AssetID    int64

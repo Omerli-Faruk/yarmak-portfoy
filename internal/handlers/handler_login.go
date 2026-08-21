@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"borsa_portfoy_backend/internal/auth"
+	"borsa_portfoy_backend/internal/database"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -50,5 +51,28 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusInternalServerError, "Token oluşturulurken hata oluştu", err)
 		return
 	}
-	respondWithJSON(w, http.StatusOK, loginResponse{Token: token, User: userResponse{ID: user.ID, Email: user.Email, CreatedAt: user.CreatedAt, Role: user.Role}})
+	refreshToken, err := auth.MakeRefreshToken()
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Refresh token oluşturulamadı", err)
+		return
+	}
+	_, err = cfg.DB.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+		Token:     refreshToken,
+		UserID:    user.ID,
+		ExpiresAt: time.Now().Add(60 * 24 * time.Hour),
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Refresh token kaydedilemedi", err)
+		return
+	}
+	respondWithJSON(w, http.StatusOK, loginResponse{
+		Token:        token,
+		RefreshToken: refreshToken,
+		User: userResponse{
+			ID:        user.ID,
+			Email:     user.Email,
+			CreatedAt: user.CreatedAt,
+			Role:      user.Role,
+		},
+	})
 }

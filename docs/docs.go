@@ -643,6 +643,49 @@ const docTemplate = `{
                 }
             }
         },
+        "/refresh": {
+            "post": {
+                "description": "Süresi dolan access token yerine refresh token kullanarak yeni bir access token üretir",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Access Token Yenile (Refresh)",
+                "parameters": [
+                    {
+                        "description": "Refresh Token Bilgisi",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.refreshTokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.refreshTokenResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/register": {
             "post": {
                 "description": "Sisteme yeni bir kullanıcı kaydeder",
@@ -672,6 +715,52 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/handlers.userResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/revoke": {
+            "post": {
+                "description": "Kullanıcının refresh token'ını iptal ederek oturumunu kapatır (Logout)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Oturumu Kapat / Token İptal Et (Revoke)",
+                "parameters": [
+                    {
+                        "description": "İptal Edilecek Refresh Token",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.refreshTokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
@@ -1245,6 +1334,9 @@ const docTemplate = `{
         "handlers.loginResponse": {
             "type": "object",
             "properties": {
+                "refresh_token": {
+                    "type": "string"
+                },
                 "token": {
                     "type": "string"
                 },
@@ -1294,6 +1386,23 @@ const docTemplate = `{
                 },
                 "usd_rate": {
                     "type": "number"
+                }
+            }
+        },
+        "handlers.refreshTokenRequest": {
+            "type": "object",
+            "properties": {
+                "refresh_token": {
+                    "type": "string",
+                    "example": "e4d909c290d0fb1ca068ffaddf22cbd0adddef5b81a8b5e52a65492d5257e841"
+                }
+            }
+        },
+        "handlers.refreshTokenResponse": {
+            "type": "object",
+            "properties": {
+                "token": {
+                    "type": "string"
                 }
             }
         },

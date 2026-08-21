@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"time"
@@ -56,4 +58,13 @@ func ValidateJWT(tokenString, tokenSecret string) (int64, error) {
 		return 0, fmt.Errorf("geçersiz kullanıcı ID: %w", err)
 	}
 	return userID, nil
+}
+
+func MakeRefreshToken() (string, error) {
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", fmt.Errorf("refresh token üretilemedi: %w", err)
+	}
+	return hex.EncodeToString(b), nil
 }

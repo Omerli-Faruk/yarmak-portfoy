@@ -146,6 +146,10 @@ func main() {
 	v1Router.Delete("/alerts/{id}", apiCFG.MiddleWareAuth(apiCFG.HandlerDeletePriceAlert))
 	v1Router.Get("/portfolio/history", apiCFG.MiddleWareAuth(apiCFG.HandlerGetUserPortfolioHistory))
 
+	// Refresh Token
+	v1Router.Post("/refresh", apiCFG.HandlerRefreshToken)
+	v1Router.Post("/revoke", apiCFG.HandlerRevokeToken)
+
 	// Alt router'ı ana router'a bağla
 	r.Mount("/v1", v1Router)
 	r.Get("/swagger/*", httpSwagger.WrapHandler)

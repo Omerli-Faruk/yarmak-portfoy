@@ -16,8 +16,17 @@ type userResponse struct {
 }
 
 type loginResponse struct {
-	Token string       `json:"token"`
-	User  userResponse `json:"user"`
+	Token        string       `json:"token"`
+	RefreshToken string       `json:"refresh_token"`
+	User         userResponse `json:"user"`
+}
+
+type refreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" example:"e4d909c290d0fb1ca068ffaddf22cbd0adddef5b81a8b5e52a65492d5257e841"`
+}
+
+type refreshTokenResponse struct {
+	Token string `json:"token"`
 }
 
 // assets

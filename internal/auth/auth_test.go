@@ -50,3 +50,21 @@ func TestValidateJWT(t *testing.T) {
 		t.Errorf("Süresi dolmuş token doğrulanmamalıydı!")
 	}
 }
+
+func TestMakeRefreshToken(t *testing.T) {
+	token1, err := MakeRefreshToken()
+	if err != nil {
+		t.Fatalf("Refresh token üretilemedi: %v", err)
+	}
+	if len(token1) != 64 {
+		t.Errorf("Beklenen token uzunluğu 64, gelen: %d", len(token1))
+	}
+	token2, err := MakeRefreshToken()
+	if err != nil {
+		t.Fatalf("İkinci refresh token üretilemedi: %v", err)
+	}
+	if token1 == token2 {
+		t.Errorf("Rastgele üretilen tokenlar birbirine eşit olmamalı!")
+	}
+}
+
