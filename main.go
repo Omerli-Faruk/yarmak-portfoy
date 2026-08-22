@@ -47,6 +47,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if len(jwtSecret) < 32 {
+		slog.Error("JWT_SECRET en az 32 karakter olmalıdır")
+		os.Exit(1)
+	}
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		slog.Error("$PORT yazılmış olması gerekiyor")
@@ -110,7 +115,15 @@ func main() {
 		slog.Error("CORS yapılandırma hatası", "error", err)
 		os.Exit(1)
 	}
+
 	v1Router.Use(corsMiddleware)
+
+	v1Router.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+			next.ServeHTTP(w, r)
+		})
+	})
 
 	// Sağlık Kontrolü
 	v1Router.Get("/healthz", handlers.HandlerReadiness)
@@ -120,11 +133,13 @@ func main() {
 	v1Router.With(authRateLimiter).Post("/register", apiCFG.HandlerRegister)
 	v1Router.With(authRateLimiter).Post("/login", apiCFG.HandlerLogin)
 	v1Router.Get("/me", apiCFG.MiddleWareAuth(apiCFG.HandlerGetMe))
+	v1Router.With(authRateLimiter).Post("/refresh", apiCFG.HandlerRefreshToken)
+	v1Router.With(authRateLimiter).Post("/revoke", apiCFG.HandlerRevokeToken)
 
 	// Asset (Hisse/Fon) Rotaları
 	v1Router.Post("/assets", apiCFG.MiddleWareAuth(apiCFG.MiddleWareAdmin(apiCFG.HandlerCreateAsset)))
 	v1Router.Get("/assets", apiCFG.HandlerListAssets)
-	v1Router.Get("/assets/lookup", apiCFG.HandlerLookupAsset)
+	v1Router.Get("/assets/lookup", apiCFG.MiddleWareAuth(apiCFG.HandlerLookupAsset))
 	v1Router.Post("/splits", apiCFG.MiddleWareAuth(apiCFG.MiddleWareAdmin(apiCFG.HandlerCreateSplit)))
 	v1Router.Get("/assets/{id}/splits", apiCFG.MiddleWareAuth(apiCFG.HandlerListSplitsByAsset))
 
@@ -142,10 +157,6 @@ func main() {
 	v1Router.Get("/alerts", apiCFG.MiddleWareAuth(apiCFG.HandlerGetUserPriceAlerts))
 	v1Router.Delete("/alerts/{id}", apiCFG.MiddleWareAuth(apiCFG.HandlerDeletePriceAlert))
 	v1Router.Get("/portfolio/history", apiCFG.MiddleWareAuth(apiCFG.HandlerGetUserPortfolioHistory))
-
-	// Refresh Token
-	v1Router.Post("/refresh", apiCFG.HandlerRefreshToken)
-	v1Router.Post("/revoke", apiCFG.HandlerRevokeToken)
 
 	// Alt router'ı ana router'a bağla
 	r.Mount("/v1", v1Router)

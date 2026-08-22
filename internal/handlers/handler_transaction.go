@@ -27,7 +27,7 @@ func lockUser(userID int64) func() {
 // @Security BearerAuth
 // @Accept json
 // @Produce json
-// @Param request body createTransactionParams true "İşlem Bilgileri"
+// @Param request body createTransactionRequest true "İşlem Bilgileri"
 // @Success 201 {object} database.Transaction
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
@@ -35,7 +35,7 @@ func lockUser(userID int64) func() {
 func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
-	params := createTransactionParams{}
+	params := createTransactionRequest{}
 	err := decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
@@ -247,7 +247,7 @@ func (cfg *ApiConfig) HandlerDeleteTransaction(w http.ResponseWriter, r *http.Re
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "İşlem başarıyla silindi"})
 }
 
-func (cfg *ApiConfig) resolveAssetID(ctx context.Context, params *createTransactionParams) error {
+func (cfg *ApiConfig) resolveAssetID(ctx context.Context, params *createTransactionRequest) error {
 	if params.AssetID > 0 {
 		return nil
 	}

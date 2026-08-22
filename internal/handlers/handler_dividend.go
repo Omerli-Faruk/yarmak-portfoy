@@ -27,14 +27,14 @@ func getUserHoldingLot(holdings []database.GetUserHoldingsSummaryRow, assetID in
 // @Security BearerAuth
 // @Accept json
 // @Produce json
-// @Param request body createDividendParams true "Temettü Bilgileri"
+// @Param request body createDividendRequest true "Temettü Bilgileri"
 // @Success 201 {object} database.Dividend
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Router /dividends [post]
 func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
-	params := createDividendParams{}
+	params := createDividendRequest{}
 	err := decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)

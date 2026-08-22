@@ -22,5 +22,9 @@ jobs:
       - name: Run golangci-lint
         run: go run github.com/golangci/golangci-lint/cmd/golangci-lint@latest run ./...
 
+      - name: Run automated tests
+        run: go test -v -race ./...
+
       - name: Build Go binary
         run: go build -v ./...
+

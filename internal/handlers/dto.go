@@ -37,7 +37,7 @@ type createAssetRequest struct {
 }
 
 // transactions & portfolio
-type createTransactionParams struct {
+type createTransactionRequest struct {
 	AssetID         int64     `json:"asset_id" example:"1"`
 	Type            string    `json:"type" example:"BUY" enums:"BUY,SELL"`
 	Amount          string    `json:"amount" example:"10.0"`
@@ -81,7 +81,7 @@ type AssetCategorySummary struct {
 }
 
 // Temettü
-type createDividendParams struct {
+type createDividendRequest struct {
 	AssetID        int64     `json:"asset_id" example:"1"`
 	Amount         string    `json:"amount" example:"500.00"`
 	PaymentDate    time.Time `json:"payment_date" example:"2026-08-21T12:00:00Z"`
@@ -89,7 +89,7 @@ type createDividendParams struct {
 }
 
 // Bölünme
-type createSplitParams struct {
+type createSplitRequest struct {
 	AssetID    int64     `json:"asset_id" example:"1"`
 	SplitRatio string    `json:"split_ratio" example:"4.000000"`
 	SplitDate  time.Time `json:"split_date" example:"2026-08-21T00:00:00Z"`

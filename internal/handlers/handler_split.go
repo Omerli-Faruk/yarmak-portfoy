@@ -16,14 +16,14 @@ import (
 // @Security BearerAuth
 // @Accept json
 // @Produce json
-// @Param request body createSplitParams true "Bölünme Parametreleri"
+// @Param request body createSplitRequest true "Bölünme Parametreleri"
 // @Success 201 {object} database.Split
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Router /splits [post]
 func (cfg *ApiConfig) HandlerCreateSplit(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
-	params := createSplitParams{}
+	params := createSplitRequest{}
 	err := decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
