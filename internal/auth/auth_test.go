@@ -51,6 +51,33 @@ func TestValidateJWT(t *testing.T) {
 	}
 }
 
+func TestInvalidJWTSignatures(t *testing.T) {
+	userID := int64(101)
+	secret := "super-jwt-key"
+	expiredToken := -1 * time.Hour
+	_, err := MakeJWT(userID, secret, expiredToken)
+	if err != nil {
+		t.Fatalf("Token oluşturulurken hata oluştu %v", err)
+	}
+
+	_, err = ValidateJWT("tamamen.gecersiz.bir.token", secret)
+	if err == nil {
+		t.Errorf("Geçersiz token doğrulanmamalıydı!")
+	}
+
+	_, err = ValidateJWT("", secret)
+	if err == nil {
+		t.Errorf("Boş token doğrulanmamalıydı!")
+	}
+
+	validToken, _ := MakeJWT(101, secret, 5*time.Minute)
+	tamperedToken := validToken + "hacked"
+	_, err = ValidateJWT(tamperedToken, secret)
+	if err == nil {
+		t.Errorf("Sahte token doğrulanmamalıydı")
+	}
+}
+
 func TestMakeRefreshToken(t *testing.T) {
 	token1, err := MakeRefreshToken()
 	if err != nil {
@@ -67,4 +94,3 @@ func TestMakeRefreshToken(t *testing.T) {
 		t.Errorf("Rastgele üretilen tokenlar birbirine eşit olmamalı!")
 	}
 }
-

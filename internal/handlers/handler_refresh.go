@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"borsa_portfoy_backend/internal/auth"
+	"borsa_portfoy_backend/internal/database"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -30,6 +31,7 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 		respondWithError(w, http.StatusUnauthorized, "Geçersiz veya süresi dolmuş refresh token", err)
 		return
 	}
+	_ = cfg.DB.RevokeRefreshToken(r.Context(), params.RefreshToken)
 
 	accessToken, err := auth.MakeJWT(user.ID, cfg.JWTSecret, 15*time.Minute)
 	if err != nil {
@@ -37,7 +39,26 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, refreshTokenResponse{Token: accessToken})
+	newRefreshToken, err := auth.MakeRefreshToken()
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Yeni token oluşturulurken hata oluştu", err)
+		return
+	}
+
+	_, err = cfg.DB.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+		Token:     newRefreshToken,
+		UserID:    user.ID,
+		ExpiresAt: time.Now().Add(60 * 24 * time.Hour),
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Tokeni veritabanına kaydederken hata oluştu", err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, refreshTokenResponse{
+		Token:        accessToken,
+		RefreshToken: newRefreshToken,
+	})
 }
 
 // @Summary Oturumu Kapat / Token İptal Et (Revoke)
