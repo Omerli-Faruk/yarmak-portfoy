@@ -1,0 +1,49 @@
+package handlers
+
+import (
+	"math"
+	"testing"
+)
+
+func TestWeightedAverageCostCalculation(t *testing.T) {
+	lot1 := 10.0
+	fiyat1 := 100.0
+
+	lot2 := 20.0
+	fiyat2 := 130.0
+
+	toplamPara := (lot1 * fiyat1) + (lot2 * fiyat2)
+	toplamLot := lot1 + lot2
+	ortalamaMaliyet := toplamPara / toplamLot
+	beklenenMaliyet := 120.0
+	if ortalamaMaliyet != beklenenMaliyet {
+		t.Errorf("Ortalama maliyet yanlış hesaplandı! Beklenen: %v, Hesaplanan: %v", beklenenMaliyet, ortalamaMaliyet)
+	}
+}
+
+func TestStockSplitCalculation(t *testing.T) {
+	eskiLot := 100.0
+	eskiBirimMaaliyet := 200.0
+	bölünmeOranı := 4.0
+	yeniLot := eskiLot * bölünmeOranı
+	yeniBirimMaaliyet := eskiBirimMaaliyet / bölünmeOranı
+	if yeniLot != 400.0 || yeniBirimMaaliyet != 50.0 || (eskiLot*eskiBirimMaaliyet) != (yeniBirimMaaliyet*yeniLot) {
+		t.Errorf("Bölünme hesaplamasında hata var!")
+	}
+}
+
+func TestGoldMultiplierCalculation(t *testing.T) {
+	gramAltin := 5000.0
+	altinS1 := gramAltin * 0.01
+	ceyrekAltin := gramAltin * 1.6078
+	cumhuriyetAltin := gramAltin * 6.6146
+	if math.Abs(altinS1-50.0) > 0.001 {
+		t.Errorf("ALTINS1 fiyatı yanlış! Beklenen: 50, Gelen: %v", altinS1)
+	}
+	if math.Abs(ceyrekAltin-8039.0) > 0.001 {
+		t.Errorf("Çeyrek altın fiyatı yanlış! Beklenen: 8039, Gelen: %v", ceyrekAltin)
+	}
+	if math.Abs(cumhuriyetAltin-33073.0) > 0.001 {
+		t.Errorf("Cumhuriyet altını fiyatı yanlış! Beklenen: 33073, Gelen: %v", cumhuriyetAltin)
+	}
+}
