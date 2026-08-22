@@ -16,6 +16,11 @@ type contextKey string
 
 const UserIDKey contextKey = "user_id"
 
+func HandlerReadiness(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("OK"))
+}
+
 func respondWithJSON(w http.ResponseWriter, code int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	dat, err := json.Marshal(payload)

@@ -113,10 +113,7 @@ func main() {
 	v1Router.Use(corsMiddleware)
 
 	// Sağlık Kontrolü
-	v1Router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
-	})
+	v1Router.Get("/healthz", handlers.HandlerReadiness)
 
 	// Kullanıcı Rotaları (Özel Brute-Force Korumalı Rate Limiter: 5 istek / dakika)
 	authRateLimiter := httprate.NewRateLimiter(5, 1*time.Minute).Handler
