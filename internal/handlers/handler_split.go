@@ -46,7 +46,16 @@ func (cfg *ApiConfig) HandlerCreateSplit(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusNotFound, "Bölünme uygulanacak hisse senedi sistemde bulunamadı", err)
 		return
 	}
-	split, err := cfg.DB.CreateSplit(r.Context(), database.CreateSplitParams{
+
+	tx, err := cfg.DBConn.BeginTx(r.Context(), nil)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "İşlem başlatılamadı", err)
+		return
+	}
+	defer tx.Rollback()
+	qtx := cfg.DB.WithTx(tx)
+
+	split, err := qtx.CreateSplit(r.Context(), database.CreateSplitParams{
 		AssetID:    asset.ID,
 		SplitRatio: params.SplitRatio,
 		SplitDate:  params.SplitDate,
@@ -55,13 +64,17 @@ func (cfg *ApiConfig) HandlerCreateSplit(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusInternalServerError, "Bölünme kaydı oluşturulurken hata meydana geldi", err)
 		return
 	}
-	err = cfg.DB.ApplyStockSplitToTransactions(r.Context(), database.ApplyStockSplitToTransactionsParams{
+	err = qtx.ApplyStockSplitToTransactions(r.Context(), database.ApplyStockSplitToTransactionsParams{
 		AssetID:         asset.ID,
 		Amount:          params.SplitRatio,
 		TransactionDate: params.SplitDate,
 	})
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Hisseye ait geçmiş işlemler bölünme oranına göre güncellenemedi", err)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		respondWithError(w, http.StatusInternalServerError, "İşlem onaylanamadı", err)
 		return
 	}
 	respondWithJSON(w, http.StatusCreated, split)

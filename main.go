@@ -18,6 +18,7 @@ import (
 	_ "borsa_portfoy_backend/docs"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
 	"github.com/joho/godotenv"
 	"github.com/jub0bs/fcors"
@@ -117,6 +118,8 @@ func main() {
 	}
 
 	v1Router.Use(corsMiddleware)
+
+	v1Router.Use(middleware.Timeout(15 * time.Second))
 
 	v1Router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
