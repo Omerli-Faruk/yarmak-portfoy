@@ -52,7 +52,9 @@ func (cfg *ApiConfig) HandlerCreateSplit(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusInternalServerError, "İşlem başlatılamadı", err)
 		return
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 	qtx := cfg.DB.WithTx(tx)
 
 	split, err := qtx.CreateSplit(r.Context(), database.CreateSplitParams{
