@@ -12,8 +12,8 @@ import (
 )
 
 const createDividend = `-- name: CreateDividend :one
-INSERT INTO dividends (user_id, asset_id, amount, payment_date)
-VALUES ($1, $2, $3, $4) RETURNING id, user_id, asset_id, amount, payment_date, created_at, deleted_at
+INSERT INTO dividends (user_id, asset_id, amount, payment_date, gross_amount, tax_amount, net_amount)
+VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, user_id, asset_id, amount, payment_date, created_at, deleted_at, gross_amount, tax_amount, net_amount
 `
 
 type CreateDividendParams struct {
@@ -21,6 +21,9 @@ type CreateDividendParams struct {
 	AssetID     int64
 	Amount      string
 	PaymentDate time.Time
+	GrossAmount string
+	TaxAmount   string
+	NetAmount   string
 }
 
 func (q *Queries) CreateDividend(ctx context.Context, arg CreateDividendParams) (Dividend, error) {
@@ -29,6 +32,9 @@ func (q *Queries) CreateDividend(ctx context.Context, arg CreateDividendParams) 
 		arg.AssetID,
 		arg.Amount,
 		arg.PaymentDate,
+		arg.GrossAmount,
+		arg.TaxAmount,
+		arg.NetAmount,
 	)
 	var i Dividend
 	err := row.Scan(
@@ -39,6 +45,9 @@ func (q *Queries) CreateDividend(ctx context.Context, arg CreateDividendParams) 
 		&i.PaymentDate,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.GrossAmount,
+		&i.TaxAmount,
+		&i.NetAmount,
 	)
 	return i, err
 }
@@ -60,7 +69,7 @@ func (q *Queries) DeleteDividend(ctx context.Context, arg DeleteDividendParams) 
 }
 
 const getTotalDividendsSummary = `-- name: GetTotalDividendsSummary :one
-SELECT COALESCE(SUM(amount), 0)::text as total_dividends
+SELECT COALESCE(SUM(net_amount), 0)::text as total_dividends
 FROM dividends
 WHERE user_id = $1 AND deleted_at IS NULL
 `
@@ -73,7 +82,7 @@ func (q *Queries) GetTotalDividendsSummary(ctx context.Context, userID int64) (s
 }
 
 const getUserDividends = `-- name: GetUserDividends :many
-SELECT d.id, d.user_id, d.asset_id, d.amount, d.payment_date, d.created_at, d.deleted_at, a.symbol, a.name as asset_name
+SELECT d.id, d.user_id, d.asset_id, d.amount, d.payment_date, d.created_at, d.deleted_at, d.gross_amount, d.tax_amount, d.net_amount, a.symbol, a.name as asset_name
 FROM dividends d
          JOIN assets a ON d.asset_id = a.id
 WHERE d.user_id = $1 AND d.deleted_at IS NULL
@@ -88,6 +97,9 @@ type GetUserDividendsRow struct {
 	PaymentDate time.Time
 	CreatedAt   time.Time
 	DeletedAt   sql.NullTime
+	GrossAmount string
+	TaxAmount   string
+	NetAmount   string
 	Symbol      string
 	AssetName   string
 }
@@ -109,6 +121,9 @@ func (q *Queries) GetUserDividends(ctx context.Context, userID int64) ([]GetUser
 			&i.PaymentDate,
 			&i.CreatedAt,
 			&i.DeletedAt,
+			&i.GrossAmount,
+			&i.TaxAmount,
+			&i.NetAmount,
 			&i.Symbol,
 			&i.AssetName,
 		); err != nil {

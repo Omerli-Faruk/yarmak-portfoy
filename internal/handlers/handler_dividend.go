@@ -73,11 +73,22 @@ func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Reque
 		respondWithError(w, http.StatusBadRequest, "Miktar veya Asset ID geçersiz", nil)
 		return
 	}
+
+	grossAmount := amount
+	taxAmount := grossAmount * 0.10
+	netAmount := grossAmount - taxAmount
+	cleanGross := fmt.Sprintf("%.6f", grossAmount)
+	cleanTax := fmt.Sprintf("%.6f", taxAmount)
+	cleanNet := fmt.Sprintf("%.6f", netAmount)
+
 	userDividend, err := cfg.DB.CreateDividend(r.Context(), database.CreateDividendParams{
 		UserID:      userID,
 		AssetID:     params.AssetID,
-		Amount:      params.Amount,
+		Amount:      cleanNet,
 		PaymentDate: params.PaymentDate,
+		GrossAmount: cleanGross,
+		TaxAmount:   cleanTax,
+		NetAmount:   cleanNet,
 	})
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Temettü oluşturulamadı", err)

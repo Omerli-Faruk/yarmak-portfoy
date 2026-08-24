@@ -26,6 +26,9 @@ type Dividend struct {
 	PaymentDate time.Time
 	CreatedAt   time.Time
 	DeletedAt   sql.NullTime
+	GrossAmount string
+	TaxAmount   string
+	NetAmount   string
 }
 
 type PortfolioSnapshot struct {

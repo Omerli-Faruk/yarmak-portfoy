@@ -1,6 +1,6 @@
 -- name: CreateDividend :one
-INSERT INTO dividends (user_id, asset_id, amount, payment_date)
-VALUES ($1, $2, $3, $4) RETURNING *;
+INSERT INTO dividends (user_id, asset_id, amount, payment_date, gross_amount, tax_amount, net_amount)
+VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;
 
 -- name: GetUserDividends :many
 SELECT d.*, a.symbol, a.name as asset_name
@@ -10,7 +10,7 @@ WHERE d.user_id = $1 AND d.deleted_at IS NULL
 ORDER BY d.payment_date DESC;
 
 -- name: GetTotalDividendsSummary :one
-SELECT COALESCE(SUM(amount), 0)::text as total_dividends
+SELECT COALESCE(SUM(net_amount), 0)::text as total_dividends
 FROM dividends
 WHERE user_id = $1 AND deleted_at IS NULL;
 

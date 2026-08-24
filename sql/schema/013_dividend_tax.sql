@@ -1,0 +1,9 @@
+-- +goose Up
+ALTER TABLE dividends ADD COLUMN gross_amount NUMERIC(18, 6) NOT NULL DEFAULT 0.000000;
+ALTER TABLE dividends ADD COLUMN tax_amount NUMERIC(18, 6) NOT NULL DEFAULT 0.000000;
+ALTER TABLE dividends ADD COLUMN net_amount NUMERIC(18, 6) NOT NULL DEFAULT 0.000000;
+
+-- +goose Down
+ALTER TABLE dividends DROP COLUMN IF EXISTS net_amount;
+ALTER TABLE dividends DROP COLUMN IF EXISTS tax_amount;
+ALTER TABLE dividends DROP COLUMN IF EXISTS gross_amount;
