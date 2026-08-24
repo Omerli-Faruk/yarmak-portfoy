@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"borsa_portfoy_backend/internal/auth"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -43,8 +44,11 @@ func TestInvalidTransactionValidation(t *testing.T) {
 	invalidJSON := `{"asset_id":1,"type":"INVALID","amount":"10","price":"-100"}`
 	req := httptest.NewRequest("POST", "/v1/transactions", strings.NewReader(invalidJSON))
 	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
 
+	ctx := context.WithValue(req.Context(), UserIDKey, int64(101))
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
 	cfg.HandlerCreateTransaction(rr, req)
 
 	if rr.Code != http.StatusBadRequest {

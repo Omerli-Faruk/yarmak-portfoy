@@ -47,3 +47,11 @@ func TestGoldMultiplierCalculation(t *testing.T) {
 		t.Errorf("Cumhuriyet altını fiyatı yanlış! Beklenen: 33073, Gelen: %v", cumhuriyetAltin)
 	}
 }
+
+func TestRoundFloat(t *testing.T) {
+	val := 1250.336789
+	rounded := round2(val)
+	if rounded != 1250.34 {
+		t.Errorf("Yuvarlama hatalı! Beklenen: 1250.34, Gelen: %v", rounded)
+	}
+}
