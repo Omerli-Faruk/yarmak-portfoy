@@ -1,6 +1,6 @@
 -- name: CreateTransaction :one
-INSERT INTO transactions (user_id, asset_id, type, amount, price, transaction_date)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO transactions (user_id, asset_id, type, amount, price, transaction_date, realized_pnl)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
     RETURNING *;
 
 -- name: GetUserTransactionsPaginated :many
@@ -35,3 +35,8 @@ WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL;
 -- name: GetTransactionByIDAndUser :one
 SELECT * FROM transactions
 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL;
+
+-- name: GetTotalRealizedPnL :one
+SELECT COALESCE(SUM(realized_pnl), 0)::text as total_realized_pnl
+FROM transactions
+WHERE user_id = $1 AND type = 'SELL' AND deleted_at IS NULL;

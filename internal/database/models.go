@@ -84,6 +84,7 @@ type Transaction struct {
 	TransactionDate time.Time
 	CreatedAt       time.Time
 	DeletedAt       sql.NullTime
+	RealizedPnl     string
 }
 
 type User struct {

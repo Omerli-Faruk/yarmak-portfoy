@@ -29,6 +29,12 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 	if err != nil {
 		totalDividendsStr = "0.000000"
 	}
+	totalRealizedStr, err := cfg.DB.GetTotalRealizedPnL(r.Context(), userID)
+	if err != nil {
+		totalRealizedStr = "0.000000"
+	}
+	totalRealizedPnL, _ := strconv.ParseFloat(totalRealizedStr, 64)
+
 	totalDividends, _ := strconv.ParseFloat(totalDividendsStr, 64)
 	var totalPortfolioValue float64
 	var totalPortfolioCost float64
@@ -70,7 +76,7 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 		totalPortfolioCost += averageCost * totalAmount
 	}
 	capitalProfitLoss := totalPortfolioValue - totalPortfolioCost
-	totalCombinedProfit := capitalProfitLoss + totalDividends
+	totalCombinedProfit := capitalProfitLoss + totalRealizedPnL + totalDividends
 	var capitalProfitLossPercentage float64
 	var totalReturnPercentage float64
 	if totalPortfolioCost > 0 {
@@ -102,6 +108,7 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 		USDRate:                     usdRate,
 		TotalValueUSD:               totalValueUSD,
 		TotalCombinedProfitUSD:      totalProfitUSD,
+		RealizedProfitLoss:          totalRealizedPnL,
 	})
 }
 

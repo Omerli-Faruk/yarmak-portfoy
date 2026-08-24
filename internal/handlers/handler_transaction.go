@@ -72,15 +72,46 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 	unlock := lockUser(userID)
 	defer unlock()
 
+	var realizedPnL float64
+
 	if params.Type == "SELL" {
-		err = cfg.validateSellHolding(r.Context(), userID, params.AssetID, amountVal)
+		holdings, err := cfg.DB.GetUserHoldingsSummary(r.Context(), userID)
 		if err != nil {
-			respondWithError(w, http.StatusBadRequest, "Yetersiz bakiye: Elinizdeki miktardan fazlasını satamazsınız", err)
+			respondWithError(w, http.StatusInternalServerError, "Portföy bilgisi alınamadı", err)
 			return
 		}
+
+		var currentLot float64
+		var avgCost float64
+		for _, h := range holdings {
+			if h.AssetID == params.AssetID {
+				currentLot, _ = strconv.ParseFloat(h.TotalAmount, 64)
+				var avgCostStr string
+				switch v := h.AverageCost.(type) {
+				case string:
+					avgCostStr = v
+				case []byte:
+					avgCostStr = string(v)
+				default:
+					avgCostStr = fmt.Sprintf("%v", v)
+				}
+				avgCost, _ = strconv.ParseFloat(avgCostStr, 64)
+				break
+			}
+		}
+
+		if amountVal > currentLot {
+			respondWithError(w, http.StatusBadRequest, "Yetersiz bakiye: Elinizdeki miktardan fazlasını satamazsınız", nil)
+			return
+		}
+
+		realizedPnL = amountVal * (priceVal - avgCost)
 	}
+
 	cleanAmount := fmt.Sprintf("%.6f", amountVal)
 	cleanPrice := fmt.Sprintf("%.6f", priceVal)
+	cleanRealizedPnL := fmt.Sprintf("%.6f", realizedPnL)
+
 	transaction, err := cfg.DB.CreateTransaction(r.Context(), database.CreateTransactionParams{
 		UserID:          userID,
 		AssetID:         params.AssetID,
@@ -88,6 +119,7 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 		Amount:          cleanAmount,
 		Price:           cleanPrice,
 		TransactionDate: params.TransactionDate,
+		RealizedPnl:     cleanRealizedPnL,
 	})
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "İşlem oluşturulamadı", err)

@@ -65,6 +65,7 @@ type portfolioSummaryResponse struct {
 	TotalCost                   float64                          `json:"total_cost"`
 	CapitalProfitLoss           float64                          `json:"capital_profit_loss"`
 	CapitalProfitLossPercentage float64                          `json:"capital_profit_loss_percentage"`
+	RealizedProfitLoss          float64                          `json:"realized_profit_loss"`
 	TotalDividends              float64                          `json:"total_dividends"`
 	TotalCombinedProfit         float64                          `json:"total_combined_profit"`
 	TotalReturnPercentage       float64                          `json:"total_return_percentage"`
