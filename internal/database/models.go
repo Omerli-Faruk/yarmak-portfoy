@@ -88,6 +88,7 @@ type Transaction struct {
 	CreatedAt       time.Time
 	DeletedAt       sql.NullTime
 	RealizedPnl     string
+	Commission      string
 }
 
 type User struct {

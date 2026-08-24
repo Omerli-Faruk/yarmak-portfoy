@@ -46,6 +46,7 @@ type createTransactionRequest struct {
 	TransactionDate time.Time `json:"transaction_date" example:"2026-08-21T12:00:00Z"`
 	Symbol          string    `json:"symbol" example:"THYAO"`
 	AssetType       string    `json:"asset_type" example:"HISSE" enums:"HISSE,FON,ALTIN,DOVIZ"`
+	Commission      string    `json:"commission,omitempty" example:"15.50"` // 👈 YENİ
 }
 
 type userHoldingResponse struct {

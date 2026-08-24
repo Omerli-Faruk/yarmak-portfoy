@@ -12,9 +12,9 @@ import (
 )
 
 const createTransaction = `-- name: CreateTransaction :one
-INSERT INTO transactions (user_id, asset_id, type, amount, price, transaction_date, realized_pnl)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-    RETURNING id, user_id, asset_id, type, amount, price, transaction_date, created_at, deleted_at, realized_pnl
+INSERT INTO transactions (user_id, asset_id, type, amount, price, transaction_date, realized_pnl, commission)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    RETURNING id, user_id, asset_id, type, amount, price, transaction_date, created_at, deleted_at, realized_pnl, commission
 `
 
 type CreateTransactionParams struct {
@@ -25,6 +25,7 @@ type CreateTransactionParams struct {
 	Price           string
 	TransactionDate time.Time
 	RealizedPnl     string
+	Commission      string
 }
 
 func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error) {
@@ -36,6 +37,7 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		arg.Price,
 		arg.TransactionDate,
 		arg.RealizedPnl,
+		arg.Commission,
 	)
 	var i Transaction
 	err := row.Scan(
@@ -49,6 +51,7 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		&i.CreatedAt,
 		&i.DeletedAt,
 		&i.RealizedPnl,
+		&i.Commission,
 	)
 	return i, err
 }
@@ -83,7 +86,7 @@ func (q *Queries) GetTotalRealizedPnL(ctx context.Context, userID int64) (string
 }
 
 const getTransactionByIDAndUser = `-- name: GetTransactionByIDAndUser :one
-SELECT id, user_id, asset_id, type, amount, price, transaction_date, created_at, deleted_at, realized_pnl FROM transactions
+SELECT id, user_id, asset_id, type, amount, price, transaction_date, created_at, deleted_at, realized_pnl, commission FROM transactions
 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
 `
 
@@ -106,6 +109,7 @@ func (q *Queries) GetTransactionByIDAndUser(ctx context.Context, arg GetTransact
 		&i.CreatedAt,
 		&i.DeletedAt,
 		&i.RealizedPnl,
+		&i.Commission,
 	)
 	return i, err
 }
@@ -169,7 +173,7 @@ func (q *Queries) GetUserHoldingsSummary(ctx context.Context, userID int64) ([]G
 }
 
 const getUserTransactionsPaginated = `-- name: GetUserTransactionsPaginated :many
-SELECT t.id, t.user_id, t.asset_id, t.type, t.amount, t.price, t.transaction_date, t.created_at, t.deleted_at, t.realized_pnl, a.symbol, a.name as asset_name, a.asset_type
+SELECT t.id, t.user_id, t.asset_id, t.type, t.amount, t.price, t.transaction_date, t.created_at, t.deleted_at, t.realized_pnl, t.commission, a.symbol, a.name as asset_name, a.asset_type
 FROM transactions t
          JOIN assets a ON t.asset_id = a.id
 WHERE t.user_id = $1 AND t.deleted_at IS NULL
@@ -194,6 +198,7 @@ type GetUserTransactionsPaginatedRow struct {
 	CreatedAt       time.Time
 	DeletedAt       sql.NullTime
 	RealizedPnl     string
+	Commission      string
 	Symbol          string
 	AssetName       string
 	AssetType       string
@@ -219,6 +224,7 @@ func (q *Queries) GetUserTransactionsPaginated(ctx context.Context, arg GetUserT
 			&i.CreatedAt,
 			&i.DeletedAt,
 			&i.RealizedPnl,
+			&i.Commission,
 			&i.Symbol,
 			&i.AssetName,
 			&i.AssetType,

@@ -1,6 +1,6 @@
 -- name: CreateTransaction :one
-INSERT INTO transactions (user_id, asset_id, type, amount, price, transaction_date, realized_pnl)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO transactions (user_id, asset_id, type, amount, price, transaction_date, realized_pnl, commission)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     RETURNING *;
 
 -- name: GetUserTransactionsPaginated :many

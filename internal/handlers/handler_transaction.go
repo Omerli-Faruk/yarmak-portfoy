@@ -111,6 +111,11 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 	cleanAmount := fmt.Sprintf("%.6f", amountVal)
 	cleanPrice := fmt.Sprintf("%.6f", priceVal)
 	cleanRealizedPnL := fmt.Sprintf("%.6f", realizedPnL)
+	commissionVal, _ := strconv.ParseFloat(params.Commission, 64)
+	if commissionVal < 0 {
+		commissionVal = 0
+	}
+	cleanCommission := fmt.Sprintf("%.6f", commissionVal)
 
 	transaction, err := cfg.DB.CreateTransaction(r.Context(), database.CreateTransactionParams{
 		UserID:          userID,
@@ -120,6 +125,7 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 		Price:           cleanPrice,
 		TransactionDate: params.TransactionDate,
 		RealizedPnl:     cleanRealizedPnL,
+		Commission:      cleanCommission,
 	})
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "İşlem oluşturulamadı", err)
