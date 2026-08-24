@@ -2,6 +2,9 @@ package handlers
 
 import (
 	"borsa_portfoy_backend/internal/database"
+	"borsa_portfoy_backend/internal/scraper"
+	"math"
+
 	"fmt"
 	"net/http"
 	"strconv"
@@ -89,6 +92,9 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 	if err == nil {
 		usdRate, _ = strconv.ParseFloat(usdAsset.CurrentPrice, 64)
 	}
+	if usdRate <= 0 {
+		usdRate, _ = scraper.FetchBISTPrice("USDTRY")
+	}
 	var totalValueUSD float64
 	var totalProfitUSD float64
 	if usdRate > 0 {
@@ -96,19 +102,19 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 		totalProfitUSD = totalCombinedProfit / usdRate
 	}
 	respondWithJSON(w, http.StatusOK, portfolioSummaryResponse{
-		TotalValue:                  totalPortfolioValue,
-		TotalCost:                   totalPortfolioCost,
-		CapitalProfitLoss:           capitalProfitLoss,
-		CapitalProfitLossPercentage: capitalProfitLossPercentage,
-		TotalDividends:              totalDividends,
-		TotalCombinedProfit:         totalCombinedProfit,
-		TotalReturnPercentage:       totalReturnPercentage,
+		TotalValue:                  round2(totalPortfolioValue),
+		TotalCost:                   round2(totalPortfolioCost),
+		CapitalProfitLoss:           round2(capitalProfitLoss),
+		CapitalProfitLossPercentage: round2(capitalProfitLossPercentage),
+		TotalDividends:              round2(totalDividends),
+		TotalCombinedProfit:         round2(totalCombinedProfit),
+		TotalReturnPercentage:       round2(totalReturnPercentage),
 		HoldingsCount:               len(holdings),
 		Breakdown:                   breakdown,
-		USDRate:                     usdRate,
-		TotalValueUSD:               totalValueUSD,
-		TotalCombinedProfitUSD:      totalProfitUSD,
-		RealizedProfitLoss:          totalRealizedPnL,
+		USDRate:                     round2(usdRate),
+		TotalValueUSD:               round2(totalValueUSD),
+		TotalCombinedProfitUSD:      round2(totalProfitUSD),
+		RealizedProfitLoss:          round2(totalRealizedPnL),
 	})
 }
 
@@ -136,4 +142,8 @@ func (cfg *ApiConfig) HandlerGetUserPortfolioHistory(w http.ResponseWriter, r *h
 		history = []database.PortfolioSnapshot{}
 	}
 	respondWithJSON(w, http.StatusOK, history)
+}
+
+func round2(val float64) float64 {
+	return math.Round(val*100) / 100
 }

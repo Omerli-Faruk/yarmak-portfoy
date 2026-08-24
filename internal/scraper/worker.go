@@ -66,6 +66,7 @@ func runScrapeCycle(ctx context.Context, db *database.Queries) {
 	}
 	close(jobs)
 	wg.Wait()
+	recordPortfolioSnapshots(ctx, db)
 	slog.Info("Canlı fiyat taraması tamamlandı", "gecen_sure", time.Since(startTime))
 }
 
@@ -134,5 +135,44 @@ func checkAndTriggerAlerts(ctx context.Context, db *database.Queries, asset data
 				"user_id", alert.UserID,
 			)
 		}
+	}
+}
+
+func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
+	users, err := db.ListUsers(ctx)
+	if err != nil {
+		return
+	}
+	for _, user := range users {
+		holdings, err := db.GetUserHoldingsSummary(ctx, user.ID)
+		if err != nil || len(holdings) == 0 {
+			continue
+		}
+		var totalValue float64
+		var totalCost float64
+		for _, h := range holdings {
+			currentPrice, _ := strconv.ParseFloat(h.CurrentPrice, 64)
+			totalAmount, _ := strconv.ParseFloat(h.TotalAmount, 64)
+			var avgCostStr string
+			switch v := h.AverageCost.(type) {
+			case string:
+				avgCostStr = v
+			case []byte:
+				avgCostStr = string(v)
+			default:
+				avgCostStr = fmt.Sprintf("%v", v)
+			}
+			avgCost, _ := strconv.ParseFloat(avgCostStr, 64)
+			totalValue += currentPrice * totalAmount
+			totalCost += avgCost * totalAmount
+		}
+		pnl := totalValue - totalCost
+		_, _ = db.CreatePortfolioSnapshot(ctx, database.CreatePortfolioSnapshotParams{
+			UserID:     user.ID,
+			TotalValue: fmt.Sprintf("%.6f", totalValue),
+			TotalCost:  fmt.Sprintf("%.6f", totalCost),
+			ProfitLoss: fmt.Sprintf("%.6f", pnl),
+			RecordedAt: time.Now().UTC(),
+		})
 	}
 }
