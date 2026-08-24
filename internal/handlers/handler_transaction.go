@@ -296,15 +296,3 @@ func (cfg *ApiConfig) resolveAssetID(ctx context.Context, params *createTransact
 	params.AssetID = asset.ID
 	return nil
 }
-
-func (cfg *ApiConfig) validateSellHolding(ctx context.Context, userID int64, assetID int64, sellAmount float64) error {
-	holdings, err := cfg.DB.GetUserHoldingsSummary(ctx, userID)
-	if err != nil {
-		return err
-	}
-	currentHolding := getUserHoldingLot(holdings, assetID)
-	if sellAmount > currentHolding {
-		return fmt.Errorf("yetersiz bakiye: elinizdeki miktardan fazlasını satamazsınız")
-	}
-	return nil
-}
