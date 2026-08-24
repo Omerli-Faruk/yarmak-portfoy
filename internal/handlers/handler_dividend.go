@@ -11,16 +11,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func getUserHoldingLot(holdings []database.GetUserHoldingsSummaryRow, assetID int64) float64 {
-	for _, h := range holdings {
-		if h.AssetID == assetID {
-			lot, _ := strconv.ParseFloat(h.TotalAmount, 64)
-			return lot
-		}
-	}
-	return 0
-}
-
 // @Summary Temettü Geliri Kaydet
 // @Description Kullanıcının aldığı nakit temettü ödemesini kaydeder
 // @Tags Dividends

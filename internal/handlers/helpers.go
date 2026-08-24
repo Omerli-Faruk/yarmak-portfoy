@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -25,7 +26,8 @@ func respondWithJSON(w http.ResponseWriter, code int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	dat, err := json.Marshal(payload)
 	if err != nil {
-		w.WriteHeader(500)
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"Sunucu hatası oluştu"}`))
 		return
 	}
 	w.WriteHeader(code)
@@ -83,4 +85,14 @@ func (cfg *ApiConfig) GetOrCreateAssetBySymbol(ctx context.Context, symbol strin
 		RecordedAt: time.Now().UTC(),
 	})
 	return newAsset, nil
+}
+
+func getUserHoldingLot(holdings []database.GetUserHoldingsSummaryRow, assetID int64) float64 {
+	for _, h := range holdings {
+		if h.AssetID == assetID {
+			lot, _ := strconv.ParseFloat(h.TotalAmount, 64)
+			return lot
+		}
+	}
+	return 0
 }

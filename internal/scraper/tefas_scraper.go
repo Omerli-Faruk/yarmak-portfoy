@@ -73,5 +73,9 @@ func parseLocalizedPrice(raw string) (float64, error) {
 	} else if strings.Contains(raw, ",") {
 		raw = strings.ReplaceAll(raw, ",", ".")
 	}
-	return strconv.ParseFloat(raw, 64)
+	price, err := strconv.ParseFloat(raw, 64)
+	if err != nil || price <= 0 {
+		return 0, fmt.Errorf("geçersiz fon fiyatı: %s", raw)
+	}
+	return price, nil
 }
