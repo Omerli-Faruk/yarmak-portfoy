@@ -35,7 +35,7 @@ func FetchTEFASPrice(symbol string) (float64, error) {
 		return 0, fmt.Errorf("Google Finance TEFAS yanıt vermedi (HTTP %d)", resp.StatusCode)
 	}
 
-	bodyBytes, err := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if err != nil {
 		return 0, fmt.Errorf("yanıt okunamadı: %w", err)
 	}

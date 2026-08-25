@@ -81,7 +81,7 @@ func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Reque
 		NetAmount:   cleanNet,
 	})
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Temettü oluşturulamadı", err)
+		respondWithError(w, http.StatusInternalServerError, "Temettü oluşturulamadı", err)
 		return
 	}
 	respondWithJSON(w, http.StatusCreated, userDividend)

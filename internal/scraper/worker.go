@@ -159,16 +159,7 @@ func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
 		for _, h := range holdings {
 			currentPrice, _ := strconv.ParseFloat(h.CurrentPrice, 64)
 			totalAmount, _ := strconv.ParseFloat(h.TotalAmount, 64)
-			var avgCostStr string
-			switch v := h.AverageCost.(type) {
-			case string:
-				avgCostStr = v
-			case []byte:
-				avgCostStr = string(v)
-			default:
-				avgCostStr = fmt.Sprintf("%v", v)
-			}
-			avgCost, _ := strconv.ParseFloat(avgCostStr, 64)
+			avgCost := parseAverageCost(h.AverageCost)
 			totalValue += currentPrice * totalAmount
 			totalCost += avgCost * totalAmount
 		}
@@ -182,4 +173,18 @@ func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
 		})
 	}
 	lastSnapshotDay = now.Day()
+}
+
+func parseAverageCost(val any) float64 {
+	var avgCostStr string
+	switch v := val.(type) {
+	case string:
+		avgCostStr = v
+	case []byte:
+		avgCostStr = string(v)
+	default:
+		avgCostStr = fmt.Sprintf("%v", v)
+	}
+	avgCost, _ := strconv.ParseFloat(avgCostStr, 64)
+	return avgCost
 }

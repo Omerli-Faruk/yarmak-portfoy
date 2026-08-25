@@ -118,3 +118,17 @@ func calculateAssetHoldingAndCost(transactions []database.Transaction) (currentL
 	}
 	return runningLot, runningCost
 }
+
+func parseAverageCost(val any) float64 {
+	var avgCostStr string
+	switch v := val.(type) {
+	case string:
+		avgCostStr = v
+	case []byte:
+		avgCostStr = string(v)
+	default:
+		avgCostStr = fmt.Sprintf("%v", v)
+	}
+	cost, _ := strconv.ParseFloat(avgCostStr, 64)
+	return cost
+}

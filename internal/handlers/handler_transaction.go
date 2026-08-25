@@ -13,12 +13,11 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-var userLocks [256]sync.Mutex
+var txLock sync.Mutex
 
 func lockUser(userID int64) func() {
-	idx := uint64(userID) % 256
-	userLocks[idx].Lock()
-	return userLocks[idx].Unlock
+	txLock.Lock()
+	return txLock.Unlock
 }
 
 // @Summary Alım/Satım İşlemi Yap
@@ -113,7 +112,7 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 		Commission:      cleanCommission,
 	})
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "İşlem oluşturulamadı", err)
+		respondWithError(w, http.StatusInternalServerError, "İşlem oluşturulamadı", err)
 		return
 	}
 	respondWithJSON(w, http.StatusCreated, transaction)
@@ -142,16 +141,8 @@ func (cfg *ApiConfig) HandlerGetUserHoldings(w http.ResponseWriter, r *http.Requ
 	for _, h := range holdings {
 		currentPrice, _ := strconv.ParseFloat(h.CurrentPrice, 64)
 		totalAmount, _ := strconv.ParseFloat(h.TotalAmount, 64)
-		var avgCostStr string
-		switch v := h.AverageCost.(type) {
-		case string:
-			avgCostStr = v
-		case []byte:
-			avgCostStr = string(v)
-		default:
-			avgCostStr = fmt.Sprintf("%v", v)
-		}
-		averageCost, _ := strconv.ParseFloat(avgCostStr, 64)
+		averageCost := parseAverageCost(h.AverageCost)
+
 		totalValue := currentPrice * totalAmount
 		costValue := averageCost * totalAmount
 		res = append(res, userHoldingResponse{
