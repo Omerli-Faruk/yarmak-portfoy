@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"borsa_portfoy_backend/internal/database"
 	"math"
 	"testing"
 )
@@ -53,5 +54,35 @@ func TestRoundFloat(t *testing.T) {
 	rounded := round2(val)
 	if rounded != 1250.34 {
 		t.Errorf("Yuvarlama hatalı! Beklenen: 1250.34, Gelen: %v", rounded)
+	}
+}
+
+func TestCalculateAssetHoldingAndCost(t *testing.T) {
+	txs := []database.Transaction{
+		{Type: "BUY", Amount: "100.000000", Price: "10.000000", Commission: "0.000000"},
+		{Type: "BUY", Amount: "100.000000", Price: "20.000000", Commission: "0.000000"},
+		{Type: "SELL", Amount: "150.000000", Price: "25.000000", Commission: "0.000000"},
+		{Type: "BUY", Amount: "50.000000", Price: "40.000000", Commission: "0.000000"},
+	}
+
+	lot, cost := calculateAssetHoldingAndCost(txs)
+
+	if lot != 100.0 {
+		t.Errorf("Beklenen lot 100.0, gelen: %v", lot)
+	}
+
+	if math.Abs(cost-27.50) > 0.001 {
+		t.Errorf("Beklenen ortalama maliyet 27.50, gelen: %v", cost)
+	}
+}
+
+func TestParseAverageCost(t *testing.T) {
+	cost1 := parseAverageCost("125.500000")
+	if cost1 != 125.50 {
+		t.Errorf("String dönüşümü hatalı: %v", cost1)
+	}
+	cost2 := parseAverageCost([]byte("125.500000"))
+	if cost2 != 125.50 {
+		t.Errorf("Byte slice dönüşümü hatalı: %v", cost2)
 	}
 }
