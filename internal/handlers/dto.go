@@ -75,6 +75,7 @@ type portfolioSummaryResponse struct {
 	USDRate                     float64                          `json:"usd_rate"`
 	TotalValueUSD               float64                          `json:"total_value_usd"`
 	TotalCombinedProfitUSD      float64                          `json:"total_combined_profit_usd"`
+	TotalCommission             float64                          `json:"total_commission"`
 }
 
 type AssetCategorySummary struct {

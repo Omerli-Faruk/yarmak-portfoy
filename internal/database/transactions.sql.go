@@ -72,6 +72,17 @@ func (q *Queries) DeleteTransaction(ctx context.Context, arg DeleteTransactionPa
 	return err
 }
 
+const getTotalCommission = `-- name: GetTotalCommission :one
+SELECT COALESCE(SUM(commission), 0)::text as total_commission FROM transactions WHERE user_id = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) GetTotalCommission(ctx context.Context, userID int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getTotalCommission, userID)
+	var total_commission string
+	err := row.Scan(&total_commission)
+	return total_commission, err
+}
+
 const getTotalRealizedPnL = `-- name: GetTotalRealizedPnL :one
 SELECT COALESCE(SUM(realized_pnl), 0)::text as total_realized_pnl
 FROM transactions
@@ -158,6 +169,50 @@ func (q *Queries) GetUserHoldingsSummary(ctx context.Context, userID int64) ([]G
 			&i.CurrentPrice,
 			&i.TotalAmount,
 			&i.AverageCost,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserTransactionsForAsset = `-- name: GetUserTransactionsForAsset :many
+SELECT id, user_id, asset_id, type, amount, price, transaction_date, created_at, deleted_at, realized_pnl, commission FROM transactions WHERE user_id = $1 AND asset_id = $2 AND deleted_at IS NULL ORDER BY transaction_date ASC, id ASC
+`
+
+type GetUserTransactionsForAssetParams struct {
+	UserID  int64
+	AssetID int64
+}
+
+func (q *Queries) GetUserTransactionsForAsset(ctx context.Context, arg GetUserTransactionsForAssetParams) ([]Transaction, error) {
+	rows, err := q.db.QueryContext(ctx, getUserTransactionsForAsset, arg.UserID, arg.AssetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Transaction
+	for rows.Next() {
+		var i Transaction
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.AssetID,
+			&i.Type,
+			&i.Amount,
+			&i.Price,
+			&i.TransactionDate,
+			&i.CreatedAt,
+			&i.DeletedAt,
+			&i.RealizedPnl,
+			&i.Commission,
 		); err != nil {
 			return nil, err
 		}

@@ -24,6 +24,11 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
 		return
 	}
+	totalCommissionStr, err := cfg.DB.GetTotalCommission(r.Context(), userID)
+	if err != nil {
+		totalCommissionStr = "0.000000"
+	}
+	totalCommission, _ := strconv.ParseFloat(totalCommissionStr, 64)
 	holdings, err := cfg.DB.GetUserHoldingsSummary(r.Context(), userID)
 	if err != nil {
 		holdings = []database.GetUserHoldingsSummaryRow{}
@@ -115,6 +120,7 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 		TotalValueUSD:               round2(totalValueUSD),
 		TotalCombinedProfitUSD:      round2(totalProfitUSD),
 		RealizedProfitLoss:          round2(totalRealizedPnL),
+		TotalCommission:             round2(totalCommission),
 	})
 }
 

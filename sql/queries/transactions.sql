@@ -40,3 +40,9 @@ WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL;
 SELECT COALESCE(SUM(realized_pnl), 0)::text as total_realized_pnl
 FROM transactions
 WHERE user_id = $1 AND type = 'SELL' AND deleted_at IS NULL;
+
+-- name: GetUserTransactionsForAsset :many
+SELECT * FROM transactions WHERE user_id = $1 AND asset_id = $2 AND deleted_at IS NULL ORDER BY transaction_date ASC, id ASC;
+
+-- name: GetTotalCommission :one
+SELECT COALESCE(SUM(commission), 0)::text as total_commission FROM transactions WHERE user_id = $1 AND deleted_at IS NULL;

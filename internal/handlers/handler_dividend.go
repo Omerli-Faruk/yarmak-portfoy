@@ -74,7 +74,7 @@ func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Reque
 	userDividend, err := cfg.DB.CreateDividend(r.Context(), database.CreateDividendParams{
 		UserID:      userID,
 		AssetID:     params.AssetID,
-		Amount:      cleanNet,
+		Amount:      cleanGross,
 		PaymentDate: params.PaymentDate,
 		GrossAmount: cleanGross,
 		TaxAmount:   cleanTax,
