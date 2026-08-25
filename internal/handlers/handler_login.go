@@ -27,7 +27,7 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	email := strings.ToLower(strings.TrimSpace(params.Email))
-	password := strings.TrimSpace(params.Password)
+	password := params.Password
 	if email == "" || password == "" {
 		respondWithError(w, http.StatusBadRequest, "Lütfen tüm alanları doldurun", nil)
 		return

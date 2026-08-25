@@ -23,3 +23,6 @@ WHERE id = $1
 
 -- name: ListUsers :many
 SELECT * FROM users;
+
+-- name: ListUserIDs :many
+SELECT id FROM users;

@@ -31,7 +31,11 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 		respondWithError(w, http.StatusUnauthorized, "Geçersiz veya süresi dolmuş refresh token", err)
 		return
 	}
-	_ = cfg.DB.RevokeRefreshToken(r.Context(), params.RefreshToken)
+	err = cfg.DB.RevokeRefreshToken(r.Context(), params.RefreshToken)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Token yenilenemedi", err)
+		return
+	}
 
 	accessToken, err := auth.MakeJWT(user.ID, cfg.JWTSecret, 15*time.Minute)
 	if err != nil {

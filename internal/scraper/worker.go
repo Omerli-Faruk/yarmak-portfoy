@@ -138,13 +138,19 @@ func checkAndTriggerAlerts(ctx context.Context, db *database.Queries, asset data
 	}
 }
 
+var lastSnapshotDay int
+
 func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
-	users, err := db.ListUsers(ctx)
+	now := time.Now()
+	if now.Hour() < 18 || lastSnapshotDay == now.Day() {
+		return
+	}
+	userIDs, err := db.ListUserIDs(ctx)
 	if err != nil {
 		return
 	}
-	for _, user := range users {
-		holdings, err := db.GetUserHoldingsSummary(ctx, user.ID)
+	for _, userID := range userIDs {
+		holdings, err := db.GetUserHoldingsSummary(ctx, userID)
 		if err != nil || len(holdings) == 0 {
 			continue
 		}
@@ -168,11 +174,12 @@ func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
 		}
 		pnl := totalValue - totalCost
 		_, _ = db.CreatePortfolioSnapshot(ctx, database.CreatePortfolioSnapshotParams{
-			UserID:     user.ID,
+			UserID:     userID,
 			TotalValue: fmt.Sprintf("%.6f", totalValue),
 			TotalCost:  fmt.Sprintf("%.6f", totalCost),
 			ProfitLoss: fmt.Sprintf("%.6f", pnl),
 			RecordedAt: time.Now().UTC(),
 		})
 	}
+	lastSnapshotDay = now.Day()
 }
