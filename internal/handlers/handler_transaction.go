@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"borsa_portfoy_backend/internal/database"
+	"borsa_portfoy_backend/internal/scraper"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -85,7 +86,7 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 			respondWithError(w, http.StatusInternalServerError, "İşlem geçmişi alınamadı", err)
 			return
 		}
-		currentLot, avgCost := calculateAssetHoldingAndCost(userTxs)
+		currentLot, avgCost := scraper.CalculateAssetHoldingAndCost(userTxs)
 		if amountVal > currentLot {
 			respondWithError(w, http.StatusBadRequest, "Yetersiz bakiye: Elinizdeki miktardan fazlasını satamazsınız", nil)
 			return
@@ -96,9 +97,6 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 	cleanAmount := fmt.Sprintf("%.6f", amountVal)
 	cleanPrice := fmt.Sprintf("%.6f", priceVal)
 	cleanRealizedPnL := fmt.Sprintf("%.6f", realizedPnL)
-	if commissionVal < 0 {
-		commissionVal = 0
-	}
 	cleanCommission := fmt.Sprintf("%.6f", commissionVal)
 
 	transaction, err := cfg.DB.CreateTransaction(r.Context(), database.CreateTransactionParams{
@@ -141,7 +139,11 @@ func (cfg *ApiConfig) HandlerGetUserHoldings(w http.ResponseWriter, r *http.Requ
 	for _, h := range holdings {
 		currentPrice, _ := strconv.ParseFloat(h.CurrentPrice, 64)
 		totalAmount, _ := strconv.ParseFloat(h.TotalAmount, 64)
-		averageCost := parseAverageCost(h.AverageCost)
+		userTxs, _ := cfg.DB.GetUserTransactionsForAsset(r.Context(), database.GetUserTransactionsForAssetParams{
+			UserID:  userID,
+			AssetID: h.AssetID,
+		})
+		_, averageCost := scraper.CalculateAssetHoldingAndCost(userTxs)
 
 		totalValue := currentPrice * totalAmount
 		costValue := averageCost * totalAmount

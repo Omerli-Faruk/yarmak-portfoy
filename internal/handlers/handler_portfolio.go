@@ -59,7 +59,11 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 	for _, h := range holdings {
 		currentPrice, _ := strconv.ParseFloat(h.CurrentPrice, 64)
 		totalAmount, _ := strconv.ParseFloat(h.TotalAmount, 64)
-		averageCost := parseAverageCost(h.AverageCost)
+		userTxs, _ := cfg.DB.GetUserTransactionsForAsset(r.Context(), database.GetUserTransactionsForAssetParams{
+			UserID:  userID,
+			AssetID: h.AssetID,
+		})
+		_, averageCost := scraper.CalculateAssetHoldingAndCost(userTxs)
 		if currentPrice <= 0 {
 			currentPrice = averageCost
 		}

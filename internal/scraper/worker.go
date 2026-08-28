@@ -159,7 +159,11 @@ func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
 		for _, h := range holdings {
 			currentPrice, _ := strconv.ParseFloat(h.CurrentPrice, 64)
 			totalAmount, _ := strconv.ParseFloat(h.TotalAmount, 64)
-			avgCost := parseAverageCost(h.AverageCost)
+			userTxs, _ := db.GetUserTransactionsForAsset(ctx, database.GetUserTransactionsForAssetParams{
+				UserID:  userID,
+				AssetID: h.AssetID,
+			})
+			_, avgCost := CalculateAssetHoldingAndCost(userTxs)
 			totalValue += currentPrice * totalAmount
 			totalCost += avgCost * totalAmount
 		}
@@ -175,16 +179,24 @@ func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
 	lastSnapshotDay = now.Day()
 }
 
-func parseAverageCost(val any) float64 {
-	var avgCostStr string
-	switch v := val.(type) {
-	case string:
-		avgCostStr = v
-	case []byte:
-		avgCostStr = string(v)
-	default:
-		avgCostStr = fmt.Sprintf("%v", v)
+func CalculateAssetHoldingAndCost(transactions []database.Transaction) (currentLot float64, avgCost float64) {
+	runningLot := 0.0
+	runningCost := 0.0
+	for _, tx := range transactions {
+		amount, _ := strconv.ParseFloat(tx.Amount, 64)
+		price, _ := strconv.ParseFloat(tx.Price, 64)
+		commission, _ := strconv.ParseFloat(tx.Commission, 64)
+		if tx.Type == "BUY" {
+			total := (amount * price) + commission
+			runningCost = (runningLot*runningCost + total) / (runningLot + amount)
+			runningLot = runningLot + amount
+		} else if tx.Type == "SELL" {
+			runningLot = runningLot - amount
+			if runningLot < 0 {
+				runningLot = 0
+				runningCost = 0
+			}
+		}
 	}
-	avgCost, _ := strconv.ParseFloat(avgCostStr, 64)
-	return avgCost
+	return runningLot, runningCost
 }
