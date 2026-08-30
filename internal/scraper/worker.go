@@ -176,6 +176,7 @@ func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
 			RecordedAt: time.Now().UTC(),
 		})
 	}
+	_ = db.DeleteExpiredRefreshTokens(ctx)
 	lastSnapshotDay = now.Day()
 }
 

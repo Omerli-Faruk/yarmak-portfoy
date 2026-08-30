@@ -132,9 +132,7 @@ SELECT
     a.name as asset_name,
     a.asset_type,
     a.current_price,
-    SUM(CASE WHEN t.type = 'BUY' THEN t.amount ELSE -t.amount END)::text as total_amount,
-    COALESCE((SUM(CASE WHEN t.type = 'BUY' THEN t.amount * t.price ELSE 0 END) /
-    NULLIF(SUM(CASE WHEN t.type = 'BUY' THEN t.amount ELSE 0 END), 0))::text, '0.0000') as average_cost
+    SUM(CASE WHEN t.type = 'BUY' THEN t.amount ELSE -t.amount END)::text as total_amount
 FROM transactions t
          JOIN assets a ON t.asset_id = a.id
 WHERE t.user_id = $1 AND t.deleted_at IS NULL
@@ -149,7 +147,6 @@ type GetUserHoldingsSummaryRow struct {
 	AssetType    string
 	CurrentPrice string
 	TotalAmount  string
-	AverageCost  interface{}
 }
 
 func (q *Queries) GetUserHoldingsSummary(ctx context.Context, userID int64) ([]GetUserHoldingsSummaryRow, error) {
@@ -168,7 +165,6 @@ func (q *Queries) GetUserHoldingsSummary(ctx context.Context, userID int64) ([]G
 			&i.AssetType,
 			&i.CurrentPrice,
 			&i.TotalAmount,
-			&i.AverageCost,
 		); err != nil {
 			return nil, err
 		}
