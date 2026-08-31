@@ -36,10 +36,8 @@ import (
 // @name Authorization
 // @description JWT Token'ınızı 'Bearer <token>' formatında giriniz.
 func main() {
-	err := godotenv.Load(".env")
-	if err != nil {
-		slog.Error("Hata .env dosyası yüklenmiyor", "error", err)
-		os.Exit(1)
+	if err := godotenv.Load(".env"); err != nil {
+		slog.Info(".env dosyası bulunamadı, sistem ortam değişkenleri kullanılacak")
 	}
 
 	jwtSecret := os.Getenv("JWT_SECRET")
