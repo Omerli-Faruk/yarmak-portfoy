@@ -1,6 +1,6 @@
 services:
   # ---------------------------------------------------------------------------
-  # 1. PostgreSQL 16 Veritabanı Servisi
+  # 1. PostgreSQL 16 VeritabanÄ± Servisi
   # ---------------------------------------------------------------------------
   db:
     image: postgres:16-alpine
@@ -27,7 +27,7 @@ services:
   # ---------------------------------------------------------------------------
   migrate:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     container_name: midas_migrate
     command: >
@@ -44,7 +44,7 @@ services:
   # ---------------------------------------------------------------------------
   api:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     container_name: midas_api
     command: ["/app/server"]
@@ -63,11 +63,11 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # 4. Başlangıç Varlıkları Yükleyici (Seed Profile - İsteğe Bağlı)
+  # 4. BaÅŸlangÄ±Ã§ VarlÄ±klarÄ± YÃ¼kleyici (Seed Profile - Ä°steÄŸe BaÄŸlÄ±)
   # ---------------------------------------------------------------------------
   seed:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     container_name: midas_seed
     command: ["/app/seed"]

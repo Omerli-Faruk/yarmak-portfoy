@@ -1,25 +1,41 @@
-# Executables
+# Environment variables & secrets (CRITICAL)
+.env
+.env.*
+!.env.example
+*.local
+cookie.txt
+
+# Node / Next.js / Frontend
+node_modules/
+.next/
+out/
+build/
+dist/
+.turbo/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Executables & Binaries
 *.exe
-*.exe font
 *.dll
 *.so
 *.dylib
 bin/
+tmp/
 borsa_portfoy_backend.exe
 
-# Environment variables
-.env
-cookie.txt
-
-# IDE / Editor files
+# IDE / Editor & OS files
 .idea/
 .vscode/
 *.swp
 *.swo
+.DS_Store
+Thumbs.db
 
-# HTTP test files & logs
+# Test / Logs / Coverage
 *.http
 *.log
-
-# Go test / coverage
 *.out
+coverage/
