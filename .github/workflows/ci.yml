@@ -7,8 +7,11 @@ on:
     branches: [ main ]
 
 jobs:
-  test-and-lint:
+  backend-test-and-lint:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -16,8 +19,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: 'backend/go.mod'
           cache: true
+          cache-dependency-path: 'backend/go.sum'
 
       - name: Run golangci-lint
         run: go run github.com/golangci/golangci-lint/cmd/golangci-lint@latest run ./...
@@ -27,4 +31,3 @@ jobs:
 
       - name: Build Go binary
         run: go build -v ./...
-
