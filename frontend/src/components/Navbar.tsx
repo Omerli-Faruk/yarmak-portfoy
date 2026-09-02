@@ -6,13 +6,15 @@ import {LogOut} from "lucide-react"
 import Image from "next/image"
 
 export default function Navbar() {
-    const {user, logOut} = useAuth();
+    const { user, loading, logOut } = useAuth();
+
 
     return (
+
         <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 h-24 flex items-center justify-between">
                 <Link className="flex justify-center items-center" href="/">
-                    <Image src="/logo.png" alt="Yarmak Logo" width={96} height={96} className="size-24 object-contain"/>
+                    <Image src="/logo.png" alt="Yarmak Logo" width={56} height={56} className="size-14 object-contain"/>
                 </Link>
                 {user ? (
                     <div

@@ -30,7 +30,7 @@ export default function RootLayout({children}: LayoutProps<"/">) {
 
             <Navbar />
 
-            <main className="flex-1">
+            <main className="flex-1 flex flex-col">
                 {children}
             </main>
 

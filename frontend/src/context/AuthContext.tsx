@@ -1,11 +1,10 @@
 'use client';
 
-
 import React, {createContext, useEffect, useState, useContext} from "react";
 import {useRouter} from "next/navigation";
 import {AuthResponse, User} from "@/types";
 import api from "@/lib/api";
-
+import Image from "next/image";
 
 interface AuthContextType {
     user: User | null;
@@ -21,9 +20,6 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const router = useRouter();
-
-
-
 
     useEffect(() => {
         async function checkAuth() {
@@ -75,6 +71,16 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
         setUser(null);
         router.push('/login');
     }
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+                <Image src="/logo.png" alt="Yarmak Logo" width={80} height={80} className="size-20 object-contain"/>
+                <div className="size-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+        );
+    }
+
     return (
         <AuthContext.Provider value={{user, loading, login, register, logOut}}>
             {children}
