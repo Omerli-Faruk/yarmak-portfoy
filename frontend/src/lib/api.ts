@@ -26,7 +26,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
     response => response,
     async error => {
-        if (error.response?.status === 401 && !error.config._retry){
+        if (error.response?.status === 401 && !error.config._retry && typeof window !== 'undefined'){
             error.config._retry = true;
             const refreshToken = localStorage.getItem('refresh_token');
             if (!refreshToken) {

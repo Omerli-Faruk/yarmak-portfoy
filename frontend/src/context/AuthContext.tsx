@@ -33,7 +33,6 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
                     const {data} = await api.get<User>('/me');
                     setUser(data);
                 } else{
-                    setUser(null);
                     setLoading(false);
                     return;
                 }
@@ -64,6 +63,13 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
     }
 
     const logOut = async () => {
+        const refreshToken = localStorage.getItem('refresh_token');
+        try {
+            if (refreshToken) { await api.post('/revoke', { refresh_token: refreshToken }); }
+
+        } catch (error) {
+            console.log(error)
+        }
         localStorage.removeItem('token');
         localStorage.removeItem('refresh_token');
         setUser(null);
