@@ -27,7 +27,7 @@ func CheckPasswordHash(password, hash string) bool {
 func MakeJWT(userID int64, tokenSecret string, expiresIn time.Duration) (string, error) {
 	signingKey := []byte(tokenSecret)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
-		Issuer:    "midas-portfoy",
+		Issuer:    "yarmak",
 		IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
 		ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiresIn)),
 		Subject:   fmt.Sprintf("%d", userID),
@@ -50,7 +50,7 @@ func ValidateJWT(tokenString, tokenSecret string) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("token doğrulanırken hata oluştu: %w", err)
 	}
-	if claims.Issuer != "midas-portfoy" {
+	if claims.Issuer != "yarmak" {
 		return 0, fmt.Errorf("geçersiz token yayıncısı")
 	}
 	userID, err := strconv.ParseInt(claims.Subject, 10, 64)

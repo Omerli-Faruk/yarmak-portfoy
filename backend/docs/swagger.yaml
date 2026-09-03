@@ -321,7 +321,7 @@ info:
   contact: {}
   description: BIST 100 hisseleri, TEFAS yatırım fonları, altın ve döviz portföy takip
     sistemi REST API dokümantasyonu.
-  title: Midas Borsa & Portföy Takip API
+  title: Yarmak Borsa & Portföy Takip API
   version: "1.0"
 paths:
   /alerts:

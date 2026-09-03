@@ -26,7 +26,7 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
-// @title Midas Borsa & Portföy Takip API
+// @title Yarmak Borsa & Portföy Takip API
 // @version 1.0
 // @description BIST 100 hisseleri, TEFAS yatırım fonları, altın ve döviz portföy takip sistemi REST API dokümantasyonu.
 // @host localhost:8080
