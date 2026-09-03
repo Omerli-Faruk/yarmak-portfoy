@@ -27,13 +27,12 @@ export default function RootLayout({children}: LayoutProps<"/">) {
         >
         <body className="min-h-full flex flex-col">
         <AuthProvider>
-
-            <Navbar />
-
-            <main className="flex-1 flex flex-col">
-                {children}
-            </main>
-
+            <div className="min-h-screen flex flex-col bg-ambient-spotlight">
+                <Navbar />
+                <main className="flex-1 flex flex-col">
+                    {children}
+                </main>
+            </div>
         </AuthProvider>
         </body>
         </html>

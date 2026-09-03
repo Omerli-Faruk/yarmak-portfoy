@@ -4,21 +4,31 @@ import Link from "next/link";
 import {useAuth} from "@/context/AuthContext";
 import {LogOut} from "lucide-react"
 import Image from "next/image"
+import { usePathname } from "next/navigation";
+import { ArrowLeft, Mail, Lock, User } from 'lucide-react';
+
 
 export default function Navbar() {
     const {user, loading, logOut} = useAuth();
-
+    const pathname = usePathname();
+    if (pathname === "/login" || pathname === "/register") {
+        return (
+            <header className="flex items-center justify-center">
+                <Link href="/" className="absolute top-8 left-8 text-gray-500 hover:text-white flex items-center gap-2 text-xs font-bold uppercase tracking-widest transition-colors z-20"> <ArrowLeft className="w-4 h-4" /> Ana Sayfa </Link>
+            </header>
+        )
+    }
 
     return (
 
-        <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
+        <header className="w-full bg-transparent">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 h-24 flex items-center justify-between">
                 <Link className="flex justify-center items-center" href="/">
                     <Image src="/logo.png" alt="Yarmak Logo" width={56} height={56} className="size-14 object-contain"/>
                 </Link>
                 {user ? (
                     <div
-                        className="hidden gap-x-8 md:flex items-center justify-between text-slate-400 text-xs uppercase tracking-widest">
+                        className="hidden gap-x-8 md:flex items-center justify-between text-slate-300 text-xs uppercase tracking-widest font-bold">
                         <Link href="/" className="hover:text-primary transition-colors">Portföyüm</Link>
                         <Link href="/holdings" className="hover:text-primary transition-colors">Varlıklarım</Link>
                         <Link href="/transactions" className="hover:text-primary transition-colors">İşlemler</Link>
@@ -26,7 +36,7 @@ export default function Navbar() {
                     </div>
                 ) : (
                     <div
-                        className="hidden gap-x-8 md:flex items-center justify-between text-slate-400 text-xs uppercase tracking-widest">
+                        className="hidden gap-x-8 md:flex items-center justify-between text-slate-300 text-xs uppercase tracking-widest font-bold">
                         <Link href="#piyasalar" className="hover:text-primary transition-colors">Piyasalar</Link>
                         <Link href="#ozellikler" className="hover:text-primary transition-colors">Özellikler</Link>
                         <Link href="#destek" className="hover:text-primary transition-colors">Destek</Link>
