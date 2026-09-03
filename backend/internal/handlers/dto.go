@@ -6,11 +6,13 @@ import "time"
 type authRequest struct {
 	Email    string `json:"email" example:"user@example.com"`
 	Password string `json:"password" example:"Secret1234"`
+	Username string `json:"username" example:"John"`
 }
 
 type userResponse struct {
 	ID        int64     `json:"id"`
 	Email     string    `json:"email"`
+	Username  string    `json:"username"`
 	CreatedAt time.Time `json:"created_at"`
 	Role      string    `json:"role"`
 }

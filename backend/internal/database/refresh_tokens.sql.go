@@ -47,7 +47,7 @@ func (q *Queries) DeleteExpiredRefreshTokens(ctx context.Context) error {
 }
 
 const getUserFromRefreshToken = `-- name: GetUserFromRefreshToken :one
-SELECT u.id, u.email, u.password_hash, u.created_at, u.role
+SELECT u.id, u.email, u.password_hash, u.created_at, u.role, u.username
 FROM users u
          JOIN refresh_tokens rt ON u.id = rt.user_id
 WHERE rt.token = $1
@@ -64,6 +64,7 @@ func (q *Queries) GetUserFromRefreshToken(ctx context.Context, token string) (Us
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.Role,
+		&i.Username,
 	)
 	return i, err
 }

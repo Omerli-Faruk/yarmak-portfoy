@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"borsa_portfoy_backend/internal/auth"
-	"borsa_portfoy_backend/internal/database"
+	"yarmak/internal/auth"
+	"yarmak/internal/database"
 	"encoding/json"
 	"net/http"
 	"net/mail"
@@ -35,15 +35,24 @@ func (cfg *ApiConfig) HandlerRegister(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Şifre 8 ile 72 karakter arasında olmalıdır", nil)
 		return
 	}
+	req.Username = strings.ToLower(strings.TrimSpace(req.Username))
+	if len(req.Username) < 3 || len(req.Username) > 15 {
+		respondWithError(w, http.StatusBadRequest, "Kullanıcı adı 3 ile 15 karakter arasında olmalıdır", nil)
+		return
+	}
 	hashedPassword, err := auth.HashPassword(req.Password)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Şifre işlenmedi", err)
 		return
 	}
-	user, err := cfg.DB.CreateUser(r.Context(), database.CreateUserParams{Email: req.Email, PasswordHash: hashedPassword})
+	user, err := cfg.DB.CreateUser(r.Context(), database.CreateUserParams{Email: req.Email, PasswordHash: hashedPassword, Username: req.Username})
 	if err != nil {
+		if strings.Contains(err.Error(), "users_username_key") {
+			respondWithError(w, http.StatusBadRequest, "Bu kullanıcı adı zaten kullanımda", err)
+			return
+		}
 		respondWithError(w, http.StatusBadRequest, "Bu e-posta adresi zaten kullanımda", err)
 		return
 	}
-	respondWithJSON(w, http.StatusCreated, userResponse{ID: user.ID, Email: user.Email, CreatedAt: user.CreatedAt, Role: user.Role})
+	respondWithJSON(w, http.StatusCreated, userResponse{ID: user.ID, Email: user.Email, CreatedAt: user.CreatedAt, Role: user.Role, Username: user.Username})
 }

@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"borsa_portfoy_backend/internal/auth"
-	"borsa_portfoy_backend/internal/database"
+	"yarmak/internal/auth"
+	"yarmak/internal/database"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -31,7 +31,14 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 		respondWithError(w, http.StatusUnauthorized, "Geçersiz veya süresi dolmuş refresh token", err)
 		return
 	}
-	err = cfg.DB.RevokeRefreshToken(r.Context(), params.RefreshToken)
+    tx, err := cfg.DBConn.BeginTx(r.Context(), nil)
+    if err != nil {
+        respondWithError(w, http.StatusInternalServerError, "İşlem başlatılamadı", err)
+        return
+    }
+    defer func() { _ = tx.Rollback() }()
+    qtx := cfg.DB.WithTx(tx)
+	err = qtx.RevokeRefreshToken(r.Context(), params.RefreshToken)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Token yenilenemedi", err)
 		return
@@ -49,13 +56,17 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	_, err = cfg.DB.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+    _, err = qtx.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
 		Token:     newRefreshToken,
 		UserID:    user.ID,
 		ExpiresAt: time.Now().Add(60 * 24 * time.Hour),
 	})
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Tokeni veritabanına kaydederken hata oluştu", err)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		respondWithError(w, http.StatusInternalServerError, "İşlem onaylanamadı", err)
 		return
 	}
 

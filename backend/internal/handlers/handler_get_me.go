@@ -24,6 +24,7 @@ func (cfg *ApiConfig) HandlerGetMe(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, userResponse{
 		ID:        dbUser.ID,
 		Email:     dbUser.Email,
+		Username:  dbUser.Username,
 		CreatedAt: dbUser.CreatedAt,
 		Role:      dbUser.Role,
 	})

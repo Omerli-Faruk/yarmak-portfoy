@@ -1,7 +1,7 @@
 package scraper
 
 import (
-	"borsa_portfoy_backend/internal/database"
+	"yarmak/internal/database"
 	"context"
 	"fmt"
 	"log/slog"
@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"sync/atomic"
 )
 
 func StartScraperWorker(ctx context.Context, db *database.Queries, interval time.Duration) {
@@ -138,11 +139,11 @@ func checkAndTriggerAlerts(ctx context.Context, db *database.Queries, asset data
 	}
 }
 
-var lastSnapshotDay int
+var lastSnapshotDay atomic.Int32
 
 func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
 	now := time.Now()
-	if now.Hour() < 18 || lastSnapshotDay == now.Day() {
+	if now.Hour() < 18 || lastSnapshotDay.Load() == int32(now.Day()) {
 		return
 	}
 	userIDs, err := db.ListUserIDs(ctx)
@@ -177,7 +178,7 @@ func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
 		})
 	}
 	_ = db.DeleteExpiredRefreshTokens(ctx)
-	lastSnapshotDay = now.Day()
+	lastSnapshotDay.Store(int32(now.Day()))
 }
 
 func CalculateAssetHoldingAndCost(transactions []database.Transaction) (currentLot float64, avgCost float64) {

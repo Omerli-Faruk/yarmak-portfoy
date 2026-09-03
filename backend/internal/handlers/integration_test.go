@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"borsa_portfoy_backend/internal/auth"
+	"yarmak/internal/auth"
 	"context"
 	"net/http"
 	"net/http/httptest"

@@ -1,16 +1,16 @@
 package handlers
 
 import (
-	"borsa_portfoy_backend/internal/auth"
-	"borsa_portfoy_backend/internal/database"
 	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
+	"yarmak/internal/auth"
+	"yarmak/internal/database"
 )
 
 // @Summary Kullanıcı Girişi
-// @Description Email ve şifre ile giriş yapıp JWT token üretir
+// @Description E-posta veya kullanıcı adı ve şifre ile giriş yapıp JWT token üretir
 // @Tags Auth
 // @Accept json
 // @Produce json
@@ -26,9 +26,12 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
 		return
 	}
-	email := strings.ToLower(strings.TrimSpace(params.Email))
+	identifier := strings.ToLower(strings.TrimSpace(params.Email))
+	if identifier == "" && params.Username != "" {
+		identifier = strings.ToLower(strings.TrimSpace(params.Username))
+	}
 	password := params.Password
-	if email == "" || password == "" {
+	if identifier == "" || password == "" {
 		respondWithError(w, http.StatusBadRequest, "Lütfen tüm alanları doldurun", nil)
 		return
 	}
@@ -36,10 +39,19 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Şifre en fazla 72 karakter olabilir", nil)
 		return
 	}
-	user, err := cfg.DB.GetUserByEmail(r.Context(), email)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Geçersiz e-posta veya şifre", err)
-		return
+	var user database.User
+	if strings.Contains(identifier, "@") {
+		user, err = cfg.DB.GetUserByEmail(r.Context(), identifier)
+		if err != nil {
+			respondWithError(w, http.StatusUnauthorized, "Geçersiz e-posta veya şifre", err)
+			return
+		}
+	} else {
+		user, err = cfg.DB.GetUserByUsername(r.Context(), identifier)
+		if err != nil {
+			respondWithError(w, http.StatusUnauthorized, "Geçersiz kullanıcı adı veya şifre", err)
+			return
+		}
 	}
 	ok := auth.CheckPasswordHash(password, user.PasswordHash)
 	if !ok {
@@ -71,6 +83,7 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 		User: userResponse{
 			ID:        user.ID,
 			Email:     user.Email,
+			Username:  user.Username,
 			CreatedAt: user.CreatedAt,
 			Role:      user.Role,
 		},

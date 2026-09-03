@@ -1,9 +1,9 @@
 package main
 
 import (
-	"borsa_portfoy_backend/internal/database"
-	"borsa_portfoy_backend/internal/handlers"
-	"borsa_portfoy_backend/internal/scraper"
+	"yarmak/internal/database"
+	"yarmak/internal/handlers"
+	"yarmak/internal/scraper"
 	"context"
 	"database/sql"
 	"errors"
@@ -15,7 +15,7 @@ import (
 	"syscall"
 	"time"
 
-	_ "borsa_portfoy_backend/docs"
+	_ "yarmak/docs"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"

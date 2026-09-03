@@ -24,7 +24,7 @@ yarn-error.log*
 *.dylib
 bin/
 tmp/
-borsa_portfoy_backend.exe
+yarmak.exe
 
 # IDE / Editor & OS files
 .idea/

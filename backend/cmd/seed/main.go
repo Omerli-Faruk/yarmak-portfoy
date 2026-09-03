@@ -1,8 +1,8 @@
 package main
 
 import (
-	"borsa_portfoy_backend/internal/database"
-	"borsa_portfoy_backend/internal/handlers"
+	"yarmak/internal/database"
+	"yarmak/internal/handlers"
 	"context"
 	"database/sql"
 	"fmt"

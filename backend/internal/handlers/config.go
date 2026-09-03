@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"borsa_portfoy_backend/internal/database"
+	"yarmak/internal/database"
 	"database/sql"
 )
 

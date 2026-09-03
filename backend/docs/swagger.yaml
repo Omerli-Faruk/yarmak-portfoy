@@ -7,7 +7,6 @@ definitions:
       currentPrice:
         type: string
       id:
-        format: int64
         type: integer
       name:
         type: string
@@ -21,25 +20,27 @@ definitions:
       amount:
         type: string
       assetID:
-        format: int64
         type: integer
       createdAt:
         type: string
       deletedAt:
         $ref: '#/definitions/sql.NullTime'
+      grossAmount:
+        type: string
       id:
-        format: int64
         type: integer
+      netAmount:
+        type: string
       paymentDate:
         type: string
+      taxAmount:
+        type: string
       userID:
-        format: int64
         type: integer
     type: object
   database.PortfolioSnapshot:
     properties:
       id:
-        format: int64
         type: integer
       profitLoss:
         type: string
@@ -50,13 +51,11 @@ definitions:
       totalValue:
         type: string
       userID:
-        format: int64
         type: integer
     type: object
   database.PriceAlert:
     properties:
       assetID:
-        format: int64
         type: integer
       createdAt:
         type: string
@@ -65,7 +64,6 @@ definitions:
       direction:
         type: string
       id:
-        format: int64
         type: integer
       isTriggered:
         type: boolean
@@ -74,20 +72,17 @@ definitions:
       triggeredAt:
         $ref: '#/definitions/sql.NullTime'
       userID:
-        format: int64
         type: integer
     type: object
   database.Split:
     properties:
       assetID:
-        format: int64
         type: integer
       createdAt:
         type: string
       deletedAt:
         $ref: '#/definitions/sql.NullTime'
       id:
-        format: int64
         type: integer
       splitDate:
         type: string
@@ -99,23 +94,24 @@ definitions:
       amount:
         type: string
       assetID:
-        format: int64
         type: integer
+      commission:
+        type: string
       createdAt:
         type: string
       deletedAt:
         $ref: '#/definitions/sql.NullTime'
       id:
-        format: int64
         type: integer
       price:
+        type: string
+      realizedPnl:
         type: string
       transactionDate:
         type: string
       type:
         type: string
       userID:
-        format: int64
         type: integer
     type: object
   handlers.AssetCategorySummary:
@@ -135,6 +131,9 @@ definitions:
       password:
         example: Secret1234
         type: string
+      username:
+        example: John
+        type: string
     type: object
   handlers.createAssetRequest:
     properties:
@@ -153,7 +152,7 @@ definitions:
         example: THYAO
         type: string
     type: object
-  handlers.createDividendParams:
+  handlers.createDividendRequest:
     properties:
       amount:
         example: "500.00"
@@ -183,7 +182,7 @@ definitions:
         example: "350.00"
         type: string
     type: object
-  handlers.createSplitParams:
+  handlers.createSplitRequest:
     properties:
       asset_id:
         example: 1
@@ -195,7 +194,7 @@ definitions:
         example: "4.000000"
         type: string
     type: object
-  handlers.createTransactionParams:
+  handlers.createTransactionRequest:
     properties:
       amount:
         example: "10.0"
@@ -210,6 +209,10 @@ definitions:
         - ALTIN
         - DOVIZ
         example: HISSE
+        type: string
+      commission:
+        description: "\U0001F448 YENİ"
+        example: "15.50"
         type: string
       price:
         example: "305.50"
@@ -248,9 +251,13 @@ definitions:
         type: number
       holdings_count:
         type: integer
+      realized_profit_loss:
+        type: number
       total_combined_profit:
         type: number
       total_combined_profit_usd:
+        type: number
+      total_commission:
         type: number
       total_cost:
         type: number
@@ -273,6 +280,8 @@ definitions:
     type: object
   handlers.refreshTokenResponse:
     properties:
+      refresh_token:
+        type: string
       token:
         type: string
     type: object
@@ -306,6 +315,8 @@ definitions:
       id:
         type: integer
       role:
+        type: string
+      username:
         type: string
     type: object
   sql.NullTime:
@@ -545,7 +556,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handlers.createDividendParams'
+          $ref: '#/definitions/handlers.createDividendRequest'
       produces:
       - application/json
       responses:
@@ -609,7 +620,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Email ve şifre ile giriş yapıp JWT token üretir
+      description: E-posta veya kullanıcı adı ve şifre ile giriş yapıp JWT token üretir
       parameters:
       - description: Kullanıcı Giriş Bilgileri
         in: body
@@ -829,7 +840,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handlers.createSplitParams'
+          $ref: '#/definitions/handlers.createSplitRequest'
       produces:
       - application/json
       responses:
@@ -899,7 +910,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handlers.createTransactionParams'
+          $ref: '#/definitions/handlers.createTransactionRequest'
       produces:
       - application/json
       responses:

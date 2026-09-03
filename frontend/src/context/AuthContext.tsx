@@ -9,8 +9,8 @@ import Image from "next/image";
 interface AuthContextType {
     user: User | null;
     loading: boolean;
-    login: (email: string, password: string) => Promise<void>;
-    register: (email: string, password: string) => Promise<void>;
+    login: (identifier: string, password: string) => Promise<void>;
+    register: (email: string, password: string, username: string) => Promise<void>;
     logOut: () => Promise<void>;
 }
 
@@ -28,7 +28,7 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
                 if (token) {
                     const {data} = await api.get<User>('/me');
                     setUser(data);
-                } else{
+                } else {
                     setLoading(false);
                     return;
                 }
@@ -42,26 +42,30 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
                 setLoading(false);
             }
         }
+
         void checkAuth();
     }, [])
 
-    const login = async (email: string, password: string) => {
-        const {data} = await api.post<AuthResponse>('/login', {email, password});
+    const login = async (identifier: string, password: string) => {
+        const {data} = await api.post<AuthResponse>('/login', {email: identifier, password});
         localStorage.setItem('token', data.token);
         localStorage.setItem('refresh_token', data.refresh_token);
         setUser(data.user);
         router.push('/');
     }
 
-    const register = async (email: string, password: string) => {
-        await api.post<AuthResponse>('/register', {email, password});
+    const register = async (email: string, password: string, username: string) =>
+    {
+        await api.post<AuthResponse>('/register', {email, password, username});
         await login(email, password)
     }
 
     const logOut = async () => {
         const refreshToken = localStorage.getItem('refresh_token');
         try {
-            if (refreshToken) { await api.post('/revoke', { refresh_token: refreshToken }); }
+            if (refreshToken) {
+                await api.post('/revoke', {refresh_token: refreshToken});
+            }
 
         } catch (error) {
             console.log(error)
@@ -76,7 +80,7 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
         return (
             <div className="min-h-screen bg-background flex flex-col items-center justify-center">
                 <Image src="/logo.png" alt="Yarmak Logo" width={80} height={80} className="size-20 object-contain"/>
-                <div className="size-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                <div className="size-5 border-2 border-primary border-t-transparent rounded-full animate-spin"/>
             </div>
         );
     }

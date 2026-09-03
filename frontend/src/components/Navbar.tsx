@@ -6,7 +6,7 @@ import {LogOut} from "lucide-react"
 import Image from "next/image"
 
 export default function Navbar() {
-    const { user, loading, logOut } = useAuth();
+    const {user, loading, logOut} = useAuth();
 
 
     return (
@@ -19,7 +19,7 @@ export default function Navbar() {
                 {user ? (
                     <div
                         className="hidden gap-x-8 md:flex items-center justify-between text-slate-400 text-xs uppercase tracking-widest">
-                        <Link href="/"   className="hover:text-primary transition-colors">Portföyüm</Link>
+                        <Link href="/" className="hover:text-primary transition-colors">Portföyüm</Link>
                         <Link href="/holdings" className="hover:text-primary transition-colors">Varlıklarım</Link>
                         <Link href="/transactions" className="hover:text-primary transition-colors">İşlemler</Link>
                         <Link href="/alerts" className="hover:text-primary transition-colors">Alarmlar</Link>
@@ -34,11 +34,12 @@ export default function Navbar() {
                 )}
                 {user ? (
                     <div className="gap-x-12 flex items-center justify-between">
-                        <span className="text-green-300 hover:text-white px-4 py-2 transition">
-                            {user?.email}
-                        </span>
-                        <button onClick={() => logOut()} className="text-xs text-slate-400 hover:text-rose-400 transition cursor-pointer flex items-center gap-1.5">
-                            <LogOut className="size-4" /> Çıkış Yap
+                  <span className="text-green-300 hover:text-white px-4 py-2 transition">
+                    {user?.username}
+                  </span>
+                        <button onClick={() => logOut()}
+                                className="text-xs text-slate-400 hover:text-rose-400 transition cursor-pointer flex items-center gap-1.5">
+                            <LogOut className="size-4"/> Çıkış Yap
                         </button>
                     </div>
                 ) : (

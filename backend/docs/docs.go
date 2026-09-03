@@ -362,7 +362,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.createDividendParams"
+                            "$ref": "#/definitions/handlers.createDividendRequest"
                         }
                     }
                 ],
@@ -451,7 +451,7 @@ const docTemplate = `{
         },
         "/login": {
             "post": {
-                "description": "Email ve şifre ile giriş yapıp JWT token üretir",
+                "description": "E-posta veya kullanıcı adı ve şifre ile giriş yapıp JWT token üretir",
                 "consumes": [
                     "application/json"
                 ],
@@ -800,7 +800,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.createSplitParams"
+                            "$ref": "#/definitions/handlers.createSplitRequest"
                         }
                     }
                 ],
@@ -908,7 +908,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.createTransactionParams"
+                            "$ref": "#/definitions/handlers.createTransactionRequest"
                         }
                     }
                 ],
@@ -1016,8 +1016,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "id": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 },
                 "name": {
                     "type": "string"
@@ -1037,8 +1036,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "assetID": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 },
                 "createdAt": {
                     "type": "string"
@@ -1046,16 +1044,23 @@ const docTemplate = `{
                 "deletedAt": {
                     "$ref": "#/definitions/sql.NullTime"
                 },
+                "grossAmount": {
+                    "type": "string"
+                },
                 "id": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
+                },
+                "netAmount": {
+                    "type": "string"
                 },
                 "paymentDate": {
                     "type": "string"
                 },
+                "taxAmount": {
+                    "type": "string"
+                },
                 "userID": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 }
             }
         },
@@ -1063,8 +1068,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "id": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 },
                 "profitLoss": {
                     "type": "string"
@@ -1079,8 +1083,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "userID": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 }
             }
         },
@@ -1088,8 +1091,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "assetID": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 },
                 "createdAt": {
                     "type": "string"
@@ -1101,8 +1103,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "id": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 },
                 "isTriggered": {
                     "type": "boolean"
@@ -1114,8 +1115,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/sql.NullTime"
                 },
                 "userID": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 }
             }
         },
@@ -1123,8 +1123,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "assetID": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 },
                 "createdAt": {
                     "type": "string"
@@ -1133,8 +1132,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/sql.NullTime"
                 },
                 "id": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 },
                 "splitDate": {
                     "type": "string"
@@ -1151,8 +1149,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "assetID": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
+                },
+                "commission": {
+                    "type": "string"
                 },
                 "createdAt": {
                     "type": "string"
@@ -1161,10 +1161,12 @@ const docTemplate = `{
                     "$ref": "#/definitions/sql.NullTime"
                 },
                 "id": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 },
                 "price": {
+                    "type": "string"
+                },
+                "realizedPnl": {
                     "type": "string"
                 },
                 "transactionDate": {
@@ -1174,8 +1176,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "userID": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 }
             }
         },
@@ -1203,6 +1204,10 @@ const docTemplate = `{
                 "password": {
                     "type": "string",
                     "example": "Secret1234"
+                },
+                "username": {
+                    "type": "string",
+                    "example": "John"
                 }
             }
         },
@@ -1229,7 +1234,7 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.createDividendParams": {
+        "handlers.createDividendRequest": {
             "type": "object",
             "properties": {
                 "amount": {
@@ -1271,7 +1276,7 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.createSplitParams": {
+        "handlers.createSplitRequest": {
             "type": "object",
             "properties": {
                 "asset_id": {
@@ -1288,7 +1293,7 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.createTransactionParams": {
+        "handlers.createTransactionRequest": {
             "type": "object",
             "properties": {
                 "amount": {
@@ -1308,6 +1313,11 @@ const docTemplate = `{
                         "DOVIZ"
                     ],
                     "example": "HISSE"
+                },
+                "commission": {
+                    "description": "👈 YENİ",
+                    "type": "string",
+                    "example": "15.50"
                 },
                 "price": {
                     "type": "string",
@@ -1363,10 +1373,16 @@ const docTemplate = `{
                 "holdings_count": {
                     "type": "integer"
                 },
+                "realized_profit_loss": {
+                    "type": "number"
+                },
                 "total_combined_profit": {
                     "type": "number"
                 },
                 "total_combined_profit_usd": {
+                    "type": "number"
+                },
+                "total_commission": {
                     "type": "number"
                 },
                 "total_cost": {
@@ -1401,6 +1417,9 @@ const docTemplate = `{
         "handlers.refreshTokenResponse": {
             "type": "object",
             "properties": {
+                "refresh_token": {
+                    "type": "string"
+                },
                 "token": {
                     "type": "string"
                 }
@@ -1451,6 +1470,9 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "role": {
+                    "type": "string"
+                },
+                "username": {
                     "type": "string"
                 }
             }

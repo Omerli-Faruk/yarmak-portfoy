@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"borsa_portfoy_backend/internal/database"
-	"borsa_portfoy_backend/internal/scraper"
+	"yarmak/internal/database"
+	"yarmak/internal/scraper"
 	"math"
 	"testing"
 )

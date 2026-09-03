@@ -356,7 +356,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.createDividendParams"
+                            "$ref": "#/definitions/handlers.createDividendRequest"
                         }
                     }
                 ],
@@ -445,7 +445,7 @@
         },
         "/login": {
             "post": {
-                "description": "Email ve şifre ile giriş yapıp JWT token üretir",
+                "description": "E-posta veya kullanıcı adı ve şifre ile giriş yapıp JWT token üretir",
                 "consumes": [
                     "application/json"
                 ],
@@ -794,7 +794,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.createSplitParams"
+                            "$ref": "#/definitions/handlers.createSplitRequest"
                         }
                     }
                 ],
@@ -902,7 +902,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.createTransactionParams"
+                            "$ref": "#/definitions/handlers.createTransactionRequest"
                         }
                     }
                 ],
@@ -1010,8 +1010,7 @@
                     "type": "string"
                 },
                 "id": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 },
                 "name": {
                     "type": "string"
@@ -1031,8 +1030,7 @@
                     "type": "string"
                 },
                 "assetID": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 },
                 "createdAt": {
                     "type": "string"
@@ -1040,16 +1038,23 @@
                 "deletedAt": {
                     "$ref": "#/definitions/sql.NullTime"
                 },
+                "grossAmount": {
+                    "type": "string"
+                },
                 "id": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
+                },
+                "netAmount": {
+                    "type": "string"
                 },
                 "paymentDate": {
                     "type": "string"
                 },
+                "taxAmount": {
+                    "type": "string"
+                },
                 "userID": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 }
             }
         },
@@ -1057,8 +1062,7 @@
             "type": "object",
             "properties": {
                 "id": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 },
                 "profitLoss": {
                     "type": "string"
@@ -1073,8 +1077,7 @@
                     "type": "string"
                 },
                 "userID": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 }
             }
         },
@@ -1082,8 +1085,7 @@
             "type": "object",
             "properties": {
                 "assetID": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 },
                 "createdAt": {
                     "type": "string"
@@ -1095,8 +1097,7 @@
                     "type": "string"
                 },
                 "id": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 },
                 "isTriggered": {
                     "type": "boolean"
@@ -1108,8 +1109,7 @@
                     "$ref": "#/definitions/sql.NullTime"
                 },
                 "userID": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 }
             }
         },
@@ -1117,8 +1117,7 @@
             "type": "object",
             "properties": {
                 "assetID": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 },
                 "createdAt": {
                     "type": "string"
@@ -1127,8 +1126,7 @@
                     "$ref": "#/definitions/sql.NullTime"
                 },
                 "id": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 },
                 "splitDate": {
                     "type": "string"
@@ -1145,8 +1143,10 @@
                     "type": "string"
                 },
                 "assetID": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
+                },
+                "commission": {
+                    "type": "string"
                 },
                 "createdAt": {
                     "type": "string"
@@ -1155,10 +1155,12 @@
                     "$ref": "#/definitions/sql.NullTime"
                 },
                 "id": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 },
                 "price": {
+                    "type": "string"
+                },
+                "realizedPnl": {
                     "type": "string"
                 },
                 "transactionDate": {
@@ -1168,8 +1170,7 @@
                     "type": "string"
                 },
                 "userID": {
-                    "type": "integer",
-                    "format": "int64"
+                    "type": "integer"
                 }
             }
         },
@@ -1197,6 +1198,10 @@
                 "password": {
                     "type": "string",
                     "example": "Secret1234"
+                },
+                "username": {
+                    "type": "string",
+                    "example": "John"
                 }
             }
         },
@@ -1223,7 +1228,7 @@
                 }
             }
         },
-        "handlers.createDividendParams": {
+        "handlers.createDividendRequest": {
             "type": "object",
             "properties": {
                 "amount": {
@@ -1265,7 +1270,7 @@
                 }
             }
         },
-        "handlers.createSplitParams": {
+        "handlers.createSplitRequest": {
             "type": "object",
             "properties": {
                 "asset_id": {
@@ -1282,7 +1287,7 @@
                 }
             }
         },
-        "handlers.createTransactionParams": {
+        "handlers.createTransactionRequest": {
             "type": "object",
             "properties": {
                 "amount": {
@@ -1302,6 +1307,11 @@
                         "DOVIZ"
                     ],
                     "example": "HISSE"
+                },
+                "commission": {
+                    "description": "👈 YENİ",
+                    "type": "string",
+                    "example": "15.50"
                 },
                 "price": {
                     "type": "string",
@@ -1357,10 +1367,16 @@
                 "holdings_count": {
                     "type": "integer"
                 },
+                "realized_profit_loss": {
+                    "type": "number"
+                },
                 "total_combined_profit": {
                     "type": "number"
                 },
                 "total_combined_profit_usd": {
+                    "type": "number"
+                },
+                "total_commission": {
                     "type": "number"
                 },
                 "total_cost": {
@@ -1395,6 +1411,9 @@
         "handlers.refreshTokenResponse": {
             "type": "object",
             "properties": {
+                "refresh_token": {
+                    "type": "string"
+                },
                 "token": {
                     "type": "string"
                 }
@@ -1445,6 +1464,9 @@
                     "type": "integer"
                 },
                 "role": {
+                    "type": "string"
+                },
+                "username": {
                     "type": "string"
                 }
             }

@@ -1,4 +1,4 @@
-module borsa_portfoy_backend
+module yarmak
 
 go 1.25.0
 

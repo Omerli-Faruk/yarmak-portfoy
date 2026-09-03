@@ -8,7 +8,7 @@ import axios from "axios";
 
 export default function LoginPage() {
     const {login} = useAuth();
-    const [email, setEmail] = useState('')
+    const [identifier, setIdentifier] = useState('')
     const [password, setPassword] = useState('')
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
@@ -18,7 +18,7 @@ export default function LoginPage() {
         setError('')
         setLoading(true)
         try {
-            await login(email, password);
+            await login(identifier, password);
         } catch (err: unknown) {
             if (axios.isAxiosError(err)) {
                 setError(err.response?.data?.error || "Giriş yapılamadı. Bilgilerinizi kontrol edin.");
@@ -44,10 +44,15 @@ export default function LoginPage() {
                 <form onSubmit={handleSubmit} className="w-full space-y-4 mt-6">
                     {error && <div
                         className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs p-3 rounded-xl text-center">{error}</div>}
-                    <label className="block text-xs font-medium text-slate-300 mb-1">E-posta</label>
-                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                           placeholder="ornek@email.com" required
-                           className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none focus:border-primary transition"/>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">E-posta veya Kullanıcı Adı</label>
+                    <input
+                        type="text"
+                        value={identifier}
+                        onChange={(e) => setIdentifier(e.target.value)}
+                        placeholder="ornek@email.com veya John"
+                        required
+                        className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none focus:border-primary transition"
+                    />
                     <div className="flex justify-between items-center mb-1">
                         <label className="text-xs font-medium text-slate-300">Şifre</label>
                         <button
