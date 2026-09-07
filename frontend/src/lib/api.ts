@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { setCookie,removeCookie } from '@/lib/cookies'
 
 const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/v1';
 
@@ -40,12 +41,14 @@ api.interceptors.response.use(
                     refresh_token: refreshToken,
                 });
                 localStorage.setItem('token', data.token);
+                setCookie('token', data.token, 7);
                 localStorage.setItem('refresh_token', data.refresh_token);
 
                 error.config.headers.Authorization = `Bearer ${data.token}`;
                 return api(error.config);
             } catch (refreshErr) {
                 localStorage.removeItem('token');
+                removeCookie('token');
                 localStorage.removeItem('refresh_token');
                 window.location.href = '/login';
                 return Promise.reject(refreshErr);

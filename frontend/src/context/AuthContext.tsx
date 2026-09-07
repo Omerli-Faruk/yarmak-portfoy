@@ -5,6 +5,8 @@ import {useRouter} from "next/navigation";
 import {AuthResponse, User} from "@/types";
 import api from "@/lib/api";
 import Image from "next/image";
+import { setCookie,removeCookie } from '@/lib/cookies'
+
 
 interface AuthContextType {
     user: User | null;
@@ -49,9 +51,10 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
     const login = async (identifier: string, password: string) => {
         const {data} = await api.post<AuthResponse>('/login', {email: identifier, password});
         localStorage.setItem('token', data.token);
+        setCookie('token', data.token, 7);
         localStorage.setItem('refresh_token', data.refresh_token);
         setUser(data.user);
-        router.push('/');
+        router.push('/dashboard')
     }
 
     const register = async (email: string, password: string, username: string) =>
@@ -71,6 +74,7 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
             console.log(error)
         }
         localStorage.removeItem('token');
+        removeCookie('token');
         localStorage.removeItem('refresh_token');
         setUser(null);
         router.push('/login');

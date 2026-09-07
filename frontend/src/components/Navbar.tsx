@@ -23,13 +23,13 @@ export default function Navbar() {
 
         <header className="w-full bg-transparent">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 h-24 flex items-center justify-between">
-                <Link className="flex justify-center items-center" href="/">
-                    <Image src="/logo.png" alt="Yarmak Logo" width={56} height={56} className="size-14 object-contain"/>
+                <Link className="flex justify-center items-center" href={user ? "/dashboard" : "/"}>
+                    <Image src="/logo.png" alt="Yarmak Logo" width={56} height={56} className="size-14 object-contain" loading="eager"/>
                 </Link>
                 {user ? (
                     <div
                         className="hidden gap-x-8 md:flex items-center justify-between text-slate-300 text-xs uppercase tracking-widest font-bold">
-                        <Link href="/" className="hover:text-primary transition-colors">Portföyüm</Link>
+                        <Link href="/dashboard" className="hover:text-primary transition-colors">Portföyüm</Link>
                         <Link href="/holdings" className="hover:text-primary transition-colors">Varlıklarım</Link>
                         <Link href="/transactions" className="hover:text-primary transition-colors">İşlemler</Link>
                         <Link href="/alerts" className="hover:text-primary transition-colors">Alarmlar</Link>

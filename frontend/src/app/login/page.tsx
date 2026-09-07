@@ -8,7 +8,6 @@ import axios from "axios";
 import {User, Lock, Eye, EyeOff} from "lucide-react";
 import {motion} from "motion/react";
 
-
 export default function LoginPage() {
     const {login} = useAuth();
     const [showPassword, setShowPassword] = useState(false);
