@@ -1,9 +1,9 @@
 package handlers
 
 import (
+	"math"
 	"yarmak/internal/database"
 	"yarmak/internal/scraper"
-	"math"
 
 	"net/http"
 	"strconv"
@@ -56,13 +56,16 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 			ProfitLoss: totalDividends,
 		},
 	}
+
+	allTxs, _ := cfg.DB.GetAllUserTransactions(r.Context(), userID)
+	txsByAsset := make(map[int64][]database.Transaction)
+	for _, tx := range allTxs {
+		txsByAsset[tx.AssetID] = append(txsByAsset[tx.AssetID], tx)
+	}
 	for _, h := range holdings {
 		currentPrice, _ := strconv.ParseFloat(h.CurrentPrice, 64)
 		totalAmount, _ := strconv.ParseFloat(h.TotalAmount, 64)
-		userTxs, _ := cfg.DB.GetUserTransactionsForAsset(r.Context(), database.GetUserTransactionsForAssetParams{
-			UserID:  userID,
-			AssetID: h.AssetID,
-		})
+		userTxs := txsByAsset[h.AssetID]
 		_, averageCost := scraper.CalculateAssetHoldingAndCost(userTxs)
 		if currentPrice <= 0 {
 			currentPrice = averageCost

@@ -22,11 +22,6 @@ type loginResponse struct {
 	RefreshToken string       `json:"refresh_token"`
 	User         userResponse `json:"user"`
 }
-
-type refreshTokenRequest struct {
-	RefreshToken string `json:"refresh_token" example:"e4d909c290d0fb1ca068ffaddf22cbd0adddef5b81a8b5e52a65492d5257e841"`
-}
-
 type refreshTokenResponse struct {
 	Token        string `json:"token"`
 	RefreshToken string `json:"refresh_token"`
@@ -92,6 +87,8 @@ type createDividendRequest struct {
 	Amount         string    `json:"amount" example:"500.00"`
 	PaymentDate    time.Time `json:"payment_date" example:"2026-08-21T12:00:00Z"`
 	AmountPerShare string    `json:"amount_per_share" example:"5.0"`
+	IsNet          bool      `json:"is_net,omitempty" example:"false"`
+	TaxRate        string    `json:"tax_rate,omitempty" example:"0.10"`
 }
 
 // Bölünme

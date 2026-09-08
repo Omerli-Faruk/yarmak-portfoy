@@ -44,3 +44,13 @@ SELECT * FROM transactions WHERE user_id = $1 AND asset_id = $2 AND deleted_at I
 
 -- name: GetTotalCommission :one
 SELECT COALESCE(SUM(commission), 0)::text as total_commission FROM transactions WHERE user_id = $1 AND deleted_at IS NULL;
+
+-- name: GetAllUserTransactions :many
+SELECT * FROM transactions
+WHERE user_id = $1 AND deleted_at IS NULL
+ORDER BY transaction_date ASC, id ASC;
+
+-- name: UpdateTransactionRealizedPnL :exec
+UPDATE transactions
+SET realized_pnl = $1
+WHERE id = $2 AND user_id = $3 AND deleted_at IS NULL;

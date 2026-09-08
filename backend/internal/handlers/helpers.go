@@ -1,16 +1,15 @@
 package handlers
 
 import (
-	"yarmak/internal/database"
-	"yarmak/internal/scraper"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
+	"yarmak/internal/database"
+	"yarmak/internal/scraper"
 )
 
 type contextKey string
@@ -85,14 +84,4 @@ func (cfg *ApiConfig) GetOrCreateAssetBySymbol(ctx context.Context, symbol strin
 		RecordedAt: time.Now().UTC(),
 	})
 	return newAsset, nil
-}
-
-func getUserHoldingLot(holdings []database.GetUserHoldingsSummaryRow, assetID int64) float64 {
-	for _, h := range holdings {
-		if h.AssetID == assetID {
-			lot, _ := strconv.ParseFloat(h.TotalAmount, 64)
-			return lot
-		}
-	}
-	return 0
 }

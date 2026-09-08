@@ -1,13 +1,13 @@
 package handlers
 
 import (
-	"yarmak/internal/auth"
 	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+	"yarmak/internal/auth"
 )
 
 func TestHealthCheck(t *testing.T) {
@@ -74,7 +74,7 @@ func TestAuthorizedAccessWithJWT(t *testing.T) {
 	})
 
 	req := httptest.NewRequest("GET", "/v1/portfolio/summary", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "access_token", Value: token})
 	rr := httptest.NewRecorder()
 
 	protectedHandler.ServeHTTP(rr, req)

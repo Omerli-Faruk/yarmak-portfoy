@@ -1,14 +1,14 @@
 package main
 
 import (
-	"yarmak/internal/database"
-	"yarmak/internal/handlers"
 	"context"
 	"database/sql"
 	"fmt"
 	"log"
 	"os"
 	"time"
+	"yarmak/internal/database"
+	"yarmak/internal/handlers"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"

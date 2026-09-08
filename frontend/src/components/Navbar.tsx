@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import {useAuth} from "@/context/AuthContext";
-import {LogOut} from "lucide-react"
-import Image from "next/image"
+import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, Mail, Lock, User } from 'lucide-react';
+import { ArrowLeft, LogOut } from 'lucide-react';
+
 
 
 export default function Navbar() {

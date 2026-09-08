@@ -1,19 +1,21 @@
 package scraper
 
 import (
-	"yarmak/internal/database"
 	"context"
 	"fmt"
 	"log/slog"
 	"math"
 	"strconv"
 	"sync"
-	"time"
 	"sync/atomic"
+	"time"
+	"yarmak/internal/database"
 )
 
-func StartScraperWorker(ctx context.Context, db *database.Queries, interval time.Duration) {
+func StartScraperWorker(ctx context.Context, db *database.Queries, interval time.Duration, wg *sync.WaitGroup) {
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		slog.Info("Scraper worker başlatıldı", "interval", interval)
 		for {
 			select {
@@ -78,6 +80,12 @@ func processSingleAsset(ctx context.Context, db *database.Queries, asset databas
 	if asset.AssetType == "HISSE" || asset.AssetType == "ALTIN" || asset.AssetType == "DOVIZ" {
 		newPrice, fetchErr = FetchBISTPrice(asset.Symbol)
 	} else if asset.AssetType == "FON" {
+		// TEFAS fonları günde sadece 1 kez (akşam) güncellenir.
+		// Dakikalık döngüde TEFAS rate limitini (6 istek/dk) tüketmemek için koruma:
+		oldPrice, _ := strconv.ParseFloat(asset.CurrentPrice, 64)
+		if oldPrice > 0 && time.Since(asset.UpdatedAt) < 12*time.Hour {
+			return
+		}
 		newPrice, fetchErr = FetchTEFASPrice(asset.Symbol)
 	} else {
 		return
@@ -143,7 +151,7 @@ var lastSnapshotDay atomic.Int32
 
 func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
 	now := time.Now()
-	if now.Hour() < 18 || lastSnapshotDay.Load() == int32(now.Day()) {
+	if now.Hour() < 18 || lastSnapshotDay.Load() == int32(now.YearDay()) {
 		return
 	}
 	userIDs, err := db.ListUserIDs(ctx)
@@ -178,7 +186,7 @@ func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
 		})
 	}
 	_ = db.DeleteExpiredRefreshTokens(ctx)
-	lastSnapshotDay.Store(int32(now.Day()))
+	lastSnapshotDay.Store(int32(now.YearDay()))
 }
 
 func CalculateAssetHoldingAndCost(transactions []database.Transaction) (currentLot float64, avgCost float64) {
@@ -194,7 +202,7 @@ func CalculateAssetHoldingAndCost(transactions []database.Transaction) (currentL
 			runningLot = runningLot + amount
 		} else if tx.Type == "SELL" {
 			runningLot = runningLot - amount
-			if runningLot < 0 {
+			if runningLot <= 0.000001 {
 				runningLot = 0
 				runningCost = 0
 			}

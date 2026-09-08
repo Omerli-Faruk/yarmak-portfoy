@@ -1,10 +1,10 @@
 package handlers
 
 import (
-	"yarmak/internal/database"
-	"yarmak/internal/scraper"
 	"math"
 	"testing"
+	"yarmak/internal/database"
+	"yarmak/internal/scraper"
 )
 
 func TestWeightedAverageCostCalculation(t *testing.T) {

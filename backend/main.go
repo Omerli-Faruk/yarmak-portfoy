@@ -1,30 +1,45 @@
 package main
 
 import (
-	"yarmak/internal/database"
-	"yarmak/internal/handlers"
-	"yarmak/internal/scraper"
 	"context"
 	"database/sql"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
+	"yarmak/internal/database"
+	"yarmak/internal/handlers"
+	"yarmak/internal/scraper"
 
 	_ "yarmak/docs"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/go-chi/httprate"
 	"github.com/joho/godotenv"
-	"github.com/jub0bs/fcors"
 	_ "github.com/lib/pq"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
+
+func keyByClientIP(r *http.Request) (string, error) {
+	ip := middleware.GetClientIP(r.Context())
+	if ip == "" {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err == nil {
+			ip = host
+		} else {
+			ip = r.RemoteAddr
+		}
+	}
+	return httprate.CanonicalizeIP(ip), nil
+}
 
 // @title Yarmak Borsa & Portföy Takip API
 // @version 1.0
@@ -89,8 +104,12 @@ func main() {
 
 	v1Router := chi.NewRouter()
 
+	v1Router.Use(middleware.RequestID)
+	v1Router.Use(middleware.Logger)
+	v1Router.Use(middleware.Recoverer)
+
 	// Rate Limiter
-	v1Router.Use(httprate.NewRateLimiter(100, 1*time.Minute).Handler)
+	v1Router.Use(httprate.NewRateLimiter(100, 1*time.Minute, httprate.WithKeyFuncs(keyByClientIP)).Handler)
 
 	allowedOriginsStr := os.Getenv("ALLOWED_ORIGINS")
 	var allowedOrigins []string
@@ -105,11 +124,14 @@ func main() {
 	if len(allowedOrigins) == 0 {
 		allowedOrigins = []string{"http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"}
 	}
-	corsMiddleware, err := fcors.AllowAccess(
-		fcors.FromOrigins(allowedOrigins[0], allowedOrigins[1:]...),
-		fcors.WithRequestHeaders("Authorization", "Content-Type", "Accept"),
-		fcors.WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS"),
-	)
+	corsMiddleware := cors.Handler(cors.Options{
+		AllowedOrigins:   allowedOrigins,
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	})
 	if err != nil {
 		slog.Error("CORS yapılandırma hatası", "error", err)
 		os.Exit(1)
@@ -130,7 +152,8 @@ func main() {
 	v1Router.Get("/healthz", handlers.HandlerReadiness)
 
 	// Kullanıcı Rotaları (Özel Brute-Force Korumalı Rate Limiter: 5 istek / dakika)
-	authRateLimiter := httprate.NewRateLimiter(5, 1*time.Minute).Handler
+	authRateLimiter := httprate.NewRateLimiter(5, 1*time.Minute, httprate.WithKeyFuncs(keyByClientIP)).Handler
+	lookupRateLimiter := httprate.NewRateLimiter(10, 1*time.Minute, httprate.WithKeyFuncs(keyByClientIP)).Handler
 	v1Router.With(authRateLimiter).Post("/register", apiCFG.HandlerRegister)
 	v1Router.With(authRateLimiter).Post("/login", apiCFG.HandlerLogin)
 	v1Router.Get("/me", apiCFG.MiddleWareAuth(apiCFG.HandlerGetMe))
@@ -140,7 +163,7 @@ func main() {
 	// Asset (Hisse/Fon) Rotaları
 	v1Router.Post("/assets", apiCFG.MiddleWareAuth(apiCFG.MiddleWareAdmin(apiCFG.HandlerCreateAsset)))
 	v1Router.Get("/assets", apiCFG.HandlerListAssets)
-	v1Router.Get("/assets/lookup", apiCFG.MiddleWareAuth(apiCFG.HandlerLookupAsset))
+	v1Router.With(lookupRateLimiter).Get("/assets/lookup", apiCFG.MiddleWareAuth(apiCFG.HandlerLookupAsset))
 	v1Router.Post("/splits", apiCFG.MiddleWareAuth(apiCFG.MiddleWareAdmin(apiCFG.HandlerCreateSplit)))
 	v1Router.Get("/assets/{id}/splits", apiCFG.MiddleWareAuth(apiCFG.HandlerListSplitsByAsset))
 
@@ -168,7 +191,8 @@ func main() {
 	defer stop()
 
 	// 2. Arka Plan Scraper Worker'ı context ile Başlat
-	scraper.StartScraperWorker(serverCtx, queries, 1*time.Minute)
+	var scraperWg sync.WaitGroup
+	scraper.StartScraperWorker(serverCtx, queries, 1*time.Minute, &scraperWg)
 	srv := &http.Server{
 		Handler: r,
 		Addr:    ":" + port,
@@ -189,6 +213,8 @@ func main() {
 	if err != nil {
 		slog.Error("Server kapatılırken hata oluştu", "error", err)
 	}
+	slog.Info("Arka plan servislerinin tamamlanması bekleniyor...")
+	scraperWg.Wait()
 	if err := conn.Close(); err != nil {
 		slog.Error("Veritabanı kapatılırken hata oluştu", "error", err)
 	}

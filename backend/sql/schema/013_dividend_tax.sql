@@ -2,6 +2,11 @@
 ALTER TABLE dividends ADD COLUMN gross_amount NUMERIC(18, 6) NOT NULL DEFAULT 0.000000;
 ALTER TABLE dividends ADD COLUMN tax_amount NUMERIC(18, 6) NOT NULL DEFAULT 0.000000;
 ALTER TABLE dividends ADD COLUMN net_amount NUMERIC(18, 6) NOT NULL DEFAULT 0.000000;
+UPDATE dividends
+SET gross_amount = amount,
+    tax_amount = amount * 0.10,
+    net_amount = amount * 0.90
+WHERE gross_amount = 0;
 
 -- +goose Down
 ALTER TABLE dividends DROP COLUMN IF EXISTS net_amount;

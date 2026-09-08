@@ -1,21 +1,22 @@
 package handlers
 
 import (
-	"yarmak/internal/auth"
 	"context"
+	"database/sql"
+	"errors"
 	"net/http"
-	"strings"
+	"yarmak/internal/auth"
 )
 
 func (cfg *ApiConfig) MiddleWareAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
+
+		cookie, err := r.Cookie("access_token")
+		if err != nil {
+			respondWithError(w, http.StatusUnauthorized, "Giriş yapmanız gerekiyor (Token eksik)", nil)
 			return
 		}
-
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		tokenString := cookie.Value
 		userID, err := auth.ValidateJWT(tokenString, cfg.JWTSecret)
 		if err != nil {
 			respondWithError(w, http.StatusUnauthorized, "Geçersiz veya süresi dolmuş token", nil)
@@ -36,6 +37,10 @@ func (cfg *ApiConfig) MiddleWareAdmin(next http.HandlerFunc) http.HandlerFunc {
 		}
 		user, err := cfg.DB.GetUserByID(r.Context(), userID)
 		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				respondWithError(w, http.StatusUnauthorized, "Kullanıcı bulunamadı", nil)
+				return
+			}
 			respondWithError(w, http.StatusInternalServerError, "Kullanıcı bulunamadı", nil)
 			return
 		}

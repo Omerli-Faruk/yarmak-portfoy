@@ -4,9 +4,9 @@ import type { NextRequest } from 'next/server';
 const protectedRoutes = ['/dashboard', '/holdings', '/transactions', '/alerts'];
 const authRoutes = ['/', '/login', '/register'];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
     const reqUrl = request.nextUrl.pathname;
-    const token = request.cookies.get('token')?.value;
+    const token = request.cookies.get('access_token')?.value;
 
     const isProtectedRoute = protectedRoutes.some(route => reqUrl.startsWith(route));
     const isAuthRoute = authRoutes.includes(reqUrl);

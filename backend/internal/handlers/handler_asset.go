@@ -1,11 +1,11 @@
 package handlers
 
 import (
-	"yarmak/internal/database"
 	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
+	"yarmak/internal/database"
 
 	"github.com/go-chi/chi/v5"
 )

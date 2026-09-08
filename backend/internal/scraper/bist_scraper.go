@@ -3,6 +3,7 @@ package scraper
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -44,6 +45,35 @@ func fetchYahooPrice(ticker string) (float64, error) {
 }
 
 func getSpotGramGoldPrice() (float64, error) {
+	// 1. Doğrudan Türkiye serbest piyasa spot altın kuru (GAU/TRY)
+	req, err := http.NewRequest("GET", "https://finans.truncgil.com/v4/today.json", nil)
+	if err == nil {
+		req.Header.Set("User-Agent", "Mozilla/5.0")
+		resp, err := client.Do(req)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			defer resp.Body.Close()
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			bodyStr := string(bodyBytes)
+
+			if idx := strings.Index(bodyStr, `"GRA"`); idx != -1 {
+				sub := bodyStr[idx:]
+				if closeIdx := strings.Index(sub, "}"); closeIdx != -1 {
+					chunk := sub[:closeIdx+1]
+					var graData struct {
+						GRA struct {
+							Selling float64 `json:"Selling"`
+							Buying  float64 `json:"Buying"`
+						} `json:"GRA"`
+					}
+					if err := json.Unmarshal([]byte("{"+chunk+"}"), &graData); err == nil && graData.GRA.Selling > 0 {
+						return graData.GRA.Selling, nil
+					}
+				}
+			}
+		}
+	}
+
+	// 2. Yedek fallback: Ons Altın * USD/TRY hesabı
 	goldUSD, err := fetchYahooPrice("GC=F")
 	if err != nil {
 		return 0, fmt.Errorf("ons altın fiyatı çekilemedi: %w", err)

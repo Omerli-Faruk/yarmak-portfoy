@@ -5,57 +5,43 @@ const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/v1';
 
 const api = axios.create({
     baseURL,
+    withCredentials: true,
     headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
     }
 })
 
-api.interceptors.request.use(
-    (config) => {
-        if (typeof window !== 'undefined') {
-            const token = localStorage.getItem('token');
-            if (token) {
-                config.headers.Authorization = `Bearer ${token}`;
-            }
-        }
-        return config;
-    },
-    (error) => Promise.reject(error)
-);
+let refreshPromise: Promise<string> | null = null;
 
 api.interceptors.response.use(
     response => response,
     async error => {
         if (error.response?.status === 401 && !error.config._retry && typeof window !== 'undefined' && !error.config.url?.includes('/login')) {
             error.config._retry = true;
-            const refreshToken = localStorage.getItem('refresh_token');
-            if (!refreshToken) {
-                localStorage.removeItem('token');
-                localStorage.removeItem('refresh_token');
-                window.location.href = '/login';
-                return Promise.reject(error);
-            }
-            try {
-                const { data } = await axios.post(`${baseURL}/refresh`, {
-                    refresh_token: refreshToken,
-                });
-                localStorage.setItem('token', data.token);
-                setCookie('token', data.token, 7);
-                localStorage.setItem('refresh_token', data.refresh_token);
 
-                error.config.headers.Authorization = `Bearer ${data.token}`;
+            try {
+                if (!refreshPromise) {
+                    refreshPromise = (async () => {
+                        try {
+                            await axios.post(`${baseURL}/refresh`, {}, { withCredentials: true });
+                            return "ok";
+                        } finally {
+                            refreshPromise = null;
+                        }
+                    })();
+                }
+
+                await refreshPromise;
                 return api(error.config);
+
             } catch (refreshErr) {
-                localStorage.removeItem('token');
-                removeCookie('token');
-                localStorage.removeItem('refresh_token');
                 window.location.href = '/login';
                 return Promise.reject(refreshErr);
             }
         }
         return Promise.reject(error);
     }
-)
+);
 
 export default api

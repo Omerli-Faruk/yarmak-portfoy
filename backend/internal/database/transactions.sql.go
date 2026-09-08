@@ -72,6 +72,47 @@ func (q *Queries) DeleteTransaction(ctx context.Context, arg DeleteTransactionPa
 	return err
 }
 
+const getAllUserTransactions = `-- name: GetAllUserTransactions :many
+SELECT id, user_id, asset_id, type, amount, price, transaction_date, created_at, deleted_at, realized_pnl, commission FROM transactions
+WHERE user_id = $1 AND deleted_at IS NULL
+ORDER BY transaction_date ASC, id ASC
+`
+
+func (q *Queries) GetAllUserTransactions(ctx context.Context, userID int64) ([]Transaction, error) {
+	rows, err := q.db.QueryContext(ctx, getAllUserTransactions, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Transaction
+	for rows.Next() {
+		var i Transaction
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.AssetID,
+			&i.Type,
+			&i.Amount,
+			&i.Price,
+			&i.TransactionDate,
+			&i.CreatedAt,
+			&i.DeletedAt,
+			&i.RealizedPnl,
+			&i.Commission,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTotalCommission = `-- name: GetTotalCommission :one
 SELECT COALESCE(SUM(commission), 0)::text as total_commission FROM transactions WHERE user_id = $1 AND deleted_at IS NULL
 `
@@ -291,4 +332,21 @@ func (q *Queries) GetUserTransactionsPaginated(ctx context.Context, arg GetUserT
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateTransactionRealizedPnL = `-- name: UpdateTransactionRealizedPnL :exec
+UPDATE transactions
+SET realized_pnl = $1
+WHERE id = $2 AND user_id = $3 AND deleted_at IS NULL
+`
+
+type UpdateTransactionRealizedPnLParams struct {
+	RealizedPnl string
+	ID          int64
+	UserID      int64
+}
+
+func (q *Queries) UpdateTransactionRealizedPnL(ctx context.Context, arg UpdateTransactionRealizedPnLParams) error {
+	_, err := q.db.ExecContext(ctx, updateTransactionRealizedPnL, arg.RealizedPnl, arg.ID, arg.UserID)
+	return err
 }

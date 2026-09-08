@@ -1,10 +1,10 @@
 package handlers
 
 import (
-	"yarmak/internal/database"
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"yarmak/internal/database"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -99,6 +99,18 @@ func (cfg *ApiConfig) HandlerDeletePriceAlert(w http.ResponseWriter, r *http.Req
 		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
 		return
 	}
+	alerts, _ := cfg.DB.GetUserPriceAlert(r.Context(), userID)
+	found := false
+	for _, a := range alerts {
+		if a.ID == priceAlertID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		respondWithError(w, http.StatusNotFound, "Silinecek fiyat alarmı bulunamadı", nil)
+		return
+	}
 	err = cfg.DB.DeletePriceAlert(r.Context(), database.DeletePriceAlertParams{
 		ID:     priceAlertID,
 		UserID: userID,
@@ -107,5 +119,6 @@ func (cfg *ApiConfig) HandlerDeletePriceAlert(w http.ResponseWriter, r *http.Req
 		respondWithError(w, http.StatusInternalServerError, "Fiyat alarmı silinemedi", err)
 		return
 	}
+
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Fiyat alarmı başarıyla silindi"})
 }

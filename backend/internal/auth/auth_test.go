@@ -54,27 +54,22 @@ func TestValidateJWT(t *testing.T) {
 func TestInvalidJWTSignatures(t *testing.T) {
 	userID := int64(101)
 	secret := "super-jwt-key"
-	expiredToken := -1 * time.Hour
-	_, err := MakeJWT(userID, secret, expiredToken)
+	wrongSecret := "bambaska-ve-yanlis-bir-gizli-anahtar"
+	fakeToken, err := MakeJWT(userID, wrongSecret, 1*time.Hour)
 	if err != nil {
-		t.Fatalf("Token oluşturulurken hata oluştu %v", err)
+		t.Fatalf("Token oluşturulurken hata oluştu: %v", err)
 	}
-
+	_, err = ValidateJWT(fakeToken, secret)
+	if err == nil {
+		t.Errorf("Yanlış anahtarla imzalanmış token geçerli sayılmamalıydı!")
+	}
 	_, err = ValidateJWT("tamamen.gecersiz.bir.token", secret)
 	if err == nil {
 		t.Errorf("Geçersiz token doğrulanmamalıydı!")
 	}
-
 	_, err = ValidateJWT("", secret)
 	if err == nil {
 		t.Errorf("Boş token doğrulanmamalıydı!")
-	}
-
-	validToken, _ := MakeJWT(101, secret, 5*time.Minute)
-	tamperedToken := validToken + "hacked"
-	_, err = ValidateJWT(tamperedToken, secret)
-	if err == nil {
-		t.Errorf("Sahte token doğrulanmamalıydı")
 	}
 }
 

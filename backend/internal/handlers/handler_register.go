@@ -1,12 +1,13 @@
 package handlers
 
 import (
-	"yarmak/internal/auth"
-	"yarmak/internal/database"
 	"encoding/json"
 	"net/http"
 	"net/mail"
+	"regexp"
 	"strings"
+	"yarmak/internal/auth"
+	"yarmak/internal/database"
 )
 
 // @Summary Yeni Kullanıcı Kaydı
@@ -25,19 +26,22 @@ func (cfg *ApiConfig) HandlerRegister(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
 		return
 	}
-	_, err = mail.ParseAddress(req.Email)
+	parsedAddr, err := mail.ParseAddress(req.Email)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Lütfen geçerli bir e-posta adresi girin", err)
 		return
 	}
-	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.Email = strings.ToLower(strings.TrimSpace(parsedAddr.Address))
+
 	if len(req.Password) < 8 || len(req.Password) > 72 {
 		respondWithError(w, http.StatusBadRequest, "Şifre 8 ile 72 karakter arasında olmalıdır", nil)
 		return
 	}
+
 	req.Username = strings.ToLower(strings.TrimSpace(req.Username))
-	if len(req.Username) < 3 || len(req.Username) > 15 {
-		respondWithError(w, http.StatusBadRequest, "Kullanıcı adı 3 ile 15 karakter arasında olmalıdır", nil)
+	usernameRegex := regexp.MustCompile(`^[a-zA-Z0-9_]{3,15}$`)
+	if !usernameRegex.MatchString(req.Username) {
+		respondWithError(w, http.StatusBadRequest, "Kullanıcı adı 3-15 karakter olmalı; yalnızca harf, rakam ve alt çizgi (_) içerebilir", nil)
 		return
 	}
 	hashedPassword, err := auth.HashPassword(req.Password)
@@ -51,8 +55,13 @@ func (cfg *ApiConfig) HandlerRegister(w http.ResponseWriter, r *http.Request) {
 			respondWithError(w, http.StatusBadRequest, "Bu kullanıcı adı zaten kullanımda", err)
 			return
 		}
-		respondWithError(w, http.StatusBadRequest, "Bu e-posta adresi zaten kullanımda", err)
+		if strings.Contains(err.Error(), "users_email_key") || strings.Contains(err.Error(), "unique") {
+			respondWithError(w, http.StatusBadRequest, "Bu e-posta adresi zaten kullanımda", err)
+			return
+		}
+		respondWithError(w, http.StatusInternalServerError, "Kullanıcı kaydı oluşturulurken bir hata meydana geldi", err)
 		return
 	}
+
 	respondWithJSON(w, http.StatusCreated, userResponse{ID: user.ID, Email: user.Email, CreatedAt: user.CreatedAt, Role: user.Role, Username: user.Username})
 }

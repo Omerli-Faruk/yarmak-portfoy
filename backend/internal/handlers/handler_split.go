@@ -1,11 +1,11 @@
 package handlers
 
 import (
-	"yarmak/internal/database"
 	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
+	"yarmak/internal/database"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -45,6 +45,22 @@ func (cfg *ApiConfig) HandlerCreateSplit(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		respondWithError(w, http.StatusNotFound, "Bölünme uygulanacak hisse senedi sistemde bulunamadı", err)
 		return
+	}
+	if splitRatio == 1.0 {
+		respondWithError(w, http.StatusBadRequest, "Bölünme oranı 1'den farklı olmalıdır", nil)
+		return
+	}
+
+	existingSplits, err := cfg.DB.ListSplitsByAsset(r.Context(), asset.ID)
+	if err == nil {
+		for _, s := range existingSplits {
+			if s.SplitDate.Year() == params.SplitDate.Year() &&
+				s.SplitDate.Month() == params.SplitDate.Month() &&
+				s.SplitDate.Day() == params.SplitDate.Day() {
+				respondWithError(w, http.StatusBadRequest, "Bu hisse senedi için bu tarihte zaten bir bölünme uygulanmış. Mükerrer bölünme yapılamaz.", nil)
+				return
+			}
+		}
 	}
 
 	tx, err := cfg.DBConn.BeginTx(r.Context(), nil)

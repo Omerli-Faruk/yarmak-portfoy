@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"yarmak/internal/database"
-	"yarmak/internal/scraper"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,15 +8,41 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"yarmak/internal/database"
+	"yarmak/internal/scraper"
 
 	"github.com/go-chi/chi/v5"
 )
 
-var txLock sync.Mutex
+type userLock struct {
+	sync.Mutex
+	count int
+}
+
+var (
+	globalMu  sync.Mutex
+	userLocks = make(map[int64]*userLock)
+)
 
 func lockUser(userID int64) func() {
-	txLock.Lock()
-	return txLock.Unlock
+	globalMu.Lock()
+	mu, exists := userLocks[userID]
+	if !exists {
+		mu = &userLock{}
+		userLocks[userID] = mu
+	}
+	mu.count++
+	globalMu.Unlock()
+	mu.Lock()
+	return func() {
+		globalMu.Lock()
+		mu.count--
+		if mu.count == 0 {
+			delete(userLocks, userID)
+		}
+		globalMu.Unlock()
+		mu.Unlock()
+	}
 }
 
 // @Summary Alım/Satım İşlemi Yap
@@ -77,21 +101,52 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 		commissionVal = 0
 	}
 	var realizedPnL float64
+
+	splits, err := cfg.DB.ListSplitsByAsset(r.Context(), params.AssetID)
+	if err == nil {
+		for _, s := range splits {
+			if s.SplitDate.After(params.TransactionDate) {
+				splitRatio, _ := strconv.ParseFloat(s.SplitRatio, 64)
+				amountVal = amountVal * splitRatio
+				priceVal = priceVal / splitRatio
+			}
+		}
+	}
 	if params.Type == "SELL" {
+		// 1. Varlığa ait tüm işlemleri eskiden yeniye çekiyoruz
 		userTxs, err := cfg.DB.GetUserTransactionsForAsset(r.Context(), database.GetUserTransactionsForAssetParams{
 			UserID:  userID,
 			AssetID: params.AssetID,
 		})
 		if err != nil {
-			respondWithError(w, http.StatusInternalServerError, "İşlem geçmişi alınamadı", err)
+			respondWithError(w, http.StatusInternalServerError, "Geçmiş işlemler çekilemedi", err)
 			return
 		}
-		currentLot, avgCost := scraper.CalculateAssetHoldingAndCost(userTxs)
-		if amountVal > currentLot {
+
+		runningLot := 0.0
+		isDatePassed := false
+		for _, tx := range userTxs {
+			txAmount, _ := strconv.ParseFloat(tx.Amount, 64)
+			if tx.TransactionDate.After(params.TransactionDate) {
+				isDatePassed = true
+			}
+			if tx.Type == "BUY" {
+				runningLot += txAmount
+			} else if tx.Type == "SELL" {
+				runningLot -= txAmount
+			}
+			if isDatePassed {
+				if runningLot-amountVal < 0 {
+					respondWithError(w, http.StatusInternalServerError, "Geçmiş tarihli bu işlem, sonraki günlerde bakiyeyi eksiye düşürüyor", err)
+					return
+				}
+			}
+		}
+		if amountVal > runningLot {
 			respondWithError(w, http.StatusBadRequest, "Yetersiz bakiye: Elinizdeki miktardan fazlasını satamazsınız", nil)
 			return
 		}
-		realizedPnL = amountVal*(priceVal-avgCost) - commissionVal
+		realizedPnL = 0
 	}
 
 	cleanAmount := fmt.Sprintf("%.6f", amountVal)
@@ -113,6 +168,7 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 		respondWithError(w, http.StatusInternalServerError, "İşlem oluşturulamadı", err)
 		return
 	}
+	_ = cfg.recalculateAssetRealizedPnL(r.Context(), userID, params.AssetID)
 	respondWithJSON(w, http.StatusCreated, transaction)
 }
 
@@ -136,13 +192,16 @@ func (cfg *ApiConfig) HandlerGetUserHoldings(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	res := make([]userHoldingResponse, 0, len(holdings))
+
+	allTxs, _ := cfg.DB.GetAllUserTransactions(r.Context(), userID)
+	txsByAsset := make(map[int64][]database.Transaction)
+	for _, tx := range allTxs {
+		txsByAsset[tx.AssetID] = append(txsByAsset[tx.AssetID], tx)
+	}
 	for _, h := range holdings {
 		currentPrice, _ := strconv.ParseFloat(h.CurrentPrice, 64)
 		totalAmount, _ := strconv.ParseFloat(h.TotalAmount, 64)
-		userTxs, _ := cfg.DB.GetUserTransactionsForAsset(r.Context(), database.GetUserTransactionsForAssetParams{
-			UserID:  userID,
-			AssetID: h.AssetID,
-		})
+		userTxs := txsByAsset[h.AssetID]
 		_, averageCost := scraper.CalculateAssetHoldingAndCost(userTxs)
 
 		totalValue := currentPrice * totalAmount
@@ -240,16 +299,29 @@ func (cfg *ApiConfig) HandlerDeleteTransaction(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if tx.Type == "BUY" {
-		amountVal, _ := strconv.ParseFloat(tx.Amount, 64)
-		holdings, err := cfg.DB.GetUserHoldingsSummary(r.Context(), userID)
+		userTxs, err := cfg.DB.GetUserTransactionsForAsset(r.Context(), database.GetUserTransactionsForAssetParams{
+			UserID:  userID,
+			AssetID: tx.AssetID,
+		})
 		if err != nil {
-			respondWithError(w, http.StatusInternalServerError, "Portföy kontrol edilemedi", err)
+			respondWithError(w, http.StatusInternalServerError, "İşlem geçmişi kontrol edilemedi", err)
 			return
 		}
-		currentHolding := getUserHoldingLot(holdings, tx.AssetID)
-		if currentHolding < amountVal {
-			respondWithError(w, http.StatusBadRequest, "Bu alım işlemini silemezsiniz, portföyünüz eksiye düşer. Lütfen önce bu varlığa ait satış işlemlerinizi silin.", nil)
-			return
+		var simulatedLot float64
+		for _, t := range userTxs {
+			if t.ID == transactionID {
+				continue
+			}
+			tAmount, _ := strconv.ParseFloat(t.Amount, 64)
+			if t.Type == "BUY" {
+				simulatedLot += tAmount
+			} else if t.Type == "SELL" {
+				simulatedLot -= tAmount
+				if simulatedLot < -0.000001 {
+					respondWithError(w, http.StatusBadRequest, "Bu alım işlemini silemezsiniz; geçmişteki satış işlemleriniz için bakiye eksiye düşecektir.", nil)
+					return
+				}
+			}
 		}
 	}
 	err = cfg.DB.DeleteTransaction(r.Context(), database.DeleteTransactionParams{
@@ -260,12 +332,20 @@ func (cfg *ApiConfig) HandlerDeleteTransaction(w http.ResponseWriter, r *http.Re
 		respondWithError(w, http.StatusInternalServerError, "İşlem silinemedi", err)
 		return
 	}
+	_ = cfg.recalculateAssetRealizedPnL(r.Context(), userID, tx.AssetID)
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "İşlem başarıyla silindi"})
 }
 
 func (cfg *ApiConfig) resolveAssetID(ctx context.Context, params *createTransactionRequest) error {
 	if params.AssetID > 0 {
-		return nil
+		if cfg.DB != nil {
+			_, err := cfg.DB.GetAssetByID(ctx, params.AssetID)
+			if err == nil {
+				return nil
+			}
+		} else {
+			return nil
+		}
 	}
 	if params.Symbol == "" {
 		return fmt.Errorf("varlık ID veya Sembol zorunludur")
@@ -278,5 +358,49 @@ func (cfg *ApiConfig) resolveAssetID(ctx context.Context, params *createTransact
 		return err
 	}
 	params.AssetID = asset.ID
+	return nil
+}
+
+func (cfg *ApiConfig) recalculateAssetRealizedPnL(ctx context.Context, userID, assetID int64) error {
+	if cfg.DB == nil {
+		return nil
+	}
+	userTxs, err := cfg.DB.GetUserTransactionsForAsset(ctx, database.GetUserTransactionsForAssetParams{
+		UserID:  userID,
+		AssetID: assetID,
+	})
+	if err != nil {
+		return err
+	}
+
+	runningLot := 0.0
+	runningCost := 0.0
+
+	for _, tx := range userTxs {
+		amount, _ := strconv.ParseFloat(tx.Amount, 64)
+		price, _ := strconv.ParseFloat(tx.Price, 64)
+		commission, _ := strconv.ParseFloat(tx.Commission, 64)
+
+		if tx.Type == "BUY" {
+			total := (amount * price) + commission
+			runningCost = (runningLot*runningCost + total) / (runningLot + amount)
+			runningLot += amount
+		} else if tx.Type == "SELL" {
+			pnl := amount*(price-runningCost) - commission
+			cleanPnL := fmt.Sprintf("%.6f", pnl)
+			if tx.RealizedPnl != cleanPnL {
+				_ = cfg.DB.UpdateTransactionRealizedPnL(ctx, database.UpdateTransactionRealizedPnLParams{
+					RealizedPnl: cleanPnL,
+					ID:          tx.ID,
+					UserID:      userID,
+				})
+			}
+			runningLot -= amount
+			if runningLot <= 0.000001 {
+				runningLot = 0
+				runningCost = 0
+			}
+		}
+	}
 	return nil
 }

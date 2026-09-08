@@ -25,34 +25,29 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
 
     useEffect(() => {
         async function checkAuth() {
-            const token = localStorage.getItem('token')
-            try {
-                if (token) {
+            const isLoggedIn = localStorage.getItem('is_logged_in');
+
+            if (isLoggedIn === 'true') {
+                try {
                     const {data} = await api.get<User>('/me');
                     setUser(data);
-                } else {
+                } catch (error) {
+                    setUser(null);
+                    localStorage.removeItem('is_logged_in');
+                    console.log(error);
+                } finally {
                     setLoading(false);
-                    return;
                 }
-
-            } catch (error) {
-                setUser(null)
-                localStorage.removeItem('token')
-                localStorage.removeItem('refresh_token');
-                console.log(error);
-            } finally {
+            } else {
                 setLoading(false);
             }
         }
-
         void checkAuth();
     }, [])
 
     const login = async (identifier: string, password: string) => {
         const {data} = await api.post<AuthResponse>('/login', {email: identifier, password});
-        localStorage.setItem('token', data.token);
-        setCookie('token', data.token, 7);
-        localStorage.setItem('refresh_token', data.refresh_token);
+        localStorage.setItem('is_logged_in', 'true');
         setUser(data.user);
         router.push('/dashboard')
     }
@@ -62,20 +57,13 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
         await api.post<AuthResponse>('/register', {email, password, username});
         await login(email, password)
     }
-
     const logOut = async () => {
-        const refreshToken = localStorage.getItem('refresh_token');
         try {
-            if (refreshToken) {
-                await api.post('/revoke', {refresh_token: refreshToken});
-            }
-
+            await api.post('/revoke');
         } catch (error) {
             console.log(error)
         }
-        localStorage.removeItem('token');
-        removeCookie('token');
-        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('is_logged_in');
         setUser(null);
         router.push('/login');
     }
@@ -83,7 +71,7 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
     if (loading) {
         return (
             <div className="min-h-screen bg-background flex flex-col items-center justify-center">
-                <Image src="/logo.png" alt="Yarmak Logo" width={80} height={80} className="size-20 object-contain"/>
+                <Image src="/logo.png" alt="Yarmak Logo" width={80} height={80} className="size-20 object-contain" loading="eager"/>
                 <div className="size-5 border-2 border-primary border-t-transparent rounded-full animate-spin"/>
             </div>
         );

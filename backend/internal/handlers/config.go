@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"yarmak/internal/database"
 	"database/sql"
+	"yarmak/internal/database"
 )
 
 type ApiConfig struct {
@@ -10,4 +10,3 @@ type ApiConfig struct {
 	DBConn    *sql.DB
 	JWTSecret string
 }
-

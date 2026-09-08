@@ -1,12 +1,12 @@
 package handlers
 
 import (
-	"yarmak/internal/database"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"time"
+	"yarmak/internal/database"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -35,28 +35,45 @@ func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Reque
 		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
 		return
 	}
-	if params.AmountPerShare != "" {
-		holdings, err := cfg.DB.GetUserHoldingsSummary(r.Context(), userID)
-		if err != nil {
-			respondWithError(w, http.StatusBadRequest, "Portföy bilgileri alınamadı", err)
-			return
-		}
-		userHoldingLot := getUserHoldingLot(holdings, params.AssetID)
+	if params.PaymentDate.IsZero() {
+		params.PaymentDate = time.Now().UTC()
+	}
 
-		if userHoldingLot <= 0 {
-			respondWithError(w, http.StatusBadRequest, "Portföyünüzde bu hisseye ait lot bulunamadı", nil)
+	if params.AmountPerShare != "" {
+		userTxs, err := cfg.DB.GetUserTransactionsForAsset(r.Context(), database.GetUserTransactionsForAssetParams{
+			UserID:  userID,
+			AssetID: params.AssetID,
+		})
+		if err != nil {
+			respondWithError(w, http.StatusBadRequest, "İşlem geçmişi alınamadı", err)
 			return
 		}
+
+		var historicalLot float64
+		for _, tx := range userTxs {
+			if !tx.TransactionDate.After(params.PaymentDate) {
+				amt, _ := strconv.ParseFloat(tx.Amount, 64)
+				if tx.Type == "BUY" {
+					historicalLot += amt
+				} else if tx.Type == "SELL" {
+					historicalLot -= amt
+				}
+			}
+		}
+
+		if historicalLot <= 0 {
+			respondWithError(w, http.StatusBadRequest, "Temettü tarihinde portföyünüzde bu hisseye ait lot bulunamadı", nil)
+			return
+		}
+
 		perShare, err := strconv.ParseFloat(params.AmountPerShare, 64)
 		if err != nil || perShare <= 0 {
 			respondWithError(w, http.StatusBadRequest, "Geçersiz hisse başı temettü miktarı", err)
 			return
 		}
-		totalAmount := userHoldingLot * perShare
+
+		totalAmount := historicalLot * perShare
 		params.Amount = fmt.Sprintf("%.6f", totalAmount)
-	}
-	if params.PaymentDate.IsZero() {
-		params.PaymentDate = time.Now().UTC()
 	}
 	amount, _ := strconv.ParseFloat(params.Amount, 64)
 	if amount <= 0 || params.AssetID <= 0 {
@@ -64,9 +81,29 @@ func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	grossAmount := amount
-	taxAmount := grossAmount * 0.10
-	netAmount := grossAmount - taxAmount
+	taxRate := 0.10
+	if params.TaxRate != "" {
+		tr, err := strconv.ParseFloat(params.TaxRate, 64)
+		if err == nil {
+			if tr > 1 {
+				tr = tr / 100
+			}
+			if tr >= 0 && tr < 1 {
+				taxRate = tr
+			}
+		}
+	}
+
+	var grossAmount, netAmount, taxAmount float64
+	if params.IsNet {
+		netAmount = amount
+		grossAmount = netAmount / (1.0 - taxRate)
+		taxAmount = grossAmount - netAmount
+	} else {
+		grossAmount = amount
+		taxAmount = grossAmount * taxRate
+		netAmount = grossAmount - taxAmount
+	}
 	cleanGross := fmt.Sprintf("%.6f", grossAmount)
 	cleanTax := fmt.Sprintf("%.6f", taxAmount)
 	cleanNet := fmt.Sprintf("%.6f", netAmount)
@@ -121,12 +158,24 @@ func (cfg *ApiConfig) HandlerGetUserDividends(w http.ResponseWriter, r *http.Req
 // @Router /dividends/{id} [delete]
 func (cfg *ApiConfig) HandlerDeleteDividend(w http.ResponseWriter, r *http.Request) {
 	urlID := chi.URLParam(r, "id")
+	userID, ok := r.Context().Value(UserIDKey).(int64)
 	dividendID, err := strconv.ParseInt(urlID, 10, 64)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz temettü ID", err)
 		return
 	}
-	userID, ok := r.Context().Value(UserIDKey).(int64)
+	dividends, _ := cfg.DB.GetUserDividends(r.Context(), userID)
+	found := false
+	for _, d := range dividends {
+		if d.ID == dividendID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		respondWithError(w, http.StatusNotFound, "Silinecek temettü kaydı bulunamadı", nil)
+		return
+	}
 	if !ok {
 		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
 		return
