@@ -3,45 +3,69 @@
 import Link from "next/link";
 import React from "react";
 import { useAuth } from "@/context/AuthContext";
+import Image from "next/image";
 
 
 export default function Footer() {
     const { user } = useAuth();
 
     return (
-        <footer className="w-full border-t border-border bg-[#0A0E14] py-12 flex items-center justify-center">
-            <div
-                className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-slate-500">
-                <div className="flex flex-col items-center md:items-start gap-1">
-                    <div className="flex items-center gap-2 mb-1">
-                        <div
-                            className="size-5 bg-primary rounded flex items-center justify-center text-black font-bold text-[10px]">
-                            Y
-                        </div>
-                        <span className="font-bold text-slate-200 tracking-wider text-sm">
+        <footer className="w-full border-t border-slate-800 bg-[#0A0E14] pt-16 pb-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
+                    {/* Brand */}
+                    <div className="flex flex-col gap-4">
+                        <div className="flex items-center gap-2">
+                            <Image src="/logo.png" alt="Yarmak Logo" width={24} height={24} className="size-6 object-contain" loading="eager"/>
+                            <span className="font-bold text-white tracking-widest text-xl">
                                 YARMAK
                             </span>
+                        </div>
+                        <p className="text-slate-400 text-sm leading-relaxed mt-2">
+                            Tarihin ilk parasından geleceğin akıllı portföyüne. BIST ve TEFAS yatırımlarınızı tek bir ekranda, canlı ve ücretsiz takip edin.
+                        </p>
                     </div>
-                    <span>Tarihin ilk parasından geleceğin akıllı portföyüne.</span>
+
+                    {/* Platform */}
+                    <div>
+                        <h4 className="text-white font-semibold mb-6">Platform</h4>
+                        <ul className="flex flex-col gap-3 text-sm text-slate-400">
+                            <li><Link href="/#piyasalar" className="hover:text-indigo-400 transition-colors">Piyasalar</Link></li>
+                            <li><Link href="/#ozellikler" className="hover:text-indigo-400 transition-colors">Özellikler</Link></li>
+                            {user ? (
+                                <li><Link href="/dashboard" className="hover:text-indigo-400 transition-colors">Portföyüm</Link></li>
+                            ) : (
+                                <li><Link href="/register" className="hover:text-indigo-400 transition-colors">Hesap Oluştur</Link></li>
+                            )}
+                        </ul>
+                    </div>
+
+                    {/* Kaynaklar */}
+                    <div>
+                        <h4 className="text-white font-semibold mb-6">Kaynaklar</h4>
+                        <ul className="flex flex-col gap-3 text-sm text-slate-400">
+                            <li><a href="#" className="hover:text-indigo-400 transition-colors">Kullanım Rehberi</a></li>
+                            <li><a href="#" className="hover:text-indigo-400 transition-colors">Sıkça Sorulan Sorular</a></li>
+                            <li><a href="#" className="hover:text-indigo-400 transition-colors">Gizlilik Politikası</a></li>
+                            <li><a href="#" className="hover:text-indigo-400 transition-colors">Kullanım Şartları</a></li>
+                        </ul>
+                    </div>
+
+                    {/* İletişim */}
+                    <div>
+                        <h4 className="text-white font-semibold mb-6">İletişim</h4>
+                        <ul className="flex flex-col gap-3 text-sm text-slate-400">
+                            <li className="flex items-center gap-3">
+                                <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                                <a href="mailto:destek@yarmak.com" className="hover:text-white transition-colors">destek@yarmak.com</a>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
-                <div className="flex items-center gap-8">
-                    {user ? (
-                        <Link href="/dashboard" className="hover:text-primary transition font-medium">
-                            Dashboard
-                        </Link>
-                    ) : (
-                        <>
-                            <Link href="/login" className="hover:text-primary transition font-medium">
-                                Giriş Yap
-                            </Link>
-                            <Link href="/register" className="hover:text-primary transition font-medium">
-                                Ücretsiz Kayıt Ol
-                            </Link>
-                        </>
-                    )}
-                    <span className="text-slate-600 hidden sm:inline">
-                        © 2026 Yarmak FinTech
-                    </span>
+
+                {/* Bottom */}
+                <div className="pt-8 border-t border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+                    <p>© 2026 Yarmak Portföy. Tüm hakları saklıdır.</p>
                 </div>
             </div>
         </footer>

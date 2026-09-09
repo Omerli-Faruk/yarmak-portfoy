@@ -1,0 +1,7 @@
+﻿User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /dashboard/
+Disallow: /transactions/
+Disallow: /holdings/
+Disallow: /alerts/

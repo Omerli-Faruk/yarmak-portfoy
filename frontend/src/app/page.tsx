@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import api from '@/lib/api';
 import {
@@ -46,71 +47,16 @@ interface Asset {
 }
 
 
-const featureCards = [
-    {
-        icon: Globe,
-        title: 'Hisse, Fon ve Altın Tek Yerde',
-        desc: 'BIST hisseleri, TEFAS yatırım fonları ve gram altını tek bir panelden takip edin. Farklı banka ve aracı kurum uygulamaları arasında kaybolmaya son.',
-    },
-    {
-        icon: LineChart,
-        title: 'Gerçek Zamanlı Dolar Bazlı Getiri',
-        desc: 'Portföyünüzün TL performansı yanıltıcı olabilir. USD/TRY kuru ile anlık çevrim yaparak enflasyondan arındırılmış gerçek satın alma gücünüzü görün.',
-    },
-    {
-        icon: Clock,
-        title: 'Bedelsiz & Temettü Otomasyonu',
-        desc: 'Sermaye artırımı sonrası lot sayınız ve birim maliyetiniz matematiksel olarak düzeltilir. Temettü ödemeleriniz brüt/net ayrımıyla kayıt altında tutulur.',
-    },
-    {
-        icon: Activity,
-        title: 'Hassas AOF Maliyet Hesabı',
-        desc: 'Ağırlıklı ortalama fiyat (AOF) formülüyle her kademeli alım-satım ve komisyon gideri maliyetinize kuruşu kuruşuna doğru yansıtılır.',
-    },
-    {
-        icon: Bell,
-        title: 'Akıllı Fiyat Alarmları',
-        desc: 'Hedef fiyat veya zarar-kes (stop-loss) seviyeleri belirleyin. Piyasa belirlediğiniz noktaya ulaştığında anında bildirim alın.',
-    },
-    {
-        icon: Shield,
-        title: 'Banka Şifresi ve Yetki İstemiyoruz',
-        desc: 'Hiçbir finansal hesabınıza erişim veya şifre talep etmiyoruz. Sadece işlemlerinizi kaydedin, tüm profesyonel analitiği biz hesaplayalım.',
-    },
-];
-
-const faqItems = [
-    {
-        question: 'Yarmak tam olarak ne yapıyor?',
-        answer: 'Yarmak, bireysel yatırımcıların BIST hisseleri, TEFAS fonları ve altın pozisyonlarını tek bir panelde izlemesini sağlayan modern bir portföy takip terminalidir. Alım-satım, temettü ve bedelsiz bölünme işlemlerinizi girdiğinizde toplam kâr/zarar, maliyet ve getiri oranlarınızı otomatik hesaplar.',
-    },
-    {
-        question: 'Piyasa fiyatları ne sıklıkla güncelleniyor?',
-        answer: 'Arka planda çalışan entegre veri tarayıcımız (Scraper Worker), Borsa İstanbul hisseleri, altın ve kurları periyodik aralıklarla veritabanında günceller. TEFAS fon fiyatları ise her iş günü resmi takas kaynaklarından çekilerek portföyünüze yansıtılır.',
-    },
-    {
-        question: 'Finansal verilerim güvende mi?',
-        answer: 'Kesinlikle evet. Banka, MKK veya aracı kurum şifreleriniz asla talep edilmez. Tüm veri trafiği endüstri standardı şifreleme protokolleriyle (HTTPS/TLS) korunur ve yalnızca sizin sisteme girdiğiniz lot/işlem kayıtları saklanır.',
-    },
-    {
-        question: 'Dolar bazlı portföy değeri nasıl hesaplanıyor?',
-        answer: 'Portföyünüzdeki her bir varlığın toplam TL değeri anlık USD/TRY kuru ile bölünerek dinamik olarak dolara çevrilir. Bu sayede kur hareketlerinin portföyünüze gerçek etkisini anlık grafiklerle izleyebilirsiniz.',
-    },
-    {
-        question: 'Bedelsiz bölünmeler portföyüme nasıl yansır?',
-        answer: 'Şirketlerin bedelsiz sermaye artırımı gerçekleştiğinde sistem bunu otomatik olarak algılar; lot miktarınızı oran kadar artırırken hisse başı ortalama maliyetinizi aynı oranda düşürür. Toplam yatırım maliyetiniz bozulmaz.',
-    },
-    {
-        question: 'Yarmak ücretli mi olacak?',
-        answer: 'Hayır, Yarmak bireysel yatırımcılar için temel ve profesyonel portföy takip özellikleriyle tamamen ücretsiz olarak sunulmaktadır. Amacımız Türkiye sermaye piyasalarında kaliteli bir yatırım deneyimi oluşturmaktır.',
-    },
-];
+import { popularTags, SLIDER_CONFIG } from '@/data/homeData';
+import FeatureCardsSection from '@/components/home/FeatureCardsSection';
+import FaqSection from '@/components/home/FaqSection';
 
 
 /* ═══════════════════════════════════════════════════════════════
    ANA SAYFA BİLEŞENİ
    ═══════════════════════════════════════════════════════════════ */
 export default function Home() {
+    const router = useRouter();
     const [searchQuery, setSearchQuery] = useState('');
     const [openFaq, setOpenFaq] = useState<number | null>(null);
     const [assets, setAssets] = useState<Asset[]>([]);
@@ -250,19 +196,7 @@ export default function Home() {
 
         // Kullanıcının talep ettiği tam sıralama:
         // dolar, euro, bist100, bist30, altın gram, koç holding, sasa, thyao, aselsan, tüpraş, astor
-        const SLIDER_CONFIG: { symbol: string; label: string; type: string }[] = [
-            { symbol: 'USDTRY', label: 'Dolar', type: 'flag_us' },
-            { symbol: 'EURTRY', label: 'Euro', type: 'flag_eu' },
-            { symbol: 'XU100', label: 'BIST 100', type: 'text' },
-            { symbol: 'XU030', label: 'BIST 30', type: 'text' },
-            { symbol: 'ALTIN', label: 'Gram Altın', type: 'gold' },
-            { symbol: 'KCHOL', label: 'Koç Holding', type: 'stock' },
-            { symbol: 'SASA', label: 'SASA', type: 'stock' },
-            { symbol: 'THYAO', label: 'THYAO', type: 'stock' },
-            { symbol: 'ASELS', label: 'Aselsan', type: 'stock' },
-            { symbol: 'TUPRS', label: 'Tüpraş', type: 'stock' },
-            { symbol: 'ASTOR', label: 'ASTOR', type: 'stock' },
-        ];
+        
 
         const items: { id: string; label: string; price: string; change: string; positive: boolean; type: string }[] = [];
 
@@ -325,7 +259,13 @@ export default function Home() {
                     className="w-full max-w-xl mt-9 relative z-50"
                     ref={searchRef}
                 >
-                    <div
+                    <form
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            if (searchQuery.trim() !== '') {
+                                router.push(`/assets/${searchQuery.trim().toUpperCase()}`);
+                            }
+                        }}
                         className={`flex items-center gap-3 bg-[#131924]/90 backdrop-blur-xl border ${
                             isSearchFocused
                                 ? 'border-primary shadow-[0_0_25px_rgba(26,159,211,0.25)] ring-1 ring-primary/40'
@@ -360,13 +300,13 @@ export default function Home() {
                                 <X className="size-4" />
                             </button>
                         )}
-                        <Link
-                            href="/register"
-                            className="bg-primary hover:bg-primary-hover text-slate-950 text-xs font-semibold px-4 py-2 rounded-full transition shrink-0 hidden sm:flex items-center gap-1.5"
+                        <button
+                            type="submit"
+                            className="bg-primary hover:bg-primary-hover text-slate-950 text-xs font-semibold px-4 py-2 rounded-full transition shrink-0 hidden sm:flex items-center gap-1.5 cursor-pointer"
                         >
                             Keşfet <ArrowRight className="size-3.5" />
-                        </Link>
-                    </div>
+                        </button>
+                    </form>
 
                     {/* Canlı Autocomplete Dropdown */}
                     <AnimatePresence>
@@ -394,6 +334,7 @@ export default function Home() {
                                                 onClick={() => {
                                                     setSearchQuery(asset.symbol);
                                                     setIsSearchFocused(false);
+                                                    router.push(`/assets/${asset.symbol}`);
                                                 }}
                                                 className="flex items-center justify-between px-4 py-3 hover:bg-primary/10 transition-colors group cursor-pointer"
                                             >
@@ -448,13 +389,7 @@ export default function Home() {
                     {/* Popüler Etiketler */}
                     <div className="flex flex-wrap items-center justify-center gap-2 mt-5 text-xs">
                         <span className="text-slate-500 font-medium">Popüler:</span>
-                        {[
-                            { label: 'Aselsan', query: 'ASELS' },
-                            { label: 'Tüpraş', query: 'TUPRS' },
-                            { label: 'Türk Hava Yolları', query: 'THYAO' },
-                            { label: 'Altın', query: 'ALTIN' },
-                            { label: 'BIST 100', query: 'XU100' },
-                        ].map((item) => (
+                        {popularTags.map((item) => (
                             <button
                                 type="button"
                                 key={item.query}
@@ -675,118 +610,10 @@ export default function Home() {
             </section>
 
             {/* ═══════════════ 4. NEDEN YARMAK? ═══════════════ */}
-            <section className="w-full max-w-6xl mx-auto px-4 py-24 flex flex-col items-center">
-                <div className="text-center mb-16">
-                    <motion.div
-                        initial={{ opacity: 0, y: 12 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ duration: 0.4 }}
-                    >
-                        <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mb-4">
-                            Neden Yarmak?
-                        </h2>
-                        <p className="text-slate-400 text-sm sm:text-base max-w-2xl mx-auto leading-relaxed">
-                            Yatırımlarınızı karmaşık Excel tablolarında mı takip ediyorsunuz, yoksa banka
-                            uygulamaları arasında mı geçiş yapıyorsunuz? Artık tüm piyasalar tek ekranda.
-                        </p>
-                    </motion.div>
-                </div>
-
-                <div className="flex flex-wrap items-stretch justify-center gap-5 w-full">
-                    {featureCards.map((feat, idx) => (
-                        <motion.div
-                            key={idx}
-                            initial={{ opacity: 0, y: 16 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.35, delay: idx * 0.05 }}
-                            className="group flex-1 min-w-[280px] max-w-[360px] flex flex-col p-6 rounded-2xl bg-surface/30 border border-border/40 hover:bg-surface/60 hover:border-primary/30 transition-all duration-300 overflow-hidden"
-                        >
-                            <div className="size-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-5 group-hover:bg-primary/20 transition-colors">
-                                <feat.icon className="size-5 text-primary" />
-                            </div>
-                            <h3 className="text-base font-bold text-white mb-2 tracking-tight">{feat.title}</h3>
-                            <p className="text-sm text-slate-400 leading-relaxed">{feat.desc}</p>
-                        </motion.div>
-                    ))}
-                </div>
-            </section>
+            <FeatureCardsSection />
 
             {/* ═══════════════ 5. SIKÇA SORULAN SORULAR ═══════════════ */}
-            <section className="w-full max-w-3xl mx-auto px-4 pb-24 flex flex-col">
-                <motion.div
-                    initial={{ opacity: 0, y: 12 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.4 }}
-                    className="text-center mb-12"
-                >
-                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white mb-3">
-                        Sıkça Sorulan Sorular
-                    </h2>
-                    <p className="text-slate-400 text-sm max-w-lg mx-auto">
-                        Yarmak&apos;ın nasıl çalıştığını ve finansal hesaplamaların nasıl yapıldığını öğrenin
-                    </p>
-                </motion.div>
-
-                <div className="space-y-2.5">
-                    {faqItems.map((item, index) => (
-                        <motion.div
-                            key={index}
-                            initial={{ opacity: 0, y: 8 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.3, delay: index * 0.04 }}
-                            className={`rounded-xl border overflow-hidden transition-colors duration-200 ${
-                                openFaq === index
-                                    ? 'border-primary/40 bg-surface/50'
-                                    : 'border-border/50 bg-surface/20 hover:bg-surface/30'
-                            }`}
-                        >
-                            <button
-                                type="button"
-                                onClick={() => setOpenFaq(openFaq === index ? null : index)}
-                                className="w-full flex items-center justify-between px-6 py-4.5 text-left cursor-pointer"
-                            >
-                                <span
-                                    className={`text-sm font-semibold transition-colors ${
-                                        openFaq === index ? 'text-white' : 'text-slate-300'
-                                    }`}
-                                >
-                                    {item.question}
-                                </span>
-                                <div
-                                    className={`size-7 rounded-full flex items-center justify-center shrink-0 ml-4 transition-all duration-300 ${
-                                        openFaq === index ? 'bg-primary/20 rotate-180' : 'bg-surface/80'
-                                    }`}
-                                >
-                                    <ChevronDown
-                                        className={`size-4 transition-colors ${
-                                            openFaq === index ? 'text-primary' : 'text-slate-500'
-                                        }`}
-                                    />
-                                </div>
-                            </button>
-                            <AnimatePresence>
-                                {openFaq === index && (
-                                    <motion.div
-                                        initial={{ height: 0, opacity: 0 }}
-                                        animate={{ height: 'auto', opacity: 1 }}
-                                        exit={{ height: 0, opacity: 0 }}
-                                        transition={{ duration: 0.25 }}
-                                        className="overflow-hidden"
-                                    >
-                                        <div className="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-border/30 pt-4">
-                                            {item.answer}
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </motion.div>
-                    ))}
-                </div>
-            </section>
+            <FaqSection />
 
         </div>
     );

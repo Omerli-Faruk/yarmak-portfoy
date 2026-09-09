@@ -1,0 +1,5 @@
+﻿# Yarmak FinTech Portfolio Platform
+# https://yarmak.app
+
+Yarmak is an advanced portfolio tracking terminal for Borsa Istanbul (BIST) stocks, TEFAS investment funds, and precious metals.
+Key features: Real-time multi-asset tracking, USD/TRY currency conversion, weighted average price calculations, dividend tracking, and price alerts.
