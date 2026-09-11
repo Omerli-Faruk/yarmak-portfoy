@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -101,6 +103,64 @@ var customTickers = map[string]string{
 	"USDTRY": "USDTRY=X", "USD": "USDTRY=X", "DOLAR": "USDTRY=X",
 	"EURTRY": "EURTRY=X", "EUR": "EURTRY=X", "EURO": "EURTRY=X",
 	"GBPTRY": "GBPTRY=X", "GBP": "GBPTRY=X", "STERLIN": "GBPTRY=X",
+	// BIST Hisse ve BYF Ticker Eşleştirmeleri
+	"GMSTRF": "GMSTR.IS",
+	"USDTRF": "USDTR.IS",
+	"ZGOLDF": "ZGOLD.IS",
+	"LYDIA":  "LYDHO.IS",
+	"EFORC":  "EFOR.IS",
+	"ENRYA":  "ENERY.IS",
+	"QNBFB":  "QNBTR.IS",
+	"OYAK":   "OYAKC.IS",
+}
+
+func fetchBigparaStockPrice(symbol string) (float64, error) {
+	slugMap := map[string]string{
+		"KOZAL": "kozal-koza-altin-detay",
+		"KOZAA": "kozaa-koza-madencilik-detay",
+	}
+	slug, ok := slugMap[symbol]
+	if !ok {
+		slug = strings.ToLower(symbol) + "-detay"
+	}
+
+	url := fmt.Sprintf("https://bigpara.hurriyet.com.tr/borsa/hisse-fiyatlari/%s/", slug)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("Bigpara yanıt vermedi (HTTP %d)", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, err
+	}
+
+	re := regexp.MustCompile(`<span class="sym__price">([0-9.,]+)</span>`)
+	matches := re.FindStringSubmatch(string(body))
+	if len(matches) < 2 {
+		return 0, fmt.Errorf("fiyat bulunamadı: %s", symbol)
+	}
+
+	raw := matches[1]
+	raw = strings.ReplaceAll(raw, ".", "")
+	raw = strings.ReplaceAll(raw, ",", ".")
+	price, err := strconv.ParseFloat(raw, 64)
+	if err != nil || price <= 0 {
+		return 0, fmt.Errorf("geçersiz fiyat: %s", raw)
+	}
+
+	return price, nil
 }
 
 func FetchBISTPrice(symbol string) (float64, error) {
@@ -134,8 +194,116 @@ func FetchBISTPrice(symbol string) (float64, error) {
 	}
 
 	// 4. Standart Borsa İstanbul Hissesi (THYAO -> THYAO.IS)
-	if !strings.Contains(symbol, "=") && !strings.Contains(symbol, ".") {
-		symbol += ".IS"
+	yahooTicker := symbol
+	if !strings.Contains(yahooTicker, "=") && !strings.Contains(yahooTicker, ".") {
+		yahooTicker += ".IS"
 	}
-	return fetchYahooPrice(symbol)
+	price, err := fetchYahooPrice(yahooTicker)
+	if err == nil && price > 0 {
+		return price, nil
+	}
+
+	// 5. Alternatif Kaynak: Bigpara (Yahoo'da listelenmeyen TVF vb. hisseler için)
+	bpPrice, bpErr := fetchBigparaStockPrice(symbol)
+	if bpErr == nil && bpPrice > 0 {
+		return bpPrice, nil
+	}
+
+	return 0, fmt.Errorf("hisse fiyatı alınamadı (%s): %v", symbol, err)
+}
+
+type StockHistoricalRecord struct {
+	Date  time.Time
+	Price float64
+}
+
+// FetchBISTHistory fetches the full daily price history and current price for a BIST stock
+func FetchBISTHistory(symbol string, rangeStr string) (currentPrice float64, history []StockHistoricalRecord, err error) {
+	ticker := strings.ToUpper(strings.TrimSpace(symbol))
+	if custom, exists := customTickers[ticker]; exists {
+		ticker = custom
+	} else if !strings.Contains(ticker, "=") && !strings.Contains(ticker, ".") {
+		ticker += ".IS"
+	}
+
+	interval := "1d"
+	if rangeStr == "1d" {
+		interval = "5m"
+	} else if rangeStr == "5d" || rangeStr == "1wk" {
+		interval = "30m"
+	} else if rangeStr == "1mo" {
+		interval = "1h"
+	} else if rangeStr == "3mo" || rangeStr == "6mo" {
+		interval = "1h"
+	} else if rangeStr == "1y" || rangeStr == "ytd" {
+		interval = "1wk"
+	} else if rangeStr == "3y" || rangeStr == "5y" || rangeStr == "max" {
+		interval = "1mo"
+	}
+
+	url := fmt.Sprintf("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=%s&range=%s", ticker, interval, rangeStr)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return 0, nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		// Yahoo'da bulunamayan hisseler için Bigpara üzerinden anlık fiyatı çek
+		if bpPrice, bpErr := fetchBigparaStockPrice(symbol); bpErr == nil && bpPrice > 0 {
+			return bpPrice, []StockHistoricalRecord{
+				{
+					Date:  time.Now(),
+					Price: bpPrice,
+				},
+			}, nil
+		}
+		return 0, nil, fmt.Errorf("Yahoo API hata kodu: %d", resp.StatusCode)
+	}
+
+	var data struct {
+		Chart struct {
+			Result []struct {
+				Meta struct {
+					RegularMarketPrice float64 `json:"regularMarketPrice"`
+				} `json:"meta"`
+				Timestamp  []int64 `json:"timestamp"`
+				Indicators struct {
+					Quote []struct {
+						Close []float64 `json:"close"`
+					} `json:"quote"`
+				} `json:"indicators"`
+			} `json:"result"`
+		} `json:"chart"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return 0, nil, err
+	}
+	if len(data.Chart.Result) == 0 {
+		return 0, nil, fmt.Errorf("veri bulunamadı: %s", ticker)
+	}
+
+	res := data.Chart.Result[0]
+	currentPrice = res.Meta.RegularMarketPrice
+
+	if len(res.Timestamp) > 0 && len(res.Indicators.Quote) > 0 && len(res.Indicators.Quote[0].Close) > 0 {
+		closes := res.Indicators.Quote[0].Close
+		for i, ts := range res.Timestamp {
+			if i < len(closes) && closes[i] > 0 {
+				history = append(history, StockHistoricalRecord{
+					Date:  time.Unix(ts, 0),
+					Price: closes[i],
+				})
+			}
+		}
+	}
+
+	return currentPrice, history, nil
 }

@@ -174,6 +174,7 @@ func main() {
 	v1Router.Get("/portfolio/summary", apiCFG.MiddleWareAuth(apiCFG.HandlerGetPortfolioSummary))
 	v1Router.Delete("/transactions/{id}", apiCFG.MiddleWareAuth(apiCFG.HandlerDeleteTransaction))
 	v1Router.Get("/assets/{id}/price-history", apiCFG.HandlerGetAssetPriceHistory)
+	v1Router.Post("/assets/{id}/backfill", apiCFG.HandlerTriggerBackfill)
 	v1Router.Post("/dividends", apiCFG.MiddleWareAuth(apiCFG.HandlerCreateDividend))
 	v1Router.Get("/dividends", apiCFG.MiddleWareAuth(apiCFG.HandlerGetUserDividends))
 	v1Router.Delete("/dividends/{id}", apiCFG.MiddleWareAuth(apiCFG.HandlerDeleteDividend))

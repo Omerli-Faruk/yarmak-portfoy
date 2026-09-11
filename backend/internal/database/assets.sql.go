@@ -41,6 +41,40 @@ func (q *Queries) CreateAsset(ctx context.Context, arg CreateAssetParams) (Asset
 	return i, err
 }
 
+const getActiveAssets = `-- name: GetActiveAssets :many
+SELECT DISTINCT a.id, a.symbol, a.name, a.asset_type, a.current_price, a.updated_at FROM assets a LEFT JOIN transactions t ON a.id = t.asset_id LEFT JOIN user_watchlists w ON a.id = w.asset_id WHERE t.id IS NOT NULL OR w.id IS NOT NULL
+`
+
+func (q *Queries) GetActiveAssets(ctx context.Context) ([]Asset, error) {
+	rows, err := q.db.QueryContext(ctx, getActiveAssets)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Asset
+	for rows.Next() {
+		var i Asset
+		if err := rows.Scan(
+			&i.ID,
+			&i.Symbol,
+			&i.Name,
+			&i.AssetType,
+			&i.CurrentPrice,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAssetByID = `-- name: GetAssetByID :one
 SELECT id, symbol, name, asset_type, current_price, updated_at FROM assets
 WHERE id = $1
@@ -154,6 +188,42 @@ type UpdateAssetTypeParams struct {
 
 func (q *Queries) UpdateAssetType(ctx context.Context, arg UpdateAssetTypeParams) (Asset, error) {
 	row := q.db.QueryRowContext(ctx, updateAssetType, arg.ID, arg.AssetType)
+	var i Asset
+	err := row.Scan(
+		&i.ID,
+		&i.Symbol,
+		&i.Name,
+		&i.AssetType,
+		&i.CurrentPrice,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const upsertAsset = `-- name: UpsertAsset :one
+INSERT INTO assets (symbol, name, asset_type, current_price)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (symbol) DO UPDATE
+SET name = EXCLUDED.name,
+    current_price = EXCLUDED.current_price,
+    updated_at = CURRENT_TIMESTAMP
+RETURNING id, symbol, name, asset_type, current_price, updated_at
+`
+
+type UpsertAssetParams struct {
+	Symbol       string
+	Name         string
+	AssetType    string
+	CurrentPrice string
+}
+
+func (q *Queries) UpsertAsset(ctx context.Context, arg UpsertAssetParams) (Asset, error) {
+	row := q.db.QueryRowContext(ctx, upsertAsset,
+		arg.Symbol,
+		arg.Name,
+		arg.AssetType,
+		arg.CurrentPrice,
+	)
 	var i Asset
 	err := row.Scan(
 		&i.ID,

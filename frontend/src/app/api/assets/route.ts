@@ -303,6 +303,22 @@ export async function GET(request: Request) {
             }
         });
 
+        // Veritabanında yeterli sonuç bulunduysa dış ağ beklemeden anında dön (Hızlı Autocomplete)
+        if (resultMap.size >= 5) {
+            const sortedResults = () => {
+            const arr = Array.from(resultMap.values());
+            arr.sort((a, b) => {
+                const aExact = cleanText(a.symbol) === cleanQ;
+                const bExact = cleanText(b.symbol) === cleanQ;
+                if (aExact && !bExact) return -1;
+                if (!aExact && bExact) return 1;
+                return 0;
+            });
+            return arr.slice(0, 10);
+        };
+        return NextResponse.json(sortedResults());
+        }
+
         // 2. TEFAS fon kataloğunda ara (Bellekteki 2000+ fondan)
         try {
             const tefasFunds = await getTefasCatalog();
@@ -391,7 +407,18 @@ export async function GET(request: Request) {
             // Yahoo arama hatası yutulur
         }
 
-        return NextResponse.json(Array.from(resultMap.values()).slice(0, 10));
+        const sortedResults = () => {
+            const arr = Array.from(resultMap.values());
+            arr.sort((a, b) => {
+                const aExact = cleanText(a.symbol) === cleanQ;
+                const bExact = cleanText(b.symbol) === cleanQ;
+                if (aExact && !bExact) return -1;
+                if (!aExact && bExact) return 1;
+                return 0;
+            });
+            return arr.slice(0, 10);
+        };
+        return NextResponse.json(sortedResults());
     } catch (err: any) {
         console.error('Next.js API assets proxy error:', err);
         return NextResponse.json({ error: 'Backend connection failed', message: err?.message }, { status: 500 });

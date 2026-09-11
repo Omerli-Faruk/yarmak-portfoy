@@ -81,6 +81,25 @@ services:
     profiles:
       - seed
 
+  # ---------------------------------------------------------------------------
+  # 5. Derin Veri Tarayıcı (Deep Seeder - Arka planda 5 yıllık data çeker)
+  # ---------------------------------------------------------------------------
+  deep_seeder:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: yarmak_deep_seeder
+    command: ["/app/deep_seeder"]
+    environment:
+      DB_URL: "postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-yarmak}?sslmode=disable"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - yarmak-network
+    profiles:
+      - deep_seed
+
 volumes:
   postgres_data:
     name: yarmak_postgres_data

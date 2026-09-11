@@ -2,10 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 	"yarmak/internal/database"
+	"yarmak/internal/scraper"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -80,12 +83,99 @@ func (cfg *ApiConfig) HandlerGetAssetPriceHistory(w http.ResponseWriter, r *http
 		respondWithError(w, http.StatusBadRequest, "Geçersiz varlık ID", err)
 		return
 	}
-	price, err := cfg.DB.GetAssetPriceHistory(r.Context(), assetID)
+
+	rangeParam := r.URL.Query().Get("range")
+
+	// Eğer HISSE veya DOVIZ ise anlık olarak Yahoo'dan çek (Kullanıcı talebiyle esnetilen kural)
+	assetObj, err := cfg.DB.GetAssetByID(r.Context(), assetID)
+	if err == nil && (assetObj.AssetType == "HISSE" || assetObj.AssetType == "DOVIZ") {
+		yhRange := "1mo"
+		switch rangeParam {
+		case "1D":
+			yhRange = "1d"
+		case "1W":
+			yhRange = "1wk"
+		case "1M":
+			yhRange = "1mo"
+		case "3M":
+			yhRange = "3mo"
+		case "6M":
+			yhRange = "6mo"
+		case "YTD":
+			yhRange = "ytd"
+		case "1Y":
+			yhRange = "1y"
+		case "3Y":
+			yhRange = "3y"
+		case "5Y", "ALL", "CUSTOM":
+			yhRange = "5y"
+		}
+
+		_, history, fetchErr := scraper.FetchBISTHistory(assetObj.Symbol, yhRange)
+		if fetchErr == nil {
+			type mappedHistory struct {
+				AssetID    int64     `json:"asset_id"`
+				Price      string    `json:"price"`
+				RecordedAt time.Time `json:"recorded_at"`
+			}
+			var mapped []mappedHistory
+			for _, h := range history {
+				mapped = append(mapped, mappedHistory{
+					AssetID:    assetID,
+					Price:      fmt.Sprintf("%.6f", h.Price),
+					RecordedAt: h.Date,
+				})
+			}
+			respondWithJSON(w, http.StatusOK, mapped)
+			return
+		}
+	}
+
+	var price interface{}
+
+	if rangeParam == "1Y" {
+		cutoff := time.Now().AddDate(-1, 0, 0)
+		price, err = cfg.DB.GetAssetPriceHistoryWeekly(r.Context(), database.GetAssetPriceHistoryWeeklyParams{
+			AssetID:    assetID,
+			RecordedAt: cutoff,
+		})
+	} else if rangeParam == "ALL" {
+		cutoff := time.Now().AddDate(-10, 0, 0) // 10 years for ALL
+		price, err = cfg.DB.GetAssetPriceHistoryMonthly(r.Context(), database.GetAssetPriceHistoryMonthlyParams{
+			AssetID:    assetID,
+			RecordedAt: cutoff,
+		})
+	} else {
+		// Daily for anything else
+		price, err = cfg.DB.GetAssetPriceHistory(r.Context(), assetID)
+	}
+
 	if err != nil {
 		respondWithError(w, http.StatusNotFound, "Fiyat geçmişi bulunamadı", err)
 		return
 	}
 	respondWithJSON(w, http.StatusOK, price)
+}
+
+func (cfg *ApiConfig) HandlerTriggerBackfill(w http.ResponseWriter, r *http.Request) {
+	assetParam := chi.URLParam(r, "id")
+	assetID, err := strconv.ParseInt(assetParam, 10, 64)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Geçersiz varlık ID", err)
+		return
+	}
+	
+	assetObj, err := cfg.DB.GetAssetByID(r.Context(), int64(assetID))
+	if err == nil {
+		scraper.QuickSyncAsset(r.Context(), cfg.DB, assetObj)
+	}
+
+	err = cfg.DB.AddToBackfillQueue(r.Context(), int32(assetID))
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Kuyruğa eklenemedi", err)
+		return
+	}
+	respondWithJSON(w, http.StatusOK, map[string]string{"status": "queued"})
 }
 
 // @Summary Akıllı Varlık Arama & Keşif

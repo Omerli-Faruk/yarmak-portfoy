@@ -6,8 +6,9 @@ import { ArrowLeft, Plus, History, Activity, TrendingUp, TrendingDown, Clock, X 
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid, Brush } from 'recharts';
 import Link from "next/link";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 
 // FORMATTERS
 function formatMoney(amount: number) {
@@ -71,6 +72,7 @@ export default function AssetDetailPage() {
     const [chartData, setChartData] = useState<any[]>([]);
     const [fundamentals, setFundamentals] = useState<any>(null);
     const [timeRange, setTimeRange] = useState('1M'); // 1W, 1M, 3M, 6M, 1Y, ALL
+    const [isChartLoading, setIsChartLoading] = useState(true);
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -80,6 +82,11 @@ export default function AssetDetailPage() {
     const [txDate, setTxDate] = useState(new Date().toISOString().slice(0, 16));
     const [txCommission, setTxCommission] = useState('0');
     const [submitting, setSubmitting] = useState(false);
+
+    // Custom Date Range & Return states
+    const [customStart, setCustomStart] = useState('');
+    const [customEnd, setCustomEnd] = useState('');
+    const [periodReturn, setPeriodReturn] = useState<number | null>(null);
 
     const loadAssetAndTransactions = async () => {
         try {
@@ -106,22 +113,61 @@ export default function AssetDetailPage() {
                 }
             }
         } catch (error) {
-            console.error('Error fetching asset/transactions:', error);
+            console.error('Error fetching asset or transactions:', error);
         } finally {
             setLoading(false);
         }
     };
 
+    const [pollCount, setPollCount] = useState(0);
+
     const loadChartAndFundamentals = async () => {
+        setIsChartLoading(true);
         try {
-            const detailRes = await fetch(`/api/assets/detail?symbol=${rawSymbol}&range=${timeRange}`);
+            // If CUSTOM is selected, we fetch CUSTOM data (daily from backend) so the brush can zoom freely!
+            const fetchRange = timeRange;
+            const url = `/api/assets/detail?symbol=${rawSymbol}&range=${fetchRange}`;
+            const detailRes = await fetch(url);
             if (detailRes.ok) {
                 const det = await detailRes.json();
-                if (det.chart) setChartData(det.chart);
+                if (det.chart && det.chart.length > 0) {
+                    setChartData(det.chart);
+                    setPollCount(0); // Reset polling
+                    
+                    // Calculate period return
+                    const firstPrice = parseFloat(det.chart[0].price);
+                    const lastPrice = parseFloat(det.chart[det.chart.length - 1].price);
+                    if (!isNaN(firstPrice) && !isNaN(lastPrice) && firstPrice > 0) {
+                        setPeriodReturn(((lastPrice - firstPrice) / firstPrice) * 100);
+                    } else {
+                        setPeriodReturn(null);
+                    }
+                } else {
+                    setChartData([]);
+                    setPeriodReturn(null);
+                    
+                    // If no data, the backend backfill queue was triggered. Poll every 3 seconds!
+                    if (pollCount < 15) {
+                        setTimeout(() => setPollCount(prev => prev + 1), 3000);
+                    }
+                }
                 if (det.fundamentals) setFundamentals(det.fundamentals);
             }
         } catch (error) {
             console.error('Error fetching chart/fundamentals:', error);
+        } finally {
+            setIsChartLoading(false);
+        }
+    };
+
+    const handleBrushChange = (e: any) => {
+        if (!chartData || chartData.length === 0) return;
+        if (e.startIndex !== undefined && e.endIndex !== undefined) {
+            const firstPrice = parseFloat(chartData[e.startIndex].price);
+            const lastPrice = parseFloat(chartData[e.endIndex].price);
+            if (!isNaN(firstPrice) && !isNaN(lastPrice) && firstPrice > 0) {
+                setPeriodReturn(((lastPrice - firstPrice) / firstPrice) * 100);
+            }
         }
     };
 
@@ -131,7 +177,7 @@ export default function AssetDetailPage() {
 
     useEffect(() => {
         loadChartAndFundamentals();
-    }, [rawSymbol, timeRange]);
+    }, [rawSymbol, timeRange, pollCount]);
 
     const handleAddTransaction = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -177,6 +223,21 @@ export default function AssetDetailPage() {
     const profitLossPercent = totalCost > 0 ? (profitLoss / totalCost) * 100 : 0;
     const isProfit = profitLoss >= 0;
 
+    if (loading) {
+        return <LoadingSpinner />;
+    }
+
+    if (!assetData) {
+        return (
+            <div className="min-h-screen  flex flex-col items-center justify-center text-white px-4">
+                <Activity className="w-16 h-16 mb-4 text-slate-600" />
+                <h1 className="text-3xl font-bold mb-2">Varlık Bulunamadı</h1>
+                <p className="text-slate-400 mb-6 text-center max-w-md">Aradığınız varlık ({rawSymbol}) sistemimizde bulunmuyor veya geçici olarak ulaşılamıyor.</p>
+                <button onClick={() => router.push('/')} className="bg-indigo-600 hover:bg-indigo-700 px-6 py-2 rounded-lg font-medium transition">Ana Sayfaya Dön</button>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen  text-slate-100 p-4 md:p-8">
             <div className="max-w-7xl mx-auto space-y-6">
@@ -208,23 +269,52 @@ export default function AssetDetailPage() {
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-row items-center justify-between gap-4">
                     <div>
                         <div className="flex items-center space-x-3">
-                            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-white tracking-tight">{rawSymbol}</h1>
-                            {assetData?.asset_type && (
-                                <span className="px-3 py-1 bg-slate-800 text-slate-300 text-xs font-semibold rounded-full">
-                                    {assetData.asset_type}
-                                </span>
-                            )}
+                            <div>
+                                <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight flex items-center gap-3">
+                                    {assetData?.symbol || rawSymbol}
+                                    <span className="px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-400 text-xs font-semibold uppercase tracking-wider border border-indigo-500/20">
+                                        {assetData?.asset_type}
+                                    </span>
+                                </h1>
+                                <p className="text-slate-400 mt-1 md:text-lg">{assetData?.name || 'Yükleniyor...'}</p>
+                            </div>
                         </div>
-                        <p className="text-slate-400 mt-1 text-lg">{assetData?.name || 'Yükleniyor...'}</p>
                     </div>
                     
                     {assetData && (
                         <div className="md:text-right">
-                            <p className="text-xl md:text-2xl lg:text-3xl font-bold text-white">{assetData.current_price} ₺</p>
-                            <p className={`flex items-center md:justify-end text-lg mt-1 font-medium ${assetData.positive ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                {assetData.positive ? <TrendingUp className="w-5 h-5 mr-1" /> : <TrendingDown className="w-5 h-5 mr-1" />}
-                                {assetData.change}%
+                            <p className="text-xl md:text-2xl lg:text-3xl font-bold text-white flex items-center md:justify-end gap-2">
+                                {assetData.current_price} ₺
+                                {fundamentals?.isStale && (
+                                    <span className="text-xs bg-amber-500/10 text-amber-400 px-2 py-1 rounded border border-amber-500/20 whitespace-nowrap">
+                                        {fundamentals.staleMessage}
+                                    </span>
+                                )}
                             </p>
+                            
+                            {periodReturn !== null ? (
+                                <p className={`flex items-center md:justify-end text-lg mt-1 font-medium ${periodReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`} title={`Seçili dönem getirisi`}>
+                                    {periodReturn >= 0 ? <TrendingUp className="w-5 h-5 mr-1" /> : <TrendingDown className="w-5 h-5 mr-1" />}
+                                    {periodReturn > 0 ? '+' : ''}{periodReturn.toFixed(2)}%
+                                    <span className="text-xs text-slate-400 ml-2 font-normal">({
+                                        timeRange === '1D' ? 'Günlük' : 
+                                        timeRange === '1W' ? 'Haftalık' : 
+                                        timeRange === '1M' ? 'Aylık' : 
+                                        timeRange === '3M' ? '3 Aylık' : 
+                                        timeRange === '6M' ? '6 Aylık' : 
+                                        timeRange === 'YTD' ? 'Yılbaşından Beri' : 
+                                        timeRange === '1Y' ? 'Yıllık' : 
+                                        timeRange === '3Y' ? '3 Yıllık' : 
+                                        timeRange === '5Y' ? '5 Yıllık' : 'Özel Aralık'
+                                    })</span>
+                                </p>
+                            ) : (
+                                <p className={`flex items-center md:justify-end text-lg mt-1 font-medium ${assetData.positive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                    {assetData.positive ? <TrendingUp className="w-5 h-5 mr-1" /> : <TrendingDown className="w-5 h-5 mr-1" />}
+                                    {assetData.change}%
+                                    <span className="text-xs text-slate-400 ml-2 font-normal">(Günlük)</span>
+                                </p>
+                            )}
                         </div>
                     )}
                 </div>
@@ -243,16 +333,20 @@ export default function AssetDetailPage() {
                                     Fiyat Grafiği
                                 </h3>
                                 <div className="flex bg-slate-800 rounded-lg p-1 w-full sm:w-auto overflow-x-auto custom-scrollbar">
-                                    {(assetData?.asset_type === 'FON' || (rawSymbol.length === 3 && rawSymbol !== 'USD' && rawSymbol !== 'EUR')
-                                        ? ['1W', '1M', '3M', '6M', '1Y', 'ALL']
-                                        : ['1D', '1W', '1M', '3M', '6M', '1Y', 'ALL']
-                                    ).map(r => (
+                                    {['1D', '1W', '1M', '3M', '6M', 'YTD', '1Y', '3Y', '5Y']
+                                        .filter(r => {
+                                            if (r === '1D') {
+                                                return assetData && assetData.asset_type !== 'FON';
+                                            }
+                                            return true;
+                                        })
+                                        .map(r => (
                                         <button
                                             key={r}
                                             onClick={() => setTimeRange(r)}
                                             className={`px-3 py-1.5 sm:py-1 text-xs font-semibold rounded-md transition shrink-0 ${timeRange === r ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'}`}
                                         >
-                                            {r === '1D' ? '1G' : r === '1W' ? '1H' : r === '1M' ? '1A' : r === '3M' ? '3A' : r === '6M' ? '6A' : r === '1Y' ? '1Y' : 'Hepsi'}
+                                            {r === '1D' ? 'Günlük' : r === '1W' ? 'Haftalık' : r === '1M' ? 'Aylık' : r === '3M' ? '3 Aylık' : r === '6M' ? '6 Aylık' : r === 'YTD' ? 'YBB' : r === '1Y' ? 'Yıllık' : r === '3Y' ? '3 Yıllık' : r === '5Y' ? '5 Yıllık' : 'Özel'}
                                         </button>
                                     ))}
                                 </div>
@@ -260,26 +354,58 @@ export default function AssetDetailPage() {
                             
                             <div className="flex-1 w-full min-h-0 relative">
                                 <div className="absolute inset-0">
-                                    {chartData.length > 0 ? (
+                                    {isChartLoading ? (
+                                        <LoadingSpinner fullScreen={false} message="Grafik yükleniyor..." />
+                                    ) : chartData && chartData.length > 0 ? (
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart data={chartData}>
+                                        <AreaChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
                                             <defs>
                                                 <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
                                                     <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
                                                     <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
                                                 </linearGradient>
                                             </defs>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                                            <XAxis dataKey="date" stroke="#475569" fontSize={12} tickMargin={10} minTickGap={30} />
-                                            <YAxis stroke="#475569" fontSize={12} tickFormatter={(val) => `₺${val}`} domain={['auto', 'auto']} width={60} />
-                                            <RechartsTooltip 
-                                                contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff' }}
-                                                itemStyle={{ color: '#818cf8' }}
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} vertical={false} />
+                                            <XAxis 
+                                                dataKey="date" 
+                                                stroke="#94a3b8" 
+                                                fontSize={12}
+                                                tickLine={false}
+                                                axisLine={false}
+                                                minTickGap={30}
                                             />
-                                            <Area type="monotone" dataKey="price" stroke="#4f46e5" strokeWidth={2} fillOpacity={1} fill="url(#colorPrice)" />
+                                            <YAxis 
+                                                domain={['auto', 'auto']} 
+                                                stroke="#94a3b8" 
+                                                fontSize={12}
+                                                tickLine={false}
+                                                axisLine={false}
+                                                tickFormatter={(value) => value.toFixed(2)}
+                                            />
+                                            <RechartsTooltip 
+                                                contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f8fafc' }}
+                                                itemStyle={{ color: '#818cf8' }}
+                                                labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
+                                            />
+                                            <Area 
+                                                type="monotone" 
+                                                dataKey="price" 
+                                                stroke="#6366f1" 
+                                                strokeWidth={2}
+                                                fillOpacity={1} 
+                                                fill="url(#colorPrice)" 
+                                            />
+                                            <Brush 
+                                                dataKey="date" 
+                                                height={30} 
+                                                stroke="#6366f1" 
+                                                fill="#1e293b" 
+                                                onChange={handleBrushChange}
+                                                tickFormatter={(date) => date}
+                                            />
                                         </AreaChart>
                                     </ResponsiveContainer>
-                                ) : assetData?.asset_type === 'FON' ? (
+                                    ) : assetData?.asset_type === 'FON' ? (
                                     <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 text-center px-4">
                                         <Activity className="w-16 h-16 mb-4 opacity-30" />
                                         <p className="text-lg font-medium text-slate-400">Devlet (TEFAS) API'si geçici olarak kısıtlandığı için fon grafikleri çekilemiyor.</p>

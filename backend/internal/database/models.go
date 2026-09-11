@@ -18,6 +18,15 @@ type Asset struct {
 	UpdatedAt    time.Time
 }
 
+type BackfillQueue struct {
+	ID           int32
+	AssetID      int32
+	Status       string
+	ErrorMessage string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
 type Dividend struct {
 	ID          int64
 	UserID      int64
@@ -98,4 +107,11 @@ type User struct {
 	CreatedAt    time.Time
 	Role         string
 	Username     string
+}
+
+type UserWatchlist struct {
+	ID        int32
+	UserID    int32
+	AssetID   int32
+	CreatedAt time.Time
 }

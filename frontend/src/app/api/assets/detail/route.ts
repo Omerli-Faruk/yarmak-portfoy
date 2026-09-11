@@ -1,197 +1,177 @@
 import { NextResponse } from 'next/server';
-import YahooFinance from 'yahoo-finance2';
 
-const yahooFinance = new YahooFinance();
-
-// In-memory cache for TEFAS requests (1 hour TTL)
-interface TefasCacheItem {
-    chart: { date: string; price: number }[];
-    fundamentals: any;
-    expiresAt: number;
-}
-const tefasMemoryCache = new Map<string, TefasCacheItem>();
-
-function formatTefasDate(d: Date): string {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}${m}${day}`;
-}
-
-async function fetchTefasChunk(symbol: string, startStr: string, endStr: string) {
-    for (const fonTipi of ['YAT', 'EMK']) {
-        try {
-            const res = await fetch('https://www.tefas.gov.tr/api/funds/fonGnlBlgSiraliGetir', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Origin': 'https://www.tefas.gov.tr',
-                    'Referer': 'https://www.tefas.gov.tr/tr/fon-verileri',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                },
-                body: JSON.stringify({
-                    fonTipi,
-                    fonKodu: symbol.toUpperCase(),
-                    basTarih: startStr,
-                    bitTarih: endStr,
-                    basSira: 1,
-                    bitSira: 1000,
-                    dil: 'TR'
-                }),
-                next: { revalidate: 3600 }
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                if (data.resultList && data.resultList.length > 0) {
-                    return data.resultList;
-                }
-            }
-        } catch (e) {
-            console.error(`TEFAS chunk fetch error (${fonTipi}):`, e);
-        }
-    }
-    return [];
-}
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080/v1';
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const rawSymbol = searchParams.get('symbol');
-    const range = searchParams.get('range') || '1M'; // 1W, 1M, 3M, 6M, 1Y, ALL
+    let range = searchParams.get('range') || '1Y';
 
     if (!rawSymbol) {
         return NextResponse.json({ error: 'Symbol is required' }, { status: 400 });
     }
 
+    // Convert CUSTOM back to ALL for the backend
+    let backendRange = range;
+    // We let backendRange = 'CUSTOM' pass through so the backend returns daily data
+
     try {
-        let chartData: { date: string; price: number | null }[] = [];
-        let fundamentals = null;
-        let isTefas = false;
+        // Step 1: Find the Asset ID from backend
+        const assetsRes = await fetch(`${BACKEND_URL}/assets`, { next: { revalidate: 300 } });
+        if (!assetsRes.ok) throw new Error("Failed to fetch assets");
+        const allAssets = await assetsRes.json();
+        const asset = allAssets.find((a: any) => (a.Symbol || a.symbol) === rawSymbol);
         
-        // TEFAS check
-        if (rawSymbol.length === 3 && rawSymbol !== 'USD' && rawSymbol !== 'EUR') {
-            isTefas = true;
+        if (!asset) {
+            return NextResponse.json({ chart: [], fundamentals: null });
         }
+        
+        const assetId = asset.ID || asset.id;
+        const isTefas = (asset.AssetType || asset.asset_type) === 'FON';
 
-        if (isTefas) {
-            const cacheKey = `${rawSymbol}_${range}`;
-            const cached = tefasMemoryCache.get(cacheKey);
-            if (cached && cached.expiresAt > Date.now()) {
-                return NextResponse.json({ chart: cached.chart, fundamentals: cached.fundamentals });
-            }
+        // Step 2: Fetch Chart Data from Backend (Backend handles 1Y weekly and ALL monthly grouping)
+        const historyRes = await fetch(`${BACKEND_URL}/assets/${assetId}/price-history?range=${backendRange}`, { next: { revalidate: 0 } });
+        let chartData: { date: string; price: number, rawDate?: Date }[] = [];
+        
+        if (historyRes.ok) {
+            let history = await historyRes.json();
+            if (history && history.length > 0) {
+                // Ensure array is strictly oldest-first (ASC)
+                history.sort((a: any, b: any) => {
+                    const dA = new Date(a.RecordedAt || a.recorded_at).getTime();
+                    const dB = new Date(b.RecordedAt || b.recorded_at).getTime();
+                    return dA - dB;
+                });
 
-            const today = new Date();
-            const start = new Date();
-            
-            // TEFAS API restricts a single request to <= 1 month ("Tarih aralığı 1 ayı aşamaz")
-            if (range === '1W') start.setDate(today.getDate() - 7);
-            else start.setDate(today.getDate() - 30); // 1M or initial chunk for 3M/6M/1Y/ALL
-
-            try {
-                const resultList = await fetchTefasChunk(rawSymbol, formatTefasDate(start), formatTefasDate(today));
+                // Filter history by range!
+                const now = new Date();
+                let cutoffDate = new Date(0); // ALL
                 
-                if (resultList && resultList.length > 0) {
-                    const sorted = [...resultList].sort((a: any, b: any) => new Date(a.tarih).getTime() - new Date(b.tarih).getTime());
-                    chartData = sorted.map((item: any) => ({
-                        date: new Date(item.tarih).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }),
-                        price: item.fiyat
-                    }));
-                    
-                    const latest = resultList[0];
-                    fundamentals = {
-                        marketCap: latest.portfoyBuyukluk ? new Intl.NumberFormat('tr-TR', { notation: "compact", compactDisplay: "short" }).format(latest.portfoyBuyukluk) + ' ₺' : 'TEFAS Fonu',
-                        peRatio: '-',
-                        dividendYield: '-',
-                        beta: '-',
-                        fiftyTwoWeekHigh: '-',
-                        fiftyTwoWeekLow: '-',
-                        volume: latest.tedPaySayisi ? new Intl.NumberFormat('tr-TR', { notation: "compact" }).format(latest.tedPaySayisi) : '-',
-                        investorCount: latest.kisiSayisi ? new Intl.NumberFormat('tr-TR').format(latest.kisiSayisi) : '-',
-                    };
-
-                    tefasMemoryCache.set(cacheKey, {
-                        chart: chartData as { date: string; price: number }[],
-                        fundamentals,
-                        expiresAt: Date.now() + 60 * 60 * 1000 // 1 hour cache
-                    });
+                if (range === '1D') {
+                    cutoffDate = new Date(now);
+                    cutoffDate.setDate(now.getDate() - 1); // Not exact for weekends, but ok
+                } else if (range === '1W') {
+                    cutoffDate = new Date(now);
+                    cutoffDate.setDate(now.getDate() - 7);
+                } else if (range === '1M') {
+                    cutoffDate = new Date(now);
+                    cutoffDate.setMonth(now.getMonth() - 1);
+                } else if (range === '3M') {
+                    cutoffDate = new Date(now);
+                    cutoffDate.setMonth(now.getMonth() - 3);
+                } else if (range === '6M') {
+                    cutoffDate = new Date(now);
+                    cutoffDate.setMonth(now.getMonth() - 6);
+                } else if (range === 'YTD') {
+                    cutoffDate = new Date(now.getFullYear(), 0, 1);
+                } else if (range === '1Y') {
+                    cutoffDate = new Date(now);
+                    cutoffDate.setFullYear(now.getFullYear() - 1);
+                } else if (range === '3Y') {
+                    cutoffDate = new Date(now);
+                    cutoffDate.setFullYear(now.getFullYear() - 3);
+                } else if (range === '5Y' || range === 'ALL') {
+                    cutoffDate = new Date(now);
+                    cutoffDate.setFullYear(now.getFullYear() - 5);
                 }
-            } catch (err) {
-                console.error("TEFAS Error:", err);
-            }
-        } else {
-            // BIST / Currencies
-            let yfSymbol = `${rawSymbol}.IS`;
-            if (rawSymbol === 'USDTRY' || rawSymbol === 'EURTRY') yfSymbol = `${rawSymbol}=X`;
-            if (rawSymbol === 'ALTIN' || rawSymbol === 'XAUUSD') yfSymbol = 'GC=F';
 
-            // Calculate Period
-            const today = new Date();
-            let startDate = new Date();
-            let interval: "1m" | "2m" | "5m" | "15m" | "30m" | "60m" | "90m" | "1h" | "1d" | "5d" | "1wk" | "1mo" | "3mo" = "1d";
-            
-            if (range === '1D') { startDate.setDate(today.getDate() - 4); interval = "5m"; } // Fetch 4 days back to handle weekends
-            else if (range === '1W') { startDate.setDate(today.getDate() - 7); interval = "30m"; }
-            else if (range === '1M') { startDate.setMonth(today.getMonth() - 1); interval = "60m"; }
-            else if (range === '3M') { startDate.setMonth(today.getMonth() - 3); interval = "60m"; }
-            else if (range === '6M') { startDate.setMonth(today.getMonth() - 6); interval = "1d"; }
-            else if (range === '1Y') { startDate.setFullYear(today.getFullYear() - 1); interval = "1wk"; }
-            else if (range === 'ALL') { startDate = new Date('2015-01-01'); interval = "1mo"; } // True ALL (from inception)
+                history = history.filter((record: any) => {
+                    const recDate = new Date(record.RecordedAt || record.recorded_at);
+                    return recDate.getTime() >= cutoffDate.getTime();
+                });
 
-            try {
-                const queryOptions = { period1: startDate.toISOString().split('T')[0], interval };
-                const chartRes = await yahooFinance.chart(yfSymbol, queryOptions);
-                
-                if (chartRes && chartRes.quotes) {
-                    let quotes = chartRes.quotes;
+                chartData = history.map((record: any) => {
+                    const d = new Date(record.RecordedAt || record.recorded_at);
+                    const tzOptions: Intl.DateTimeFormatOptions = { timeZone: 'Europe/Istanbul' };
+                    let dateStr = '';
                     
-                    // For 1D, filter only the last actual trading day
-                    if (range === '1D' && quotes.length > 0) {
-                        const lastDateObj = new Date(quotes[quotes.length - 1].date);
-                        const lastDayStr = lastDateObj.toLocaleDateString('tr-TR');
-                        quotes = quotes.filter((q: any) => new Date(q.date).toLocaleDateString('tr-TR') === lastDayStr);
-                    }
-
-                    chartData = quotes.map((q: any) => {
-                        const d = new Date(q.date);
-                        let dateStr = '';
-                        if (range === '1D') {
-                            dateStr = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-                        } else if (range === '1W' || range === '1M' || range === '3M') {
-                            dateStr = d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-                        } else if (range === 'ALL') {
-                            dateStr = d.toLocaleDateString('tr-TR', { month: 'short', year: 'numeric' });
-                        } else {
-                            dateStr = d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+                    if (range === '1D') {
+                        dateStr = d.toLocaleTimeString('tr-TR', { ...tzOptions, hour12: false, hour: '2-digit', minute: '2-digit' });
+                    } else if (range === '1W' || range === '1M' || range === '3M') {
+                        dateStr = d.toLocaleDateString('tr-TR', { ...tzOptions, day: 'numeric', month: 'short' });
+                        if (!isTefas) {
+                            let adjustedD = new Date(d);
+                            if (range === '1M' || range === '3M') {
+                                // 1h interval: always ends in :30. Round all down to :00 (09:30 -> 09:00, 10:30 -> 10:00)
+                                if (adjustedD.getMinutes() === 30) {
+                                    adjustedD.setMinutes(0);
+                                }
+                            } else if (range === '1W' || range === '1D') {
+                                // 30m or 5m interval: only round the opening 09:30 to 09:00, keep others intact (10:30 -> 10:30)
+                                if (adjustedD.getHours() === 9 && adjustedD.getMinutes() === 30) {
+                                    adjustedD.setMinutes(0);
+                                }
+                            }
+                            dateStr += ' ' + adjustedD.toLocaleTimeString('tr-TR', { ...tzOptions, hour12: false, hour: '2-digit', minute: '2-digit' });
                         }
-                        return {
-                            date: dateStr,
-                            price: q.close || null,
-                        };
-                    }).filter((d: any) => d.price !== null);
-                }
-                
-                // Quote Summary
-                const quoteRes = await yahooFinance.quoteSummary(yfSymbol, { modules: ['summaryDetail', 'price', 'defaultKeyStatistics'] });
-                if (quoteRes) {
-                    fundamentals = {
-                        marketCap: quoteRes.price?.marketCap ? new Intl.NumberFormat('tr-TR', { notation: "compact", compactDisplay: "short" }).format(quoteRes.price.marketCap) + ' ₺' : '-',
-                        peRatio: quoteRes.summaryDetail?.trailingPE?.toFixed(2) || '-',
-                        dividendYield: quoteRes.summaryDetail?.dividendYield ? (quoteRes.summaryDetail.dividendYield * 100).toFixed(2) + '%' : '-',
-                        dividendRate: quoteRes.summaryDetail?.dividendRate ? quoteRes.summaryDetail.dividendRate + ' ₺' : '-',
-                        exDividendDate: quoteRes.summaryDetail?.exDividendDate ? new Date(quoteRes.summaryDetail.exDividendDate).toLocaleDateString('tr-TR') : '-',
-                        beta: quoteRes.summaryDetail?.beta?.toFixed(2) || '-',
-                        fiftyTwoWeekHigh: quoteRes.summaryDetail?.fiftyTwoWeekHigh?.toFixed(2) || '-',
-                        fiftyTwoWeekLow: quoteRes.summaryDetail?.fiftyTwoWeekLow?.toFixed(2) || '-',
-                        volume: quoteRes.summaryDetail?.volume ? new Intl.NumberFormat('tr-TR', { notation: "compact" }).format(quoteRes.summaryDetail.volume) : '-',
+                    } else if (range === 'ALL' || range === '5Y' || range === '3Y' || range === '1Y') {
+                        dateStr = d.toLocaleDateString('tr-TR', { ...tzOptions, month: 'short', year: 'numeric' });
+                    } else if (range === 'CUSTOM') {
+                        if (history.length <= 40) { // Kısa aralıksa sadece gün ve ay göster
+                            dateStr = d.toLocaleDateString('tr-TR', { ...tzOptions, day: 'numeric', month: 'short' });
+                        } else {
+                            dateStr = d.toLocaleDateString('tr-TR', { ...tzOptions, day: 'numeric', month: 'short', year: 'numeric' });
+                        }
+                    } else {
+                        dateStr = d.toLocaleDateString('tr-TR', { ...tzOptions, day: 'numeric', month: 'short' });
+                    }
+                    
+                    return {
+                        date: dateStr,
+                        price: parseFloat(record.Price || record.price),
+                        rawDate: d,
                     };
-                }
-            } catch (err) {
-                console.error("Yahoo Error:", err);
+                });
             }
         }
 
-        return NextResponse.json({ chart: chartData, fundamentals });
+        // Step 3: Check if we need to trigger backfill
+        // If data is very sparse or missing, ask backend to put it in the queue
+        if (chartData.length < 3 && range !== '1D') {
+            fetch(`${BACKEND_URL}/assets/${assetId}/backfill`, { method: 'POST' }).catch(console.error);
+        }
+
+        // Step 4: Fundamentals / UI Hints
+        let fundamentals: any = null;
+        if (isTefas) {
+            let isStale = false;
+            let staleMessage = "";
+            
+            if (chartData.length > 0) {
+                const latestRecordTime = chartData[chartData.length - 1].rawDate;
+                const today = new Date();
+                
+                // If the latest record is older than yesterday, or it's evening but we only have yesterday's price
+                if (latestRecordTime) {
+                    const daysDiff = (today.getTime() - latestRecordTime.getTime()) / (1000 * 3600 * 24);
+                    if (daysDiff >= 3) {
+                        isStale = true;
+                        staleMessage = `Son Güncelleme: ${latestRecordTime.toLocaleDateString('tr-TR')}`;
+                    }
+                }
+            }
+
+            fundamentals = {
+                marketCap: '-',
+                peRatio: '-',
+                dividendYield: '-',
+                dividendRate: '-',
+                exDividendDate: '-',
+                beta: '-',
+                fiftyTwoWeekHigh: '-',
+                fiftyTwoWeekLow: '-',
+                volume: '-',
+                isStale,
+                staleMessage
+            };
+        }
+
+        // Clean rawDate before sending to client
+        const cleanChartData = chartData.map(d => ({ date: d.date, price: d.price }));
+
+        return NextResponse.json({ chart: cleanChartData, fundamentals });
     } catch (error) {
+        console.error("Route error:", error);
         return NextResponse.json({ chart: [], fundamentals: null });
     }
 }
