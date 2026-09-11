@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"context"
@@ -19,16 +19,16 @@ import (
 )
 
 func main() {
-	mode := flag.String("mode", "catalog", "Mod: 'catalog' (tüm hisse ve fonları kaydet) veya 'history' (5 yıllık verileri indir)")
-	targetType := flag.String("type", "all", "İşlenecek varlık türü: 'all' (hepsi), 'stocks' (sadece hisseler), 'funds' (sadece fonlar)")
-	years := flag.Int("years", 5, "History modu için geriye dönük kaç yıl veri indirilecek")
-	force := flag.Bool("force", false, "Daha önce indirilmiş verileri tekrar indirmeyi zorla")
-	dbURL := flag.String("db", "postgres://postgres:postgres@localhost:5432/yarmak?sslmode=disable", "Veritabanı URL'si")
+	mode := flag.String("mode", "catalog", "Mod: 'catalog' (tÃ¼m hisse ve fonlarÄ± kaydet) veya 'history' (5 yÄ±llÄ±k verileri indir)")
+	targetType := flag.String("type", "all", "Ä°ÅŸlenecek varlÄ±k tÃ¼rÃ¼: 'all' (hepsi), 'stocks' (sadece hisseler), 'funds' (sadece fonlar)")
+	years := flag.Int("years", 5, "History modu iÃ§in geriye dÃ¶nÃ¼k kaÃ§ yÄ±l veri indirilecek")
+	force := flag.Bool("force", false, "Daha Ã¶nce indirilmiÅŸ verileri tekrar indirmeyi zorla")
+	dbURL := flag.String("db", "postgres://postgres:postgres@localhost:5432/yarmak?sslmode=disable", "VeritabanÄ± URL'si")
 	flag.Parse()
 
 	conn, err := sql.Open("postgres", *dbURL)
 	if err != nil {
-		slog.Error("Veritabanına bağlanılamadı", "error", err)
+		slog.Error("VeritabanÄ±na baÄŸlanÄ±lamadÄ±", "error", err)
 		os.Exit(1)
 	}
 	defer conn.Close()
@@ -41,7 +41,7 @@ func main() {
 	} else if *mode == "history" {
 		runHistorySync(ctx, conn, db, *years, *targetType, *force)
 	} else {
-		slog.Error("Geçersiz mod", "mode", *mode)
+		slog.Error("GeÃ§ersiz mod", "mode", *mode)
 	}
 }
 
@@ -75,10 +75,10 @@ func fetchAllBISTStocks() ([]bistStockItem, error) {
 }
 
 func runCatalogSync(ctx context.Context, db *database.Queries) {
-	slog.Info("=== 1. BORSA İSTANBUL (BIST) HİSSELERİ AKTARILIYOR ===")
+	slog.Info("=== 1. BORSA Ä°STANBUL (BIST) HÄ°SSELERÄ° AKTARILIYOR ===")
 	bistStocks, err := fetchAllBISTStocks()
 	if err != nil {
-		slog.Error("BIST hisseleri çekilemedi", "error", err)
+		slog.Error("BIST hisseleri Ã§ekilemedi", "error", err)
 	} else {
 		count := 0
 		for _, stock := range bistStocks {
@@ -99,18 +99,18 @@ func runCatalogSync(ctx context.Context, db *database.Queries) {
 				count++
 			}
 		}
-		slog.Info("BIST hisseleri başarıyla yüklendi", "eklenen_veya_guncellenen", count)
+		slog.Info("BIST hisseleri baÅŸarÄ±yla yÃ¼klendi", "eklenen_veya_guncellenen", count)
 	}
 
-	slog.Info("=== 2. MAKRO VARLIKLAR (DÖVİZ, ALTIN, ENDEKSLER) EKLENİYOR ===")
+	slog.Info("=== 2. MAKRO VARLIKLAR (DÃ–VÄ°Z, ALTIN, ENDEKSLER) EKLENÄ°YOR ===")
 	macros := []struct {
 		sym, name, aType string
 	}{
-		{"USDTRY", "Amerikan Doları", "DOVIZ"},
+		{"USDTRY", "Amerikan DolarÄ±", "DOVIZ"},
 		{"EURTRY", "Euro", "DOVIZ"},
 		{"XU100", "BIST 100 Endeksi", "ENDEKS"},
 		{"XU030", "BIST 30 Endeksi", "ENDEKS"},
-		{"ALTIN", "Gram Altın", "ALTIN"},
+		{"ALTIN", "Gram AltÄ±n", "ALTIN"},
 	}
 	for _, m := range macros {
 		_, _ = db.UpsertAsset(ctx, database.UpsertAssetParams{
@@ -125,10 +125,10 @@ func runCatalogSync(ctx context.Context, db *database.Queries) {
 	totalFunds := 0
 	fundTypes := []string{"YAT", "EMK", "BYF", "GYF", "GSYF"}
 	for _, fType := range fundTypes {
-		slog.Info(fmt.Sprintf("TEFAS %s fonları çekiliyor...", fType))
+		slog.Info(fmt.Sprintf("TEFAS %s fonlarÄ± Ã§ekiliyor...", fType))
 		funds, err := scraper.FetchAllTEFASFunds(time.Time{}, fType)
 		if err != nil {
-			slog.Error("TEFAS fonları çekilirken hata oluştu", "type", fType, "error", err)
+			slog.Error("TEFAS fonlarÄ± Ã§ekilirken hata oluÅŸtu", "type", fType, "error", err)
 			time.Sleep(6 * time.Second)
 			continue
 		}
@@ -142,16 +142,16 @@ func runCatalogSync(ctx context.Context, db *database.Queries) {
 				CurrentPrice: priceStr,
 			})
 			if err != nil {
-				slog.Error("Fon veritabanına eklenemedi", "symbol", fund.Symbol, "error", err)
+				slog.Error("Fon veritabanÄ±na eklenemedi", "symbol", fund.Symbol, "error", err)
 			} else {
 				totalFunds++
 			}
 		}
-		slog.Info(fmt.Sprintf("TEFAS %s fonları kaydedildi", fType), "adet", len(funds))
-		time.Sleep(6 * time.Second) // WAF rate limit koruması
+		slog.Info(fmt.Sprintf("TEFAS %s fonlarÄ± kaydedildi", fType), "adet", len(funds))
+		time.Sleep(6 * time.Second) // WAF rate limit korumasÄ±
 	}
 
-	slog.Info("TÜM KATALOG SENKRONİZASYONU TAMAMLANDI!", "toplam_bist", len(bistStocks), "toplam_fon", totalFunds)
+	slog.Info("TÃœM KATALOG SENKRONÄ°ZASYONU TAMAMLANDI!", "toplam_bist", len(bistStocks), "toplam_fon", totalFunds)
 }
 
 func getHistoryCounts(ctx context.Context, conn *sql.DB) (map[int64]int, error) {
@@ -175,18 +175,18 @@ func getHistoryCounts(ctx context.Context, conn *sql.DB) (map[int64]int, error) 
 func runHistorySync(ctx context.Context, conn *sql.DB, db *database.Queries, years int, targetType string, force bool) {
 	assets, err := db.ListAssets(ctx)
 	if err != nil {
-		slog.Error("Varlıklar çekilemedi", "error", err)
+		slog.Error("VarlÄ±klar Ã§ekilemedi", "error", err)
 		return
 	}
 
 	historyCounts, err := getHistoryCounts(ctx, conn)
 	if err != nil {
-		slog.Warn("Geçmiş kayıt sayıları sorgulanamadı", "error", err)
+		slog.Warn("GeÃ§miÅŸ kayÄ±t sayÄ±larÄ± sorgulanamadÄ±", "error", err)
 	}
 
-	// 1. BIST Hisseleri Fiyat Geçmişi (Yahoo Finance üzerinden 5 yıllık günlük veriler)
+	// 1. BIST Hisseleri Fiyat GeÃ§miÅŸi (Yahoo Finance Ã¼zerinden 5 yÄ±llÄ±k gÃ¼nlÃ¼k veriler)
 	if targetType == "all" || targetType == "stocks" {
-		slog.Info("=== BORSA İSTANBUL (BIST) HİSSELERİNİN 5 YILLIK GEÇMİŞİ VE CANLI FİYATLARI İNDİRİLİYOR ===")
+		slog.Info("=== BORSA Ä°STANBUL (BIST) HÄ°SSELERÄ°NÄ°N 5 YILLIK GEÃ‡MÄ°ÅÄ° VE CANLI FÄ°YATLARI Ä°NDÄ°RÄ°LÄ°YOR ===")
 		var stocks []database.Asset
 		for _, a := range assets {
 			if a.AssetType == "HISSE" {
@@ -194,7 +194,7 @@ func runHistorySync(ctx context.Context, conn *sql.DB, db *database.Queries, yea
 			}
 		}
 
-		slog.Info("Toplam taranacak hisse sayısı:", "adet", len(stocks))
+		slog.Info("Toplam taranacak hisse sayÄ±sÄ±:", "adet", len(stocks))
 		rangeStr := fmt.Sprintf("%dy", years)
 
 		skippedCount := 0
@@ -202,7 +202,7 @@ func runHistorySync(ctx context.Context, conn *sql.DB, db *database.Queries, yea
 
 		for i, stock := range stocks {
 			existingCount := historyCounts[stock.ID]
-			// Eğer daha önce veritabanına geçmiş kaydedilmişse ve --force verilmemişse atla
+			// EÄŸer daha Ã¶nce veritabanÄ±na geÃ§miÅŸ kaydedilmiÅŸse ve --force verilmemiÅŸse atla
 			if !force && existingCount > 0 {
 				skippedCount++
 				continue
@@ -210,11 +210,11 @@ func runHistorySync(ctx context.Context, conn *sql.DB, db *database.Queries, yea
 
 			curPrice, history, err := scraper.FetchBISTHistory(stock.Symbol, rangeStr)
 			if err != nil {
-				slog.Warn("Hisse geçmişi çekilemedi", "symbol", stock.Symbol, "error", err)
+				slog.Warn("Hisse geÃ§miÅŸi Ã§ekilemedi", "symbol", stock.Symbol, "error", err)
 				continue
 			}
 
-			// Canlı / Son Kapanış Fiyatını assets tablosunda güncelle
+			// CanlÄ± / Son KapanÄ±ÅŸ FiyatÄ±nÄ± assets tablosunda gÃ¼ncelle
 			if curPrice > 0 {
 				priceStr := fmt.Sprintf("%.4f", curPrice)
 				_, _ = db.UpdateAssetPrice(ctx, database.UpdateAssetPriceParams{
@@ -223,11 +223,11 @@ func runHistorySync(ctx context.Context, conn *sql.DB, db *database.Queries, yea
 				})
 			}
 
-			// Geçmiş gün kapanış fiyatlarını price_history tablosuna mükerrersiz yaz
+			// GeÃ§miÅŸ gÃ¼n kapanÄ±ÅŸ fiyatlarÄ±nÄ± price_history tablosuna mÃ¼kerrersiz yaz
 			savedCount := 0
 			for _, rec := range history {
 				priceStr := fmt.Sprintf("%.4f", rec.Price)
-				err = db.InsertPriceHistoryIgnore(ctx, database.InsertPriceHistoryIgnoreParams{
+				err = db.UpsertPriceHistory(ctx, database.UpsertPriceHistoryParams{
 					AssetID:    stock.ID,
 					Price:      priceStr,
 					RecordedAt: rec.Date,
@@ -238,25 +238,25 @@ func runHistorySync(ctx context.Context, conn *sql.DB, db *database.Queries, yea
 			}
 
 			processedCount++
-			slog.Info("Hisse fiyat geçmişi kaydedildi",
+			slog.Info("Hisse fiyat geÃ§miÅŸi kaydedildi",
 				"symbol", stock.Symbol,
 				"ilerleme", fmt.Sprintf("%d/%d", i+1, len(stocks)),
-				"güncel_fiyat", curPrice,
+				"gÃ¼ncel_fiyat", curPrice,
 				"toplam_gun", len(history),
 				"atlananlar", skippedCount,
 			)
 
-			time.Sleep(150 * time.Millisecond) // Sunucu yükünü dengede tut
+			time.Sleep(150 * time.Millisecond) // Sunucu yÃ¼kÃ¼nÃ¼ dengede tut
 		}
-		slog.Info("BIST hisselerinin fiyat geçmişleri başarıyla senkronize edildi!",
+		slog.Info("BIST hisselerinin fiyat geÃ§miÅŸleri baÅŸarÄ±yla senkronize edildi!",
 			"yeni_islenen", processedCount,
 			"onceden_kayitli_atlanan", skippedCount,
 		)
 	}
 
-	// 2. TEFAS Fonları Fiyat Geçmişi (TEFAS API üzerinden)
+	// 2. TEFAS FonlarÄ± Fiyat GeÃ§miÅŸi (TEFAS API Ã¼zerinden)
 	if targetType == "all" || targetType == "funds" {
-		slog.Info("=== TEFAS FONLARININ 5 YILLIK GEÇMİŞİ İNDİRİLİYOR ===")
+		slog.Info("=== TEFAS FONLARININ 5 YILLIK GEÃ‡MÄ°ÅÄ° Ä°NDÄ°RÄ°LÄ°YOR ===")
 		endDate := time.Now()
 		startDate := endDate.AddDate(-years, 0, 0)
 
@@ -267,14 +267,14 @@ func runHistorySync(ctx context.Context, conn *sql.DB, db *database.Queries, yea
 			}
 		}
 
-		slog.Info("Toplam taranacak fon sayısı:", "adet", len(funds))
+		slog.Info("Toplam taranacak fon sayÄ±sÄ±:", "adet", len(funds))
 
 		skippedFunds := 0
 		processedFunds := 0
 
 		for i, fund := range funds {
 			existingCount := historyCounts[fund.ID]
-			// Eğer daha önce veritabanına geçmiş kaydedilmişse ve --force verilmemişse atla
+			// EÄŸer daha Ã¶nce veritabanÄ±na geÃ§miÅŸ kaydedilmiÅŸse ve --force verilmemiÅŸse atla
 			if !force && existingCount > 0 {
 				skippedFunds++
 				if skippedFunds%50 == 0 || i == len(funds)-1 {
@@ -283,7 +283,7 @@ func runHistorySync(ctx context.Context, conn *sql.DB, db *database.Queries, yea
 				continue
 			}
 
-			slog.Info("🔍 Fon geçmişi indiriliyor...",
+			slog.Info("ğŸ” Fon geÃ§miÅŸi indiriliyor...",
 				"fon", fund.Symbol,
 				"ad", fund.Name,
 				"ilerleme", fmt.Sprintf("%d/%d", i+1, len(funds)),
@@ -291,13 +291,13 @@ func runHistorySync(ctx context.Context, conn *sql.DB, db *database.Queries, yea
 
 			history, err := scraper.FetchTEFASFundHistory(fund.Symbol, startDate, endDate)
 			if err != nil {
-				slog.Error("Fon geçmişi çekilemedi", "fon", fund.Symbol, "error", err)
+				slog.Error("Fon geÃ§miÅŸi Ã§ekilemedi", "fon", fund.Symbol, "error", err)
 				continue
 			}
 
 			for _, record := range history {
 				priceStr := fmt.Sprintf("%.6f", record.Price)
-				_ = db.InsertPriceHistoryIgnore(ctx, database.InsertPriceHistoryIgnoreParams{
+				_ = db.UpsertPriceHistory(ctx, database.UpsertPriceHistoryParams{
 					AssetID:    fund.ID,
 					Price:      priceStr,
 					RecordedAt: record.Date,
@@ -306,22 +306,22 @@ func runHistorySync(ctx context.Context, conn *sql.DB, db *database.Queries, yea
 
 			if len(history) > 0 {
 				processedFunds++
-				slog.Info("✅  Fon geçmişi kaydedildi",
+				slog.Info("âœ…  Fon geÃ§miÅŸi kaydedildi",
 					"fon", fund.Symbol,
 					"ilerleme", fmt.Sprintf("%d/%d", i+1, len(funds)),
 					"veri_sayisi", len(history),
 					"atlananlar", skippedFunds,
 				)
 			} else {
-				slog.Warn("⚠️ Fon için hiç veri çekilemedi (WAF veya limitler yüzünden olabilir)",
+				slog.Warn("âš ï¸ Fon iÃ§in hiÃ§ veri Ã§ekilemedi (WAF veya limitler yÃ¼zÃ¼nden olabilir)",
 					"fon", fund.Symbol,
 					"ilerleme", fmt.Sprintf("%d/%d", i+1, len(funds)),
 				)
 			}
 
-			time.Sleep(5 * time.Second) // WAF koruması (Artırıldı)
+			time.Sleep(5 * time.Second) // WAF korumasÄ± (ArtÄ±rÄ±ldÄ±)
 		}
-		slog.Info("TEFAS fonlarının fiyat geçmişleri başarıyla senkronize edildi!",
+		slog.Info("TEFAS fonlarÄ±nÄ±n fiyat geÃ§miÅŸleri baÅŸarÄ±yla senkronize edildi!",
 			"yeni_islenen", processedFunds,
 			"onceden_kayitli_atlanan", skippedFunds,
 		)
