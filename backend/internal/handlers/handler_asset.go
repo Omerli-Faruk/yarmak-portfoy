@@ -167,7 +167,9 @@ func (cfg *ApiConfig) HandlerTriggerBackfill(w http.ResponseWriter, r *http.Requ
 	
 	assetObj, err := cfg.DB.GetAssetByID(r.Context(), int64(assetID))
 	if err == nil {
-		scraper.QuickSyncAsset(r.Context(), cfg.DB, assetObj)
+		go func() {
+			_ = scraper.QuickSyncAsset(r.Context(), cfg.DB, assetObj)
+		}()
 	}
 
 	err = cfg.DB.AddToBackfillQueue(r.Context(), int32(assetID))
