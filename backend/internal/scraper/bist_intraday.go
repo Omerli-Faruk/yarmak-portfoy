@@ -30,7 +30,8 @@ func StartBistIntradayWorker(ctx context.Context, db *database.Queries, wg *sync
 				if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
 					continue
 				}
-				if now.Hour() < 9 || (now.Hour() == 9 && now.Minute() < 30) || now.Hour() > 18 || (now.Hour() == 18 && now.Minute() > 15) {
+				// BIST sürekli işlem saatleri 10:00 - 18:00 (18:10 kapanış marjı)
+				if now.Hour() < 10 || now.Hour() > 18 || (now.Hour() == 18 && now.Minute() > 15) {
 					continue
 				}
 
