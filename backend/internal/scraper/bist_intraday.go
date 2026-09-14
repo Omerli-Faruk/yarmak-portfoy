@@ -16,6 +16,17 @@ func StartBistIntradayWorker(ctx context.Context, db *database.Queries, wg *sync
 	go func() {
 		defer wg.Done()
 		slog.Info("BIST Intraday worker başlatıldı")
+		
+		// Sunucu ilk açıldığında hemen bir kez çalıştır
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("BIST İlk açılış döngüsünde panic yakalandı", "panic", r)
+				}
+			}()
+			runBistCycle(ctx, db)
+		}()
+
 		ticker := time.NewTicker(15 * time.Minute)
 		defer ticker.Stop()
 

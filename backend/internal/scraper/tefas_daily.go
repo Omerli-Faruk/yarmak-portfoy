@@ -15,6 +15,16 @@ func StartTefasDailyWorker(ctx context.Context, db *database.Queries, wg *sync.W
 		defer wg.Done()
 		slog.Info("TEFAS Daily worker başlatıldı")
 		
+		// Sunucu ilk açıldığında hemen bir kez güncel verileri çek
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("TEFAS İlk açılış döngüsünde panic yakalandı", "panic", r)
+				}
+			}()
+			runTefasDailyCycle(ctx, db)
+		}()
+		
 		for {
 			now := time.Now()
 			// Hedef: Her akşam 20:00 ve sabah 09:00 (TEFAS fiyatları 18:30 ile sabah arası güncellenir)
