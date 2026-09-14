@@ -80,41 +80,46 @@ func runTefasDailyCycle(ctx context.Context, db *database.Queries) {
 		return
 	}
 
-	// Sadece aktif varlıkları güncelle
+	// Sadece aktif (portföyde veya izleme listesinde olan) varlıkları bul (history için)
 	activeAssets, err := db.GetActiveAssets(ctx)
 	if err != nil {
 		slog.Error("Aktif varlıklar çekilemedi", "error", err)
 		return
 	}
-	activeMap := make(map[string]database.Asset)
+	activeMap := make(map[string]bool)
 	for _, a := range activeAssets {
 		if a.AssetType == "FON" {
-			activeMap[a.Symbol] = a
+			activeMap[a.Symbol] = true
 		}
 	}
 
 	updateCount := 0
 	for _, fund := range allFunds {
-		if asset, ok := activeMap[fund.Symbol]; ok {
-			priceStr := fmt.Sprintf("%.6f", fund.Price)
-			
-			_, err := db.UpdateAssetPrice(ctx, database.UpdateAssetPriceParams{
-				ID:           asset.ID,
-				CurrentPrice: priceStr,
-			})
-			if err != nil {
-				continue
-			}
+		priceStr := fmt.Sprintf("%.6f", fund.Price)
+		
+		// 1. Her zaman fonu Upsert et (Böylece yeni fonlar sisteme girer, mevcutların live fiyatı güncellenir)
+		asset, err := db.UpsertAsset(ctx, database.UpsertAssetParams{
+			Symbol:       fund.Symbol,
+			Name:         fund.Name,
+			AssetType:    "FON",
+			CurrentPrice: priceStr,
+		})
+		
+		if err != nil {
+			continue // Veritabanı hatası
+		}
 
+		// 2. Eğer bu fon aktif bir fon ise, Price History tablosuna kaydet
+		if activeMap[fund.Symbol] {
 			err = db.UpsertPriceHistory(ctx, database.UpsertPriceHistoryParams{
 				AssetID:    asset.ID,
 				Price:      priceStr,
-				RecordedAt: fund.Date.UTC(), // DO UPDATE takes care of overwriting if corrected
+				RecordedAt: fund.Date.UTC(),
 			})
 			if err == nil {
 				updateCount++
 			}
 		}
 	}
-	slog.Info("TEFAS Toplu Fiyat Çekimi Tamamlandı", "guncellenen_fon_sayisi", updateCount)
+	slog.Info("TEFAS Toplu Fiyat Çekimi Tamamlandı", "guncellenen_aktif_fon_sayisi", updateCount)
 }
