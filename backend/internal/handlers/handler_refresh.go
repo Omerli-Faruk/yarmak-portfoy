@@ -46,19 +46,26 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 	}
 
 	rows, _ := res.RowsAffected()
-	if rows == 0 {
-		respondWithError(w, http.StatusUnauthorized, "Geçersiz, süresi dolmuş veya daha önce kullanılmış token", nil)
-		return
-	}
-
 	var userID int64
-	err = tx.QueryRowContext(r.Context(), `SELECT user_id FROM refresh_tokens WHERE token = $1`, hashedToken).Scan(&userID)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Kullanıcı bulunamadı", err)
-		return
+	if rows == 0 {
+		// Grace period (30 sn): Eşzamanlı paralel isteklerde token henüz yenilendiyse oturumu düşürme
+		errGrace := tx.QueryRowContext(r.Context(), `
+			SELECT user_id FROM refresh_tokens 
+			WHERE token = $1 AND revoked_at > NOW() - INTERVAL '30 seconds' AND expires_at > NOW()
+		`, hashedToken).Scan(&userID)
+		if errGrace != nil {
+			respondWithError(w, http.StatusUnauthorized, "Geçersiz, süresi dolmuş veya daha önce kullanılmış token", nil)
+			return
+		}
+	} else {
+		err = tx.QueryRowContext(r.Context(), `SELECT user_id FROM refresh_tokens WHERE token = $1`, hashedToken).Scan(&userID)
+		if err != nil {
+			respondWithError(w, http.StatusUnauthorized, "Kullanıcı bulunamadı", err)
+			return
+		}
 	}
 
-	accessToken, err := auth.MakeJWT(userID, cfg.JWTSecret, 15*time.Minute)
+	accessToken, err := auth.MakeJWT(userID, cfg.JWTSecret, 30*24*time.Hour)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Token üretilemedi", err)
 		return
@@ -74,7 +81,7 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 	_, err = qtx.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
 		Token:     auth.HashToken(newRefreshToken),
 		UserID:    userID,
-		ExpiresAt: time.Now().Add(60 * 24 * time.Hour),
+		ExpiresAt: time.Now().Add(90 * 24 * time.Hour),
 	})
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Token veritabanına kaydedilemedi", err)
@@ -93,7 +100,7 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   3600,
+		MaxAge:   30 * 24 * 3600,
 	})
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
@@ -102,7 +109,7 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   3600 * 24 * 60,
+		MaxAge:   90 * 24 * 3600,
 	})
 
 	respondWithJSON(w, http.StatusOK, refreshTokenResponse{

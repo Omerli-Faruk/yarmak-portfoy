@@ -1,7 +1,8 @@
 'use client'
 
 import {useAuth} from "@/context/AuthContext";
-import React, {useState} from "react";
+import React, {useState, useEffect} from "react";
+import {useRouter} from "next/navigation";
 import axios from "axios";
 import Link from "next/link";
 import Image from "next/image";
@@ -10,7 +11,8 @@ import {User, Mail, Lock, Eye, EyeOff} from "lucide-react";
 
 
 export default function RegisterPage() {
-    const {register} = useAuth();
+    const {user, loading: authLoading, register} = useAuth();
+    const router = useRouter();
     const [email, setEmail] = useState('')
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
@@ -19,6 +21,12 @@ export default function RegisterPage() {
     const [loading, setLoading] = useState(false)
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+    useEffect(() => {
+        if (!authLoading && user) {
+            router.replace('/dashboard');
+        }
+    }, [user, authLoading, router]);
 
     async function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
         e.preventDefault()

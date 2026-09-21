@@ -58,7 +58,7 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusUnauthorized, "Geçersiz e-posta veya şifre", nil)
 		return
 	}
-	token, err := auth.MakeJWT(user.ID, cfg.JWTSecret, 15*time.Minute)
+	token, err := auth.MakeJWT(user.ID, cfg.JWTSecret, 30*24*time.Hour)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Token oluşturulurken hata oluştu", err)
 		return
@@ -71,7 +71,7 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 	_, err = cfg.DB.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
 		Token:     auth.HashToken(refreshToken),
 		UserID:    user.ID,
-		ExpiresAt: time.Now().Add(60 * 24 * time.Hour),
+		ExpiresAt: time.Now().Add(90 * 24 * time.Hour),
 	})
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Refresh token kaydedilemedi", err)
@@ -85,7 +85,7 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   3600,
+		MaxAge:   30 * 24 * 3600,
 	})
 
 	http.SetCookie(w, &http.Cookie{
@@ -95,7 +95,7 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   3600 * 24 * 60,
+		MaxAge:   90 * 24 * 3600,
 	})
 	respondWithJSON(w, http.StatusOK, loginResponse{
 		Token:        token,

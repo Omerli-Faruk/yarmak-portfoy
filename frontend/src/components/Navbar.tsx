@@ -13,7 +13,7 @@ export default function Navbar() {
     const pathname = usePathname();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-    if (pathname === "/login" || pathname === "/register") {
+    if (pathname?.startsWith("/login") || pathname?.startsWith("/register")) {
         return (
             <header className="flex items-center justify-center">
                 <Link href="/" className="absolute top-8 left-8 text-gray-500 hover:text-white flex items-center gap-2 text-xs font-bold uppercase tracking-widest transition-colors z-20"> <ArrowLeft className="w-4 h-4" /> Ana Sayfa </Link>

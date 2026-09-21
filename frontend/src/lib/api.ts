@@ -17,7 +17,7 @@ let refreshPromise: Promise<string> | null = null;
 api.interceptors.response.use(
     response => response,
     async error => {
-        if (error.response?.status === 401 && !error.config._retry && typeof window !== 'undefined' && !error.config.url?.includes('/login')) {
+        if (error.response?.status === 401 && !error.config._retry && typeof window !== 'undefined' && !error.config.url?.includes('/login') && !error.config.url?.includes('/refresh')) {
             error.config._retry = true;
 
             try {
@@ -40,7 +40,9 @@ api.interceptors.response.use(
                     localStorage.removeItem('is_logged_in');
                     document.cookie = 'access_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
                     document.cookie = 'refresh_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-                    window.location.href = '/login';
+                    if (!window.location.pathname.startsWith('/login')) {
+                        window.location.href = '/login';
+                    }
                 }
                 return Promise.reject(refreshErr);
             }

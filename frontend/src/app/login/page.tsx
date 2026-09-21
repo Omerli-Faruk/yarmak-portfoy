@@ -1,7 +1,8 @@
 'use client'
 
-import React, {useState} from "react";
+import React, {useState, useEffect} from "react";
 import {useAuth} from "@/context/AuthContext";
+import {useRouter} from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import axios from "axios";
@@ -9,12 +10,19 @@ import {User, Lock, Eye, EyeOff} from "lucide-react";
 import {motion} from "motion/react";
 
 export default function LoginPage() {
-    const {login} = useAuth();
+    const {user, loading: authLoading, login} = useAuth();
+    const router = useRouter();
     const [showPassword, setShowPassword] = useState(false);
     const [identifier, setIdentifier] = useState('')
     const [password, setPassword] = useState('')
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
+
+    useEffect(() => {
+        if (!authLoading && user) {
+            router.replace('/dashboard');
+        }
+    }, [user, authLoading, router]);
 
     async function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
         e.preventDefault();
