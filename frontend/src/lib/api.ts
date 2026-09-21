@@ -36,7 +36,12 @@ api.interceptors.response.use(
                 return api(error.config);
 
             } catch (refreshErr) {
-                window.location.href = '/login';
+                if (typeof window !== 'undefined') {
+                    localStorage.removeItem('is_logged_in');
+                    document.cookie = 'access_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+                    document.cookie = 'refresh_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+                    window.location.href = '/login';
+                }
                 return Promise.reject(refreshErr);
             }
         }

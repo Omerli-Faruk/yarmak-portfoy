@@ -236,7 +236,7 @@ export async function GET(request: Request) {
             const name = String(item.Name ?? item.name ?? symbol).trim();
             const assetType = String(item.AssetType ?? item.asset_type ?? 'HISSE').trim().toUpperCase();
             let price = parseFloat(item.CurrentPrice ?? item.current_price ?? '0');
-            let change = '+0.50';
+            let change = '0.00';
             let positive = true;
 
             const live = liveQuotes[symbol];
@@ -336,7 +336,7 @@ export async function GET(request: Request) {
                         name: f.name,
                         asset_type: 'FON',
                         current_price: formatPrice(f.price),
-                        change: '+0.45',
+                        change: '0.00',
                         positive: true,
                     });
                 }

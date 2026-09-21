@@ -25,7 +25,7 @@ export default function Navbar() {
         <header className="w-full ">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
                 {/* LOGO */}
-                <Link className="flex justify-center items-center" href={user ? "/dashboard" : "/"}>
+                <Link className="flex justify-center items-center" href="/">
                     <Image src="/logo.png" alt="Yarmak Logo" width={48} height={48} className="size-12 object-contain" loading="eager"/>
                 </Link>
 
@@ -51,9 +51,9 @@ export default function Navbar() {
                 <div className="hidden md:flex items-center gap-x-6">
                     {user ? (
                         <>
-                            <span className="text-emerald-400 font-medium text-sm">
+                            <Link href="/profile" className="text-emerald-400 hover:text-emerald-300 font-medium text-sm transition hover:underline">
                                 {user?.username}
-                            </span>
+                            </Link>
                             <button onClick={() => logOut()}
                                     className="text-xs text-slate-400 hover:text-rose-400 transition cursor-pointer flex items-center gap-1.5 font-medium bg-slate-800/50 px-3 py-2 rounded-lg">
                                 <LogOut className="size-4"/> Çıkış Yap
@@ -98,7 +98,9 @@ export default function Navbar() {
                                 <Link href="/alerts" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-primary p-2 bg-white/5 rounded-lg">Alarmlar</Link>
                                 <div className="h-px bg-white/10 my-2"></div>
                                 <div className="flex items-center justify-between px-2">
-                                    <span className="text-emerald-400 normal-case">{user?.username}</span>
+                                    <Link href="/profile" onClick={() => setIsMobileMenuOpen(false)} className="text-emerald-400 hover:text-emerald-300 font-medium normal-case">
+                                        {user?.username}
+                                    </Link>
                                     <button onClick={() => { logOut(); setIsMobileMenuOpen(false); }}
                                             className="text-rose-400 hover:text-rose-300 transition flex items-center gap-1.5 normal-case">
                                         <LogOut className="size-4"/> Çıkış

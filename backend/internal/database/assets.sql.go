@@ -42,7 +42,7 @@ func (q *Queries) CreateAsset(ctx context.Context, arg CreateAssetParams) (Asset
 }
 
 const getActiveAssets = `-- name: GetActiveAssets :many
-SELECT DISTINCT a.id, a.symbol, a.name, a.asset_type, a.current_price, a.updated_at FROM assets a LEFT JOIN transactions t ON a.id = t.asset_id LEFT JOIN user_watchlists w ON a.id = w.asset_id WHERE t.id IS NOT NULL OR w.id IS NOT NULL
+SELECT DISTINCT a.id, a.symbol, a.name, a.asset_type, a.current_price, a.updated_at FROM assets a LEFT JOIN transactions t ON a.id = t.asset_id LEFT JOIN user_watchlists w ON a.id = w.asset_id WHERE (t.id IS NOT NULL AND t.deleted_at IS NULL) OR w.id IS NOT NULL
 `
 
 func (q *Queries) GetActiveAssets(ctx context.Context) ([]Asset, error) {

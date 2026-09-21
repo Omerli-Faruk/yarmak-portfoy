@@ -236,8 +236,10 @@ func FetchBISTHistory(symbol string, rangeStr string) (currentPrice float64, his
 	} else if rangeStr == "3mo" || rangeStr == "6mo" {
 		interval = "1h"
 	} else if rangeStr == "1y" || rangeStr == "ytd" {
+		interval = "1d"
+	} else if rangeStr == "3y" {
 		interval = "1wk"
-	} else if rangeStr == "3y" || rangeStr == "5y" || rangeStr == "max" {
+	} else if rangeStr == "5y" || rangeStr == "max" {
 		interval = "1mo"
 	}
 

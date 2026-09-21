@@ -12,7 +12,7 @@ import (
 const addToBackfillQueue = `-- name: AddToBackfillQueue :exec
 INSERT INTO backfill_queue (asset_id)
 VALUES ($1)
-ON CONFLICT (asset_id) DO NOTHING
+ON CONFLICT (asset_id) DO UPDATE SET status = 'PENDING', error_message = NULL, updated_at = NOW()
 `
 
 func (q *Queries) AddToBackfillQueue(ctx context.Context, assetID int32) error {

@@ -36,3 +36,8 @@ body {
           radial-gradient(ellipse 80% 50% at 50% -5%, rgba(26, 159, 211, 0.18) 0%, rgba(10, 14, 20, 0) 70%),
           radial-gradient(circle at 50% 0%, rgba(26, 159, 211, 0.06) 0%, rgba(10, 14, 20, 0) 90%);
 }
+
+/* Recharts Brush Tutamaç Metinlerinin İçe Girmesini ve Taşmasını Önleme */
+.recharts-brush-texts {
+  display: none !important;
+}

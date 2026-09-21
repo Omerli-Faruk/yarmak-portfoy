@@ -67,7 +67,8 @@ func checkAndTriggerAlerts(ctx context.Context, db *database.Queries, asset data
 var lastSnapshotDay atomic.Int32
 
 func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
-	now := time.Now()
+	loc, _ := time.LoadLocation("Europe/Istanbul")
+	now := time.Now().In(loc)
 	if now.Hour() < 18 || lastSnapshotDay.Load() == int32(now.YearDay()) {
 		return
 	}

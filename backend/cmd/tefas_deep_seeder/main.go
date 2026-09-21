@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"yarmak/internal/database"
@@ -25,22 +26,58 @@ type tefasResponse struct {
 }
 
 func main() {
-	dbURL := "postgres://postgres:postgres@db:5432/yarmak?sslmode=disable"
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		dbURL = "postgres://postgres:postgres@db:5432/yarmak?sslmode=disable"
+	}
 	dbConn, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("DB bağlantı hatası: %v", err)
 	}
+	defer dbConn.Close()
 	db := database.New(dbConn)
 	ctx := context.Background()
 
-	log.Println("TEFAS Ultra-Hızlı Derin Tarayıcı (Toplu Tarama) Başlatılıyor...")
-	log.Println("Tüm pazar (3200+ fon) ay-ay tek seferde çekilecek.")
-	log.Println("Bu işlem eskisi gibi 3 gün değil, sadece ~20-30 dakika sürecek!")
+	log.Println("TEFAS Ultra-Hızlı Derin Tarayıcı Başlatılıyor...")
 
 	today := time.Now()
-	// Start from 5 years ago
+	// Varsayılan: 5 yıl öncesi (İlk kurulum için)
 	currentStart := today.AddDate(-5, 0, 0)
-	
+
+	// Veritabanındaki mevcut fon fiyat geçmişini kontrol et
+	var maxRecordedAt sql.NullTime
+	var countRecords int64
+	err = dbConn.QueryRowContext(ctx, `
+		SELECT MAX(ph.recorded_at), COUNT(ph.id) 
+		FROM price_history ph 
+		JOIN assets a ON ph.asset_id = a.id 
+		WHERE a.asset_type = 'FON' AND ph.recorded_at > '2000-01-01'
+	`).Scan(&maxRecordedAt, &countRecords)
+
+	forceFull := os.Getenv("FORCE_FULL_BACKFILL") == "true"
+
+	if err == nil && countRecords > 1000 && maxRecordedAt.Valid && !forceFull {
+		log.Printf("📊 Veritabanında %d adet fon fiyat geçmişi kaydı bulundu (En son kayıt: %s).",
+			countRecords, maxRecordedAt.Time.Format("2006-01-02"))
+
+		oneMonthAgo := today.AddDate(0, -1, 0)
+		// Eğer son kayıt 1 aydan daha eskiyse, aradaki boşluğu kapatmak için son kayıt tarihinden başla
+		if maxRecordedAt.Time.Before(oneMonthAgo) && maxRecordedAt.Time.After(today.AddDate(-5, 0, 0)) {
+			currentStart = maxRecordedAt.Time.AddDate(0, 0, -3) // 3 gün güvenlik payı
+			log.Printf("🔄 Konteyner kapalı kaldığı için aradaki boşluğu kapatmak üzere %s tarihinden itibaren senkronize ediliyor...",
+				currentStart.Format("2006-01-02"))
+		} else {
+			// Son kayıt güncel (son 1 ay içinde): Sadece son 1 ayı güncelle ("son ay çeksin yeter")
+			currentStart = oneMonthAgo
+			log.Printf("🔄 Hızlı Güncelleme Modu: Eski veriler mevcut olduğundan sadece son 1 aylık veri (%s -> %s) senkronize ediliyor.",
+				currentStart.Format("2006-01-02"), today.Format("2006-01-02"))
+		}
+	} else {
+		log.Println("🚀 İlk Kurulum / Tam Tarama Modu: 5 yıllık tüm geçmiş veri ay-ay indirilecek...")
+		log.Println("Tüm pazar (3200+ fon) ay-ay tek seferde çekilecek.")
+		log.Println("Bu işlem yaklaşık 20-30 dakika sürebilir.")
+	}
+
 	// Create a map of Symbol -> AssetID for quick lookups
 	assets, err := db.ListAssets(ctx)
 	if err != nil {
@@ -60,7 +97,7 @@ func main() {
 		}
 
 		log.Printf(">>> Tüm Piyasa Çekiliyor: %s -> %s", currentStart.Format("2006-01-02"), currentEnd.Format("2006-01-02"))
-		
+
 		reqBody := map[string]interface{}{
 			"fonTipi":  "YAT",
 			"fonKodu":  "",
@@ -75,7 +112,7 @@ func main() {
 		req, _ := http.NewRequest("POST", "https://www.tefas.gov.tr/api/funds/fonGnlBlgSiraliGetir", bytes.NewBuffer(jsonBytes))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("User-Agent", "Mozilla/5.0")
-		
+
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			log.Printf("    ! Ağ Hatası. 15 DAKİKA zorunlu dinlenme... (%v)", err)
@@ -93,7 +130,7 @@ func main() {
 		if resp.StatusCode == 200 {
 			bodyBytes, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
-			
+
 			var tefasRes tefasResponse
 			if err := json.Unmarshal(bodyBytes, &tefasRes); err == nil {
 				inserted := 0
@@ -102,7 +139,7 @@ func main() {
 					if !exists {
 						continue // We don't care about funds not in our DB
 					}
-					
+
 					var parsedDate time.Time
 					if pt, err := time.Parse("2006-01-02", rec.Tarih); err == nil {
 						parsedDate = pt
@@ -133,6 +170,6 @@ func main() {
 		currentStart = currentEnd.AddDate(0, 0, 1)
 		time.Sleep(15 * time.Second)
 	}
-	
-	log.Println("TÜM FONLARIN 5 YILLIK VERİSİ BAŞARIYLA İNDİRİLDİ!")
+
+	log.Println("✅ FON FİYAT GEÇMİŞİ SENKRONİZASYONU BAŞARIYLA TAMAMLANDI!")
 }

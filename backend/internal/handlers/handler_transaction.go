@@ -68,6 +68,10 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 	if params.TransactionDate.IsZero() {
 		params.TransactionDate = time.Now().UTC()
 	}
+	if params.TransactionDate.After(time.Now().Add(2 * time.Minute)) {
+		respondWithError(w, http.StatusBadRequest, "Gelecek tarihli işlem kaydedilemez", nil)
+		return
+	}
 	if err := cfg.resolveAssetID(r.Context(), &params); err != nil {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
 		return
@@ -169,6 +173,15 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 		return
 	}
 	_ = cfg.recalculateAssetRealizedPnL(r.Context(), userID, params.AssetID)
+
+	// Varlık fiyatı 15 dakikadan eskiyse arka planda piyasa verisini otomatik güncelle
+	go func(assetID int64) {
+		assetObj, err := cfg.DB.GetAssetByID(context.Background(), assetID)
+		if err == nil && time.Since(assetObj.UpdatedAt) > 15*time.Minute {
+			_ = scraper.QuickSyncAsset(context.Background(), cfg.DB, assetObj)
+		}
+	}(params.AssetID)
+
 	respondWithJSON(w, http.StatusCreated, transaction)
 }
 

@@ -27,7 +27,7 @@ func StartBistIntradayWorker(ctx context.Context, db *database.Queries, wg *sync
 			runBistCycle(ctx, db)
 		}()
 
-		ticker := time.NewTicker(15 * time.Minute)
+		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 
 		for {
@@ -36,14 +36,26 @@ func StartBistIntradayWorker(ctx context.Context, db *database.Queries, wg *sync
 				slog.Info("BIST Intraday worker durduruldu")
 				return
 			case <-ticker.C:
-				now := time.Now()
-				// Only run between 09:30 and 18:15 on weekdays
-				if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
-					continue
-				}
-				// BIST sürekli işlem saatleri 10:00 - 18:00 (18:10 kapanış marjı)
-				if now.Hour() < 10 || now.Hour() > 18 || (now.Hour() == 18 && now.Minute() > 15) {
-					continue
+				loc, _ := time.LoadLocation("Europe/Istanbul")
+				now := time.Now().In(loc)
+				isWeekend := now.Weekday() == time.Saturday || now.Weekday() == time.Sunday
+				isMarketHours := !isWeekend && now.Hour() >= 10 && (now.Hour() < 18 || (now.Hour() == 18 && now.Minute() <= 15))
+
+				// Mesai saatleri dışında sadece bayat kalmış (> 4 saat) aktif hisseleri tarar
+				if !isMarketHours {
+					hasStale := false
+					activeAssets, err := db.GetActiveAssets(ctx)
+					if err == nil {
+						for _, a := range activeAssets {
+							if a.AssetType != "FON" && time.Since(a.UpdatedAt) > 4*time.Hour {
+								hasStale = true
+								break
+							}
+						}
+					}
+					if !hasStale {
+						continue
+					}
 				}
 
 				func() {

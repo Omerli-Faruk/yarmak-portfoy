@@ -45,6 +45,21 @@ func respondWithError(w http.ResponseWriter, code int, msg string, err error) {
 func (cfg *ApiConfig) GetOrCreateAssetBySymbol(ctx context.Context, symbol string, assetType string) (database.Asset, error) {
 	symbol = strings.ToUpper(strings.TrimSpace(symbol))
 	assetType = strings.ToUpper(strings.TrimSpace(assetType))
+
+	switch symbol {
+	case "USD", "DOLAR":
+		symbol = "USDTRY"
+		assetType = "DOVIZ"
+	case "EUR", "EURO":
+		symbol = "EURTRY"
+		assetType = "DOVIZ"
+	case "GBP", "STERLIN":
+		symbol = "GBPTRY"
+		assetType = "DOVIZ"
+	case "ALTIN", "GRAMALTIN", "GRAM":
+		symbol = "ALTIN"
+		assetType = "ALTIN"
+	}
 	asset, err := cfg.DB.GetAssetBySymbol(ctx, symbol)
 	if err == nil {
 		return asset, nil

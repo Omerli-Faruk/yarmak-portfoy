@@ -26,15 +26,16 @@ func StartTefasDailyWorker(ctx context.Context, db *database.Queries, wg *sync.W
 		}()
 		
 		for {
-			now := time.Now()
+			loc, _ := time.LoadLocation("Europe/Istanbul")
+			now := time.Now().In(loc)
 			// Hedef: Her akşam 20:00 ve sabah 09:00 (TEFAS fiyatları 18:30 ile sabah arası güncellenir)
 			var next time.Time
 			if now.Hour() < 9 {
-				next = time.Date(now.Year(), now.Month(), now.Day(), 9, 0, 0, 0, now.Location())
+				next = time.Date(now.Year(), now.Month(), now.Day(), 9, 0, 0, 0, loc)
 			} else if now.Hour() < 20 {
-				next = time.Date(now.Year(), now.Month(), now.Day(), 20, 0, 0, 0, now.Location())
+				next = time.Date(now.Year(), now.Month(), now.Day(), 20, 0, 0, 0, loc)
 			} else {
-				next = time.Date(now.Year(), now.Month(), now.Day()+1, 9, 0, 0, 0, now.Location())
+				next = time.Date(now.Year(), now.Month(), now.Day()+1, 9, 0, 0, 0, loc)
 			}
 			
 			waitDuration := next.Sub(now)

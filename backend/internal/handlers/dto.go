@@ -73,6 +73,8 @@ type portfolioSummaryResponse struct {
 	TotalValueUSD               float64                          `json:"total_value_usd"`
 	TotalCombinedProfitUSD      float64                          `json:"total_combined_profit_usd"`
 	TotalCommission             float64                          `json:"total_commission"`
+	PeriodReturns               map[string]float64               `json:"period_returns,omitempty"`
+	PeriodValues                map[string]float64               `json:"period_values,omitempty"`
 }
 
 type AssetCategorySummary struct {

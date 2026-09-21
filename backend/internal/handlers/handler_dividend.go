@@ -159,6 +159,10 @@ func (cfg *ApiConfig) HandlerGetUserDividends(w http.ResponseWriter, r *http.Req
 func (cfg *ApiConfig) HandlerDeleteDividend(w http.ResponseWriter, r *http.Request) {
 	urlID := chi.URLParam(r, "id")
 	userID, ok := r.Context().Value(UserIDKey).(int64)
+	if !ok {
+		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
+		return
+	}
 	dividendID, err := strconv.ParseInt(urlID, 10, 64)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz temettü ID", err)
@@ -174,10 +178,6 @@ func (cfg *ApiConfig) HandlerDeleteDividend(w http.ResponseWriter, r *http.Reque
 	}
 	if !found {
 		respondWithError(w, http.StatusNotFound, "Silinecek temettü kaydı bulunamadı", nil)
-		return
-	}
-	if !ok {
-		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
 		return
 	}
 	err = cfg.DB.DeleteDividend(r.Context(), database.DeleteDividendParams{

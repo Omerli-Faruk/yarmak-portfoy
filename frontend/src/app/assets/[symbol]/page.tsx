@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, History, Activity, TrendingUp, TrendingDown, Clock, X } from 'lucide-react';
 import api from '@/lib/api';
@@ -9,6 +9,8 @@ import { useAuth } from '@/context/AuthContext';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid, Brush } from 'recharts';
 import Link from "next/link";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import TransactionDatePicker from "@/components/TransactionDatePicker";
+import { InteractiveAreaChart, ChartPeriod } from "@/components/InteractiveAreaChart";
 
 // FORMATTERS
 function formatMoney(amount: number) {
@@ -71,6 +73,7 @@ export default function AssetDetailPage() {
     const [assetData, setAssetData] = useState<any>(null);
     const [chartData, setChartData] = useState<any[]>([]);
     const [fundamentals, setFundamentals] = useState<any>(null);
+    const [summaryData, setSummaryData] = useState<any>(null);
     const [timeRange, setTimeRange] = useState('1M'); // 1W, 1M, 3M, 6M, 1Y, ALL
     const [isChartLoading, setIsChartLoading] = useState(true);
 
@@ -79,13 +82,12 @@ export default function AssetDetailPage() {
     const [txType, setTxType] = useState('BUY');
     const [txAmount, setTxAmount] = useState('');
     const [txPrice, setTxPrice] = useState('');
-    const [txDate, setTxDate] = useState(new Date().toISOString().slice(0, 16));
+    const [txDate, setTxDate] = useState(new Date().toISOString());
     const [txCommission, setTxCommission] = useState('0');
+    const [isTxDateError, setIsTxDateError] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
-    // Custom Date Range & Return states
-    const [customStart, setCustomStart] = useState('');
-    const [customEnd, setCustomEnd] = useState('');
+    // Return state
     const [periodReturn, setPeriodReturn] = useState<number | null>(null);
 
     const loadAssetAndTransactions = async () => {
@@ -121,17 +123,34 @@ export default function AssetDetailPage() {
 
     const [pollCount, setPollCount] = useState(0);
 
+    const chartCacheRef = useRef<Record<string, { chart: any[]; timestamp: number }>>({});
+
     const loadChartAndFundamentals = async () => {
-        setIsChartLoading(true);
+        // Önceden çekilmişse ve 45 saniyeden eskiyse anında bellekten göster (0 ms gecikme, sıfır API yükü)
+        const cached = chartCacheRef.current[timeRange];
+        if (cached && cached.chart && cached.chart.length > 0) {
+            setChartData(cached.chart);
+            setIsChartLoading(false);
+            const firstPrice = parseFloat(cached.chart[0].price);
+            const lastPrice = parseFloat(cached.chart[cached.chart.length - 1].price);
+            if (!isNaN(firstPrice) && !isNaN(lastPrice) && firstPrice > 0) {
+                setPeriodReturn(((lastPrice - firstPrice) / firstPrice) * 100);
+            }
+            if (Date.now() - cached.timestamp < 45000) {
+                return;
+            }
+        } else {
+            setIsChartLoading(true);
+        }
+
         try {
-            // If CUSTOM is selected, we fetch CUSTOM data (daily from backend) so the brush can zoom freely!
-            const fetchRange = timeRange;
-            const url = `/api/assets/detail?symbol=${rawSymbol}&range=${fetchRange}`;
+            const url = `/api/assets/detail?symbol=${rawSymbol}&range=${timeRange}`;
             const detailRes = await fetch(url);
             if (detailRes.ok) {
                 const det = await detailRes.json();
                 if (det.chart && det.chart.length > 0) {
                     setChartData(det.chart);
+                    chartCacheRef.current[timeRange] = { chart: det.chart, timestamp: Date.now() };
                     setPollCount(0); // Reset polling
                     
                     // Calculate period return
@@ -142,7 +161,7 @@ export default function AssetDetailPage() {
                     } else {
                         setPeriodReturn(null);
                     }
-                } else {
+                } else if (!cached) {
                     setChartData([]);
                     setPeriodReturn(null);
                     
@@ -152,6 +171,7 @@ export default function AssetDetailPage() {
                     }
                 }
                 if (det.fundamentals) setFundamentals(det.fundamentals);
+                if (det.summary) setSummaryData(det.summary);
             }
         } catch (error) {
             console.error('Error fetching chart/fundamentals:', error);
@@ -181,6 +201,10 @@ export default function AssetDetailPage() {
 
     const handleAddTransaction = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (new Date(txDate).getTime() > Date.now() + 60000) {
+            alert('Gelecek tarihli işlem kaydedilemez.');
+            return;
+        }
         try {
             setSubmitting(true);
             const payload = {
@@ -222,6 +246,59 @@ export default function AssetDetailPage() {
     const profitLoss = currentTotalValue - totalCost;
     const profitLossPercent = totalCost > 0 ? (profitLoss / totalCost) * 100 : 0;
     const isProfit = profitLoss >= 0;
+
+    const assetPeriods: ChartPeriod[] = useMemo(() => {
+        const list: { id: string; label: string; rKey: string }[] = [];
+        if (assetData && assetData.asset_type !== 'FON') {
+            list.push({ id: '1D', label: '1G', rKey: '1D' });
+        }
+        list.push(
+            { id: '1W', label: '1H', rKey: '1W' },
+            { id: '1M', label: '1A', rKey: '1M' },
+            { id: '3M', label: '3A', rKey: '3M' },
+            { id: '6M', label: '6A', rKey: '6M' },
+            { id: 'YTD', label: 'YBB', rKey: 'YTD' },
+            { id: '1Y', label: '1Y', rKey: '1Y' },
+            { id: '3Y', label: '3Y', rKey: '3Y' },
+            { id: '5Y', label: '5Y', rKey: '5Y' },
+        );
+
+        return list.map(item => {
+            let sumVal: number | null = null;
+            if (item.id === '1D') {
+                if (summaryData && typeof summaryData['1D'] === 'number' && !isNaN(summaryData['1D']) && summaryData['1D'] !== 0) {
+                    sumVal = summaryData['1D'];
+                } else if (assetData?.change !== undefined && assetData.change !== '' && assetData.change !== '0.00' && assetData.change !== '0') {
+                    const parsed = parseFloat(String(assetData.change).replace('+', ''));
+                    if (!isNaN(parsed)) sumVal = parsed;
+                } else if (periodReturn !== null && !isNaN(periodReturn)) {
+                    sumVal = periodReturn;
+                }
+            } else if (item.id === 'CUSTOM') {
+                if (timeRange === 'CUSTOM' && periodReturn !== null) {
+                    sumVal = periodReturn;
+                }
+            } else if (summaryData) {
+                if (summaryData[item.rKey] !== undefined) {
+                    sumVal = summaryData[item.rKey];
+                } else if (summaryData[item.id] !== undefined) {
+                    sumVal = summaryData[item.id];
+                } else if (item.id === '5Y' && summaryData['ALL'] !== undefined) {
+                    sumVal = summaryData['ALL'];
+                }
+            }
+
+            if (sumVal === null && timeRange === item.id && periodReturn !== null) {
+                sumVal = periodReturn;
+            }
+
+            return {
+                id: item.id,
+                label: item.label,
+                changePercent: sumVal,
+            };
+        });
+    }, [assetData, summaryData, periodReturn, timeRange]);
 
     if (loading) {
         return <LoadingSpinner />;
@@ -277,44 +354,66 @@ export default function AssetDetailPage() {
                                     </span>
                                 </h1>
                                 <p className="text-slate-400 mt-1 md:text-lg">{assetData?.name || 'Yükleniyor...'}</p>
+                                
+                                {/* Son Güncelleme: Doğrudan hisse adı ve sembolün altında */}
+                                {fundamentals?.staleMessage && (
+                                    <div className="mt-2.5 flex items-center">
+                                        <button 
+                                            onClick={() => {
+                                                chartCacheRef.current = {};
+                                                loadChartAndFundamentals();
+                                            }}
+                                            title="Verileri yenilemek için tıklayın"
+                                            className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg font-medium border transition hover:opacity-80 active:scale-95 cursor-pointer ${
+                                                fundamentals.isStale 
+                                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20' 
+                                                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
+                                            }`}
+                                        >
+                                            <Clock className="w-3.5 h-3.5" />
+                                            <span>{fundamentals.staleMessage}</span>
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
                     
                     {assetData && (
-                        <div className="md:text-right">
-                            <p className="text-xl md:text-2xl lg:text-3xl font-bold text-white flex items-center md:justify-end gap-2">
+                        <div className="md:text-right flex flex-col md:items-end">
+                            <p className="text-xl md:text-2xl lg:text-3xl font-bold text-white">
                                 {assetData.current_price} ₺
-                                {fundamentals?.isStale && (
-                                    <span className="text-xs bg-amber-500/10 text-amber-400 px-2 py-1 rounded border border-amber-500/20 whitespace-nowrap">
-                                        {fundamentals.staleMessage}
-                                    </span>
-                                )}
                             </p>
                             
-                            {periodReturn !== null ? (
-                                <p className={`flex items-center md:justify-end text-lg mt-1 font-medium ${periodReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`} title={`Seçili dönem getirisi`}>
-                                    {periodReturn >= 0 ? <TrendingUp className="w-5 h-5 mr-1" /> : <TrendingDown className="w-5 h-5 mr-1" />}
-                                    {periodReturn > 0 ? '+' : ''}{periodReturn.toFixed(2)}%
-                                    <span className="text-xs text-slate-400 ml-2 font-normal">({
-                                        timeRange === '1D' ? 'Günlük' : 
-                                        timeRange === '1W' ? 'Haftalık' : 
-                                        timeRange === '1M' ? 'Aylık' : 
-                                        timeRange === '3M' ? '3 Aylık' : 
-                                        timeRange === '6M' ? '6 Aylık' : 
-                                        timeRange === 'YTD' ? 'Yılbaşından Beri' : 
-                                        timeRange === '1Y' ? 'Yıllık' : 
-                                        timeRange === '3Y' ? '3 Yıllık' : 
-                                        timeRange === '5Y' ? '5 Yıllık' : 'Özel Aralık'
-                                    })</span>
-                                </p>
-                            ) : (
-                                <p className={`flex items-center md:justify-end text-lg mt-1 font-medium ${assetData.positive ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                    {assetData.positive ? <TrendingUp className="w-5 h-5 mr-1" /> : <TrendingDown className="w-5 h-5 mr-1" />}
-                                    {assetData.change}%
-                                    <span className="text-xs text-slate-400 ml-2 font-normal">(Günlük)</span>
-                                </p>
-                            )}
+                            {(() => {
+                                let dailyChangeVal: number | null = null;
+                                if (summaryData && typeof summaryData['1D'] === 'number' && !isNaN(summaryData['1D']) && summaryData['1D'] !== 0) {
+                                    dailyChangeVal = summaryData['1D'];
+                                } else if (assetData?.change !== undefined && assetData.change !== '' && assetData.change !== '0.00' && assetData.change !== '0') {
+                                    const parsed = parseFloat(String(assetData.change).replace('+', ''));
+                                    if (!isNaN(parsed)) dailyChangeVal = parsed;
+                                } else if (periodReturn !== null && !isNaN(periodReturn)) {
+                                    dailyChangeVal = periodReturn;
+                                } else if (summaryData && typeof summaryData['1D'] === 'number' && !isNaN(summaryData['1D'])) {
+                                    dailyChangeVal = summaryData['1D'];
+                                } else if (assetData?.change !== undefined) {
+                                    const parsed = parseFloat(String(assetData.change).replace('+', ''));
+                                    if (!isNaN(parsed)) dailyChangeVal = parsed;
+                                }
+
+                                if (dailyChangeVal === null) return null;
+
+                                const isPos = dailyChangeVal >= 0;
+                                const formatted = `${dailyChangeVal > 0 ? '+' : ''}${dailyChangeVal.toFixed(2)}%`;
+
+                                return (
+                                    <p className={`flex items-center md:justify-end text-lg mt-1 font-medium ${isPos ? 'text-emerald-400' : 'text-rose-400'}`} title="Bugünün Değişimi">
+                                        {isPos ? <TrendingUp className="w-5 h-5 mr-1" /> : <TrendingDown className="w-5 h-5 mr-1" />}
+                                        {formatted}
+                                        <span className="text-xs text-slate-400 ml-2 font-normal">(Günlük)</span>
+                                    </p>
+                                );
+                            })()}
                         </div>
                     )}
                 </div>
@@ -326,99 +425,31 @@ export default function AssetDetailPage() {
                     <div className="flex-1 flex flex-col gap-6">
                         
                         {/* CHART */}
-                        <div className="flex-1 bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 min-h-96 flex flex-col">
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3 sm:gap-0 w-full">
-                                <h3 className="text-lg font-bold text-white flex items-center shrink-0">
-                                    <Activity className="w-5 h-5 mr-2 text-indigo-400" />
-                                    Fiyat Grafiği
-                                </h3>
-                                <div className="flex bg-slate-800 rounded-lg p-1 w-full sm:w-auto overflow-x-auto custom-scrollbar">
-                                    {['1D', '1W', '1M', '3M', '6M', 'YTD', '1Y', '3Y', '5Y']
-                                        .filter(r => {
-                                            if (r === '1D') {
-                                                return assetData && assetData.asset_type !== 'FON';
-                                            }
-                                            return true;
-                                        })
-                                        .map(r => (
-                                        <button
-                                            key={r}
-                                            onClick={() => setTimeRange(r)}
-                                            className={`px-3 py-1.5 sm:py-1 text-xs font-semibold rounded-md transition shrink-0 ${timeRange === r ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'}`}
-                                        >
-                                            {r === '1D' ? 'Günlük' : r === '1W' ? 'Haftalık' : r === '1M' ? 'Aylık' : r === '3M' ? '3 Aylık' : r === '6M' ? '6 Aylık' : r === 'YTD' ? 'YBB' : r === '1Y' ? 'Yıllık' : r === '3Y' ? '3 Yıllık' : r === '5Y' ? '5 Yıllık' : 'Özel'}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                            
-                            <div className="flex-1 w-full min-h-0 relative">
-                                <div className="absolute inset-0">
-                                    {isChartLoading ? (
-                                        <LoadingSpinner fullScreen={false} message="Grafik yükleniyor..." />
-                                    ) : chartData && chartData.length > 0 ? (
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
-                                            <defs>
-                                                <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
-                                                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
-                                                </linearGradient>
-                                            </defs>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} vertical={false} />
-                                            <XAxis 
-                                                dataKey="date" 
-                                                stroke="#94a3b8" 
-                                                fontSize={12}
-                                                tickLine={false}
-                                                axisLine={false}
-                                                minTickGap={30}
-                                            />
-                                            <YAxis 
-                                                domain={['auto', 'auto']} 
-                                                stroke="#94a3b8" 
-                                                fontSize={12}
-                                                tickLine={false}
-                                                axisLine={false}
-                                                tickFormatter={(value) => value.toFixed(2)}
-                                            />
-                                            <RechartsTooltip 
-                                                contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f8fafc' }}
-                                                itemStyle={{ color: '#818cf8' }}
-                                                labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
-                                            />
-                                            <Area 
-                                                type="monotone" 
-                                                dataKey="price" 
-                                                stroke="#6366f1" 
-                                                strokeWidth={2}
-                                                fillOpacity={1} 
-                                                fill="url(#colorPrice)" 
-                                            />
-                                            <Brush 
-                                                dataKey="date" 
-                                                height={30} 
-                                                stroke="#6366f1" 
-                                                fill="#1e293b" 
-                                                onChange={handleBrushChange}
-                                                tickFormatter={(date) => date}
-                                            />
-                                        </AreaChart>
-                                    </ResponsiveContainer>
-                                    ) : assetData?.asset_type === 'FON' ? (
-                                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 text-center px-4">
-                                        <Activity className="w-16 h-16 mb-4 opacity-30" />
-                                        <p className="text-lg font-medium text-slate-400">Devlet (TEFAS) API'si geçici olarak kısıtlandığı için fon grafikleri çekilemiyor.</p>
-                                        <p className="text-sm mt-2 text-slate-500">BIST hisseleri ve Döviz kurları sorunsuz çalışmaktadır.</p>
-                                    </div>
-                                ) : (
-                                    <div className="w-full h-full flex items-center justify-center">
-                                        <span className="text-slate-500">Grafik Yükleniyor Veya Veri Bulunamadı...</span>
-                                    </div>
-                                )}
-                                </div>
-                            </div>
-                        </div>
+                        <InteractiveAreaChart
+                            title="Fiyat Grafiği"
+                            subtitle={assetData ? `${assetData.symbol} detaylı zaman ve fiyat analizi` : undefined}
+                            data={chartData.map(pt => ({
+                                date: pt.date,
+                                value: typeof pt.price === 'number' ? pt.price : parseFloat(String(pt.price || 0)),
+                                raw: typeof pt.price === 'number' ? pt.price : parseFloat(String(pt.price || 0)),
+                            }))}
+                            dataKey="value"
+                            dateKey="date"
+                            periods={assetPeriods}
+                            activePeriod={timeRange}
+                            onPeriodChange={(r) => setTimeRange(r)}
+                            currencySymbol="₺"
+                            currency="TRY"
+                            valueFormatter={(val) => `${val.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺`}
+                            showBrush={true}
+                            showStats={true}
+                            isLoading={isChartLoading}
+                            emptyMessage={
+                                assetData?.asset_type === 'FON'
+                                    ? "Devlet (TEFAS) API'si kısıtlaması nedeniyle fon grafiği gösterilemiyor."
+                                    : "Grafik verisi yükleniyor veya veri bulunamadı..."
+                            }
+                        />
 
                         {/* PORTFOLIO SNAPSHOT (If holding) */}
                         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shrink-0">
@@ -542,8 +573,8 @@ export default function AssetDetailPage() {
                     </div>
                 </div>
 
-                {/* DIV 9: Bottom Row: Temel Bilgiler (Spans across full width below the flex container) */}
-                {fundamentals && (
+                {/* DIV 9: Bottom Row: Temel Bilgiler (Hisseler için gösterilir) */}
+                {fundamentals && assetData?.asset_type === 'HISSE' && (
                     <div className="mt-6 bg-slate-900 border border-slate-800 rounded-2xl p-6">
                         <h3 className="text-lg font-bold text-white mb-4 flex items-center">
                             <Activity className="w-5 h-5 mr-2 text-indigo-400" />
@@ -658,17 +689,8 @@ export default function AssetDetailPage() {
                                 </div>
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Tarih ve Saat</label>
-                                <input 
-                                    type="datetime-local" 
-                                    required
-                                    max={new Date().toISOString().slice(0, 16)}
-                                    value={txDate}
-                                    onChange={e => setTxDate(e.target.value)}
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 [color-scheme:dark]"
-                                />
-                            </div>
+                            {/* 🗓️ GELİŞMİŞ ERGONOMİK TARİH VE SAAT SEÇİCİ */}
+                            <TransactionDatePicker value={txDate} onChange={setTxDate} onErrorChange={setIsTxDateError} />
 
                             <div>
                                 <label className="block text-sm font-medium text-slate-400 mb-1">Ödenen Komisyon (₺) - Opsiyonel</label>
@@ -683,10 +705,20 @@ export default function AssetDetailPage() {
                                 />
                             </div>
 
+                            {/* Toplam İşlem Tutarı Özeti */}
+                            {parseFloat(txAmount) > 0 && parseFloat(txPrice) > 0 && (
+                                <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700 flex justify-between items-center text-xs">
+                                    <span className="text-slate-400 font-medium">Toplam İşlem Tutarı:</span>
+                                    <span className="font-bold text-white font-mono text-sm">
+                                        {((parseFloat(txAmount) || 0) * (parseFloat(txPrice) || 0)).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+                                    </span>
+                                </div>
+                            )}
+
                             <button 
                                 type="submit" 
-                                disabled={submitting}
-                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                                disabled={submitting || isTxDateError}
+                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer"
                             >
                                 {submitting ? 'Kaydediliyor...' : 'İşlemi Kaydet'}
                             </button>

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -168,7 +169,7 @@ func (cfg *ApiConfig) HandlerTriggerBackfill(w http.ResponseWriter, r *http.Requ
 	assetObj, err := cfg.DB.GetAssetByID(r.Context(), int64(assetID))
 	if err == nil {
 		go func() {
-			_ = scraper.QuickSyncAsset(r.Context(), cfg.DB, assetObj)
+			_ = scraper.QuickSyncAsset(context.Background(), cfg.DB, assetObj)
 		}()
 	}
 
@@ -201,4 +202,63 @@ func (cfg *ApiConfig) HandlerLookupAsset(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	respondWithJSON(w, http.StatusOK, asset)
+}
+
+func (cfg *ApiConfig) HandlerGetAssetSummary(w http.ResponseWriter, r *http.Request) {
+	assetParam := chi.URLParam(r, "id")
+	assetID, err := strconv.ParseInt(assetParam, 10, 64)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Geçersiz varlık ID", err)
+		return
+	}
+
+	summary, err := cfg.DB.GetAssetReturnsSummary(r.Context(), assetID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Getiri özeti alınamadı", err)
+		return
+	}
+
+	currentP, _ := strconv.ParseFloat(summary.CurrentP, 64)
+	p1d, _ := strconv.ParseFloat(summary.P1d, 64)
+	p1w, _ := strconv.ParseFloat(summary.P1w, 64)
+	p1m, _ := strconv.ParseFloat(summary.P1m, 64)
+	p3m, _ := strconv.ParseFloat(summary.P3m, 64)
+	p6m, _ := strconv.ParseFloat(summary.P6m, 64)
+	pYtd, _ := strconv.ParseFloat(summary.PYtd, 64)
+	p1y, _ := strconv.ParseFloat(summary.P1y, 64)
+	pAll, _ := strconv.ParseFloat(summary.PAll, 64)
+
+	var p3yStr string
+	_ = cfg.DBConn.QueryRowContext(r.Context(), `
+		WITH current_price AS (
+			SELECT ph.price, ph.recorded_at FROM price_history ph WHERE ph.asset_id = $1 ORDER BY ph.recorded_at DESC LIMIT 1
+		),
+		price_3y AS (
+			SELECT ph.price FROM price_history ph WHERE ph.asset_id = $1 AND ph.recorded_at >= (SELECT cp.recorded_at FROM current_price cp) - INTERVAL '3 years' ORDER BY ph.recorded_at ASC LIMIT 1
+		)
+		SELECT COALESCE((SELECT p.price FROM price_3y p), '0')::text;
+	`, assetID).Scan(&p3yStr)
+	p3y, _ := strconv.ParseFloat(p3yStr, 64)
+
+	calcReturn := func(current, period float64) float64 {
+		if period == 0 {
+			return 0
+		}
+		return ((current - period) / period) * 100
+	}
+
+	returns := map[string]float64{
+		"1D":  calcReturn(currentP, p1d),
+		"1W":  calcReturn(currentP, p1w),
+		"1M":  calcReturn(currentP, p1m),
+		"3M":  calcReturn(currentP, p3m),
+		"6M":  calcReturn(currentP, p6m),
+		"YTD": calcReturn(currentP, pYtd),
+		"1Y":  calcReturn(currentP, p1y),
+		"3Y":  calcReturn(currentP, p3y),
+		"5Y":  calcReturn(currentP, pAll),
+		"ALL": calcReturn(currentP, pAll),
+	}
+
+	respondWithJSON(w, http.StatusOK, returns)
 }

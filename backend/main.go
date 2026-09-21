@@ -108,8 +108,8 @@ func main() {
 	v1Router.Use(middleware.Logger)
 	v1Router.Use(middleware.Recoverer)
 
-	// Rate Limiter
-	v1Router.Use(httprate.NewRateLimiter(100, 1*time.Minute, httprate.WithKeyFuncs(keyByClientIP)).Handler)
+	// Rate Limiter (Geliştirme ve hızlı UI gezinmeleri için cömert limit)
+	v1Router.Use(httprate.NewRateLimiter(1000, 1*time.Minute, httprate.WithKeyFuncs(keyByClientIP)).Handler)
 
 	allowedOriginsStr := os.Getenv("ALLOWED_ORIGINS")
 	var allowedOrigins []string
@@ -132,10 +132,7 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           300,
 	})
-	if err != nil {
-		slog.Error("CORS yapılandırma hatası", "error", err)
-		os.Exit(1)
-	}
+	
 
 	v1Router.Use(corsMiddleware)
 
@@ -153,17 +150,18 @@ func main() {
 
 	// Kullanıcı Rotaları (Özel Brute-Force Korumalı Rate Limiter: 5 istek / dakika)
 	authRateLimiter := httprate.NewRateLimiter(5, 1*time.Minute, httprate.WithKeyFuncs(keyByClientIP)).Handler
+	refreshRateLimiter := httprate.NewRateLimiter(60, 1*time.Minute, httprate.WithKeyFuncs(keyByClientIP)).Handler
 	lookupRateLimiter := httprate.NewRateLimiter(10, 1*time.Minute, httprate.WithKeyFuncs(keyByClientIP)).Handler
 	v1Router.With(authRateLimiter).Post("/register", apiCFG.HandlerRegister)
 	v1Router.With(authRateLimiter).Post("/login", apiCFG.HandlerLogin)
 	v1Router.Get("/me", apiCFG.MiddleWareAuth(apiCFG.HandlerGetMe))
-	v1Router.With(authRateLimiter).Post("/refresh", apiCFG.HandlerRefreshToken)
-	v1Router.With(authRateLimiter).Post("/revoke", apiCFG.HandlerRevokeToken)
+	v1Router.With(refreshRateLimiter).Post("/refresh", apiCFG.HandlerRefreshToken)
+	v1Router.Post("/revoke", apiCFG.HandlerRevokeToken)
 
 	// Asset (Hisse/Fon) Rotaları
 	v1Router.Post("/assets", apiCFG.MiddleWareAuth(apiCFG.MiddleWareAdmin(apiCFG.HandlerCreateAsset)))
 	v1Router.Get("/assets", apiCFG.HandlerListAssets)
-	v1Router.With(lookupRateLimiter).Get("/assets/lookup", apiCFG.MiddleWareAuth(apiCFG.HandlerLookupAsset))
+	v1Router.Get("/assets/lookup", apiCFG.HandlerLookupAsset)
 	v1Router.Post("/splits", apiCFG.MiddleWareAuth(apiCFG.MiddleWareAdmin(apiCFG.HandlerCreateSplit)))
 	v1Router.Get("/assets/{id}/splits", apiCFG.MiddleWareAuth(apiCFG.HandlerListSplitsByAsset))
 
@@ -174,7 +172,8 @@ func main() {
 	v1Router.Get("/portfolio/summary", apiCFG.MiddleWareAuth(apiCFG.HandlerGetPortfolioSummary))
 	v1Router.Delete("/transactions/{id}", apiCFG.MiddleWareAuth(apiCFG.HandlerDeleteTransaction))
 	v1Router.Get("/assets/{id}/price-history", apiCFG.HandlerGetAssetPriceHistory)
-	v1Router.Post("/assets/{id}/backfill", apiCFG.HandlerTriggerBackfill)
+	v1Router.Get("/assets/{id}/summary", apiCFG.HandlerGetAssetSummary)
+	v1Router.With(lookupRateLimiter).Post("/assets/{id}/backfill", apiCFG.HandlerTriggerBackfill)
 	v1Router.Post("/dividends", apiCFG.MiddleWareAuth(apiCFG.HandlerCreateDividend))
 	v1Router.Get("/dividends", apiCFG.MiddleWareAuth(apiCFG.HandlerGetUserDividends))
 	v1Router.Delete("/dividends/{id}", apiCFG.MiddleWareAuth(apiCFG.HandlerDeleteDividend))

@@ -36,4 +36,4 @@ SET name = EXCLUDED.name,
     updated_at = CURRENT_TIMESTAMP
 RETURNING *;
 -- name: GetActiveAssets :many
-SELECT DISTINCT a.* FROM assets a LEFT JOIN transactions t ON a.id = t.asset_id LEFT JOIN user_watchlists w ON a.id = w.asset_id WHERE t.id IS NOT NULL OR w.id IS NOT NULL;
+SELECT DISTINCT a.* FROM assets a LEFT JOIN transactions t ON a.id = t.asset_id LEFT JOIN user_watchlists w ON a.id = w.asset_id WHERE (t.id IS NOT NULL AND t.deleted_at IS NULL) OR w.id IS NOT NULL;

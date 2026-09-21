@@ -45,6 +45,8 @@ export interface PortfolioSummary {
     total_value_usd: number;
     total_combined_profit_usd: number;
     total_commission: number;
+    period_returns?: Record<string, number>;
+    period_values?: Record<string, number>;
 }
 
 export interface Transaction {
