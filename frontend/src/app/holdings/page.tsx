@@ -29,6 +29,8 @@ import {
     Clock
 } from 'lucide-react';
 import TransactionDatePicker from '@/components/TransactionDatePicker';
+import { formatCurrency } from '@/lib/formatters';
+import { fetchAssetSummariesBulk, invalidateAssetCache } from '@/lib/assetCache';
 
 interface AssetGroup {
     id: string;
@@ -48,8 +50,9 @@ export default function HoldingsPage() {
     // Para birimi seçimi: 'TRY' veya 'USD'
     const [currency, setCurrency] = useState<'TRY' | 'USD'>('TRY');
 
-    // Periyot Seçimi: 1D (Günlük), 1W, 1M, 3M, 1Y, ALL
-    const [selectedPeriod, setSelectedPeriod] = useState<'1D' | '1W' | '1M' | '3M' | '1Y' | 'ALL'>('1D');
+    // Periyot Seçimi: 1D (Günlük), 1W, 1M, 3M, 6M, YTD, 1Y, 3Y, 5Y, ALL
+    type Period = '1D' | '1W' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '3Y' | '5Y' | 'ALL';
+    const [selectedPeriod, setSelectedPeriod] = useState<Period>('1D');
 
     // Her varlığın periyot getiri verileri (symbol -> { 1D: number, 1W: number, ... })
     const [assetSummaries, setAssetSummaries] = useState<Record<string, Record<string, number>>>({});
@@ -152,9 +155,12 @@ export default function HoldingsPage() {
         }
     };
 
-    const loadData = async () => {
+    const loadData = async (isManualRefresh = false) => {
         try {
             setRefreshing(true);
+            if (isManualRefresh) {
+                invalidateAssetCache();
+            }
             const [sumRes, holdRes] = await Promise.all([
                 api.get<PortfolioSummary>('/portfolio/summary').catch(() => null),
                 api.get<UserHolding[]>('/portfolio/holdings').catch(() => null),
@@ -165,23 +171,12 @@ export default function HoldingsPage() {
                 const holds = holdRes.data;
                 setHoldings(holds);
 
-                // Her varlığın periyot getirilerini arka planda detay API'sinden çek
-                holds.forEach(async h => {
-                    try {
-                        const detRes = await fetch(`/api/assets/detail?symbol=${h.symbol}&range=1D`);
-                        if (detRes.ok) {
-                            const det = await detRes.json();
-                            if (det.summary) {
-                                setAssetSummaries(prev => ({
-                                    ...prev,
-                                    [h.symbol]: det.summary,
-                                }));
-                            }
-                        }
-                    } catch {
-                        // sessizce geç
-                    }
-                });
+                // Tüm varlıkların periyot getirilerini akıllı önbellekten veya batch istek ile çek
+                const symbols = holds.map(h => h.symbol);
+                const summaries = await fetchAssetSummariesBulk(symbols, isManualRefresh);
+                if (Object.keys(summaries).length > 0) {
+                    setAssetSummaries(prev => ({ ...prev, ...summaries }));
+                }
             }
         } catch (err) {
             console.error('Varlıklar yüklenirken hata:', err);
@@ -203,25 +198,8 @@ export default function HoldingsPage() {
 
     const usdRate = summary?.usd_rate && summary.usd_rate > 0 ? summary.usd_rate : 48.65;
 
-    // Para formatlayıcı
-    const fmt = (amountTRY: number): string => {
-        if (isNaN(amountTRY)) amountTRY = 0;
-        if (currency === 'USD') {
-            const valUSD = amountTRY / usdRate;
-            return new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: 'USD',
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-            }).format(valUSD);
-        }
-        return new Intl.NumberFormat('tr-TR', {
-            style: 'currency',
-            currency: 'TRY',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        }).format(amountTRY);
-    };
+    // Para formatlama — ortak formatters kütüphanesini kullanır
+    const fmt = (amountTRY: number, showPlusSign: boolean = false): string => formatCurrency(amountTRY, currency, usdRate, showPlusSign);
 
     // Yeni Grup Oluştur
     const handleCreateGroup = (e: React.FormEvent) => {
@@ -332,27 +310,76 @@ export default function HoldingsPage() {
         return list;
     }, [holdings, activeTab, assetGroups, searchQuery, sortBy]);
 
-    // Seçili grubun istatistikleri
-    const selectedGroupMeta = useMemo(() => {
-        if (activeTab === 'all' || activeTab === 'by_type') return null;
-        const grp = groups.find(g => g.id === activeTab);
-        if (!grp) return null;
+    // Seçili grup ve seçili periyoda göre dinamik portföy / grup getiri ve metrikleri
+    const activeGroupMetrics = useMemo(() => {
+        let targetAssets: UserHolding[] = holdings;
+        let groupName = 'Toplam Portföy';
+        let groupColor: string | null = null;
+        const isCustomGroup = activeTab !== 'all' && activeTab !== 'by_type';
 
-        const groupAssets = holdings.filter(h => (assetGroups[h.symbol] || []).includes(grp.id));
-        const totalVal = groupAssets.reduce((sum, a) => sum + a.total_value, 0);
-        const totalCost = groupAssets.reduce((sum, a) => sum + (a.average_cost * a.total_amount), 0);
-        const totalPnl = totalVal - totalCost;
-        const pnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
+        if (isCustomGroup) {
+            const grp = groups.find(g => g.id === activeTab);
+            if (grp) {
+                groupName = grp.name;
+                groupColor = grp.color;
+            }
+            targetAssets = holdings.filter(h => (assetGroups[h.symbol] || []).includes(activeTab));
+        }
+
+        const totalVal = targetAssets.reduce((sum, h) => sum + h.total_value, 0);
+        const totalCost = targetAssets.reduce((sum, h) => sum + (h.average_cost * h.total_amount), 0);
+
+        let pnlAmount = 0;
+        let pnlPercent = 0;
+
+        if (selectedPeriod === 'ALL') {
+            pnlAmount = totalVal - totalCost;
+            pnlPercent = totalCost > 0 ? (pnlAmount / totalCost) * 100 : 0;
+        } else {
+            // Dönemsel baz fiyat ve getiri hesabı:
+            // Her varlık için dönemsel getiri oranı r = assetSummaries[h.symbol][selectedPeriod]
+            // Varlığın dönem başındaki baz değeri: baseVal = curVal / (1 + r / 100)
+            let totalBaseVal = 0;
+            let hasAnyValidReturn = false;
+
+            for (const h of targetAssets) {
+                const sum = assetSummaries[h.symbol];
+                const ret = sum?.[selectedPeriod];
+                const curVal = h.total_value;
+
+                if (ret !== undefined && !isNaN(ret) && ret !== 0) {
+                    hasAnyValidReturn = true;
+                    const baseVal = ret <= -100 ? 0 : curVal / (1 + (ret / 100));
+                    totalBaseVal += baseVal;
+                } else {
+                    totalBaseVal += curVal;
+                }
+            }
+
+            if (hasAnyValidReturn && totalBaseVal > 0) {
+                pnlAmount = totalVal - totalBaseVal;
+                pnlPercent = (pnlAmount / totalBaseVal) * 100;
+            } else if (!isCustomGroup && summary?.period_returns?.[selectedPeriod] !== undefined && summary.period_returns[selectedPeriod] !== 0) {
+                // Varlık bazında veri yoksa genel portföy snapshot getirisi
+                pnlPercent = summary.period_returns[selectedPeriod];
+                pnlAmount = totalVal * (pnlPercent / (100 + pnlPercent));
+            } else {
+                pnlAmount = 0;
+                pnlPercent = 0;
+            }
+        }
 
         return {
-            group: grp,
-            assetCount: groupAssets.length,
+            isCustomGroup,
+            groupName,
+            groupColor,
+            assetCount: targetAssets.length,
             totalVal,
             totalCost,
-            totalPnl,
-            pnlPct,
+            pnlAmount,
+            pnlPercent,
         };
-    }, [activeTab, groups, holdings, assetGroups]);
+    }, [activeTab, groups, holdings, assetGroups, selectedPeriod, assetSummaries, summary]);
 
     if (authLoading || loading) {
         return <LoadingSpinner withLogo message="Varlıklarınız ve portföy grupları yükleniyor..." />;
@@ -364,11 +391,11 @@ export default function HoldingsPage() {
     const totalPortfolioPnlPct = totalPortfolioCost > 0 ? (totalPortfolioPnl / totalPortfolioCost) * 100 : 0;
 
     return (
-        <div className="min-h-screen text-slate-100 py-8 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen text-slate-100 py-6 sm:py-8 px-3 sm:px-6 lg:px-8">
             <div className="max-w-7xl mx-auto space-y-6">
 
                 {/* 1. ÜST BAR: BAŞLIK, PARA BİRİMİ TOGGLE, İŞLEM EKLE */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/70 border border-slate-800 rounded-2xl p-6 backdrop-blur-sm shadow-sm">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/70 border border-slate-800 rounded-2xl p-4 sm:p-6 backdrop-blur-sm shadow-sm">
                     <div>
                         <div className="flex items-center gap-3">
                             <Link href="/dashboard" className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition" title="Dashboard'a Dön">
@@ -388,75 +415,85 @@ export default function HoldingsPage() {
                         <button
                             onClick={toggleCurrency}
                             title="Tüm değerleri Dolar veya TL cinsinden görüntüle"
-                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-sm border bg-slate-800 border-slate-700 hover:border-slate-600 active:scale-95 cursor-pointer text-white"
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition shadow-sm border bg-slate-800 border-slate-700 hover:border-[#1A9FD3] hover:text-[#1A9FD3] active:scale-95 cursor-pointer text-slate-100"
                         >
                             <span className="text-base">{currency === 'TRY' ? '🇹🇷' : '🇺🇸'}</span>
                             <span>Para Birimi:</span>
-                            <span className={`px-2 py-0.5 rounded-md font-extrabold ${currency === 'TRY' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                            <span className={`px-2 py-0.5 rounded-md font-extrabold ${currency === 'TRY' ? 'bg-[#1A9FD3]/15 text-[#1A9FD3]' : 'bg-[#1A9FD3]/15 text-[#1A9FD3]'}`}>
                                 {currency === 'TRY' ? '₺ TRY' : '$ USD'}
                             </span>
                         </button>
 
-                        {/* Yeni İşlem Ekle */}
+                        {/* İşlem Ekle */}
                         <button
                             onClick={() => {
-                                setTxSymbol(holdings[0]?.symbol || 'ASELS');
+                                setTxSymbol('');
+                                setTxAmount('');
+                                setTxPrice('');
                                 setIsTxModalOpen(true);
                             }}
-                            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-lg shadow-indigo-600/20 cursor-pointer"
+                            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[#1A9FD3] hover:bg-[#0C6991] text-white transition shadow-sm shadow-[#1A9FD3]/20 cursor-pointer active:scale-95"
                         >
-                            <Plus className="w-4 h-4" />
+                            <Plus className="w-4 h-4 stroke-[2.5]" />
                             <span>İşlem Ekle</span>
                         </button>
 
                         {/* Yenile */}
                         <button
-                            onClick={loadData}
+                            onClick={() => loadData(true)}
                             disabled={refreshing}
-                            className="p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition disabled:opacity-50 cursor-pointer"
-                            title="Yenile"
+                            className="p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-[#1A9FD3] hover:border-[#1A9FD3] transition disabled:opacity-50 cursor-pointer"
+                            title="Yenile (Önbelleği Temizle)"
                         >
-                            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-indigo-400' : ''}`} />
+                            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-[#1A9FD3]' : ''}`} />
                         </button>
                     </div>
                 </div>
 
                 {/* 2. PERİYOT BUTONLARI & PORTFÖY TOPLAM ÖZETİ */}
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                    {/* PERİYOT SEÇİCİ: 1D, 1W, 1M, 3M, 1Y, ALL */}
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mr-1 flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-indigo-400" /> Getiri Dönemi:
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
+                    {/* PERİYOT SEÇİCİ: 1D, 1W, 1M, 3M, 6M, YTD, 1Y, 3Y, 5Y, ALL */}
+                    <div className="flex items-center gap-2 flex-wrap w-full lg:w-auto">
+                        <span className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider mr-1 flex items-center gap-1.5 shrink-0">
+                            <Clock className="w-4 h-4 text-[#1A9FD3]" /> Getiri Dönemi:
                         </span>
-                        <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700/60 overflow-x-auto">
-                            {(['1D', '1W', '1M', '3M', '1Y', 'ALL'] as const).map(p => (
+                        <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700/60 overflow-x-auto gap-1 no-scrollbar touch-pan-x max-w-full">
+                            {(['1D', '1W', '1M', '3M', '6M', 'YTD', '1Y', '3Y', '5Y', 'ALL'] as const).map(p => (
                                 <button
                                     key={p}
                                     onClick={() => setSelectedPeriod(p)}
-                                    className={`px-3 py-1 text-xs font-bold rounded-lg transition cursor-pointer shrink-0 ${
+                                    className={`px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-bold rounded-lg transition cursor-pointer shrink-0 ${
                                         selectedPeriod === p
-                                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/40'
+                                            ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white font-bold shadow-sm shadow-[#1A9FD3]/20'
+                                            : 'text-slate-300 hover:text-[#1A9FD3] hover:bg-[#1A9FD3]/15'
                                     }`}
                                 >
-                                    {p === '1D' ? 'Günlük (1D)' : p === '1W' ? 'Haftalık' : p === '1M' ? 'Aylık' : p === '3M' ? '3 Aylık' : p === '1Y' ? 'Yıllık' : 'Tümü'}
+                                    {p === '1D' ? '1G' : p === '1W' ? '1H' : p === '1M' ? '1A' : p === '3M' ? '3A' : p === '6M' ? '6A' : p === 'YTD' ? 'YBB' : p === '1Y' ? '1Y' : p === '3Y' ? '3Y' : p === '5Y' ? '5Y' : 'Tümü'}
                                 </button>
                             ))}
                         </div>
                     </div>
 
-                    {/* Toplam Portföy Hızlı Göstergesi */}
-                    <div className="flex items-center gap-6 self-stretch md:self-auto justify-between md:justify-end border-t md:border-t-0 pt-3 md:pt-0 border-slate-800">
+                    {/* Toplam Portföy / Seçili Grup Hızlı Göstergesi (BÜYÜK VE OKUNAKLI PUNTOLAR) */}
+                    <div className="flex items-center gap-6 sm:gap-10 self-stretch lg:self-auto justify-between lg:justify-end border-t lg:border-t-0 pt-4 lg:pt-0 border-slate-800">
                         <div>
-                            <p className="text-[11px] text-slate-400">Toplam Portföy Değeri</p>
-                            <p className="text-lg font-black text-white">{fmt(totalPortfolioVal)}</p>
+                            <p className="text-xs sm:text-sm text-slate-400 font-medium">
+                                {activeGroupMetrics.isCustomGroup ? `${activeGroupMetrics.groupName} Değeri` : 'Toplam Portföy Değeri'}
+                            </p>
+                            <p className="text-2xl sm:text-3xl font-black text-white tracking-tight tabular-nums mt-0.5">
+                                {fmt(activeGroupMetrics.totalVal)}
+                            </p>
                         </div>
                         <div className="text-right">
-                            <p className="text-[11px] text-slate-400">Net Kâr / Zarar</p>
-                            <p className={`text-lg font-black flex items-center justify-end ${totalPortfolioPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                {totalPortfolioPnl >= 0 ? '+' : ''}{fmt(totalPortfolioPnl)}
-                                <span className="text-xs font-bold ml-1.5 font-mono">
-                                    ({totalPortfolioPnl >= 0 ? '+' : ''}{totalPortfolioPnlPct.toFixed(2)}%)
+                            <p className="text-xs sm:text-sm text-slate-400 font-medium">
+                                {selectedPeriod === 'ALL'
+                                    ? (activeGroupMetrics.isCustomGroup ? 'Grup Toplam Getiri' : 'Toplam Getiri (ALL)')
+                                    : `${selectedPeriod === '1D' ? 'Günlük (1G)' : selectedPeriod === '1W' ? 'Haftalık (1H)' : selectedPeriod === '1M' ? 'Aylık (1A)' : selectedPeriod === '3M' ? '3 Aylık (3A)' : selectedPeriod === '6M' ? '6 Aylık (6A)' : selectedPeriod === 'YTD' ? 'Yılbaşından Bugüne (YBB)' : selectedPeriod === '1Y' ? 'Yıllık (1Y)' : selectedPeriod === '3Y' ? '3 Yıllık (3Y)' : selectedPeriod === '5Y' ? '5 Yıllık (5Y)' : selectedPeriod} K/Z`}
+                            </p>
+                            <p className={`text-2xl sm:text-3xl font-black flex items-center justify-end tracking-tight tabular-nums mt-0.5 ${activeGroupMetrics.pnlAmount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {fmt(activeGroupMetrics.pnlAmount, true)}
+                                <span className={`text-xs sm:text-sm font-bold ml-2 px-2 py-0.5 rounded font-mono ${activeGroupMetrics.pnlAmount >= 0 ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'bg-rose-500/15 text-rose-400 border border-rose-500/25'}`}>
+                                    {activeGroupMetrics.pnlAmount >= 0 ? '+' : ''}{activeGroupMetrics.pnlPercent.toFixed(2)}%
                                 </span>
                             </p>
                         </div>
@@ -467,30 +504,42 @@ export default function HoldingsPage() {
                 <div className="space-y-3">
                     <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <Layers className="w-3.5 h-3.5 text-indigo-400" /> Gruplar & Listeler
+                            <Layers className="w-3.5 h-3.5 text-[#1A9FD3]" /> Gruplar & Listeler
                         </span>
-                        <button
-                            onClick={() => setIsCreateGroupOpen(true)}
-                            className="flex items-center gap-1 text-xs font-bold text-indigo-400 hover:text-indigo-300 transition cursor-pointer bg-indigo-500/10 px-2.5 py-1 rounded-lg border border-indigo-500/20"
-                        >
-                            <FolderPlus className="w-3.5 h-3.5" />
-                            <span>+ Yeni Grup Oluştur</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                            {activeGroupMetrics.isCustomGroup && (
+                                <button
+                                    onClick={() => handleDeleteGroup(activeTab)}
+                                    className="flex items-center gap-1.5 text-xs font-bold text-rose-400 hover:text-rose-300 transition cursor-pointer bg-rose-500/10 hover:bg-rose-500/20 px-3 py-1.5 rounded-lg border border-rose-500/25 active:scale-95"
+                                    title={`"${activeGroupMetrics.groupName}" Grubunu Sil`}
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span>Grubu Sil</span>
+                                </button>
+                            )}
+                            <button
+                                onClick={() => setIsCreateGroupOpen(true)}
+                                className="flex items-center gap-1 text-xs font-bold text-[#1A9FD3] hover:text-white transition cursor-pointer bg-[#1A9FD3]/10 hover:bg-[#0C6991] px-2.5 py-1.5 rounded-lg border border-[#1A9FD3]/30"
+                            >
+                                <FolderPlus className="w-3.5 h-3.5" />
+                                <span>+ Yeni Grup Oluştur</span>
+                            </button>
+                        </div>
                     </div>
 
-                    {/* Grup Butonları / Sekmeleri */}
-                    <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+                    {/* Grup Butonları / Sekmeleri (YÜKSEK KONTRASTLI VE SEÇİLİ DURUMDA NET OKUNUR) */}
+                    <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar touch-pan-x">
                         {/* 1. TÜMÜ */}
                         <button
                             onClick={() => setActiveTab('all')}
-                            className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 cursor-pointer flex items-center gap-2 ${
+                            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition shrink-0 cursor-pointer flex items-center gap-2 ${
                                 activeTab === 'all'
-                                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                                    : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                                    ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white shadow-sm shadow-[#1A9FD3]/20'
+                                    : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-[#1A9FD3] hover:border-[#1A9FD3]/50 hover:bg-[#1A9FD3]/10'
                             }`}
                         >
                             <span>Tüm Varlıklar</span>
-                            <span className="px-1.5 py-0.5 rounded-full bg-black/20 text-[10px] font-mono">
+                            <span className={`px-1.5 py-0.5 rounded-full text-xs font-mono ${activeTab === 'all' ? 'bg-white/20 text-white font-bold' : 'bg-black/20 text-slate-300'}`}>
                                 {holdings.length}
                             </span>
                         </button>
@@ -498,10 +547,10 @@ export default function HoldingsPage() {
                         {/* 2. TÜRE GÖRE OTOMATİK GRUPLAMA */}
                         <button
                             onClick={() => setActiveTab('by_type')}
-                            className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 cursor-pointer flex items-center gap-2 ${
+                            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition shrink-0 cursor-pointer flex items-center gap-2 ${
                                 activeTab === 'by_type'
-                                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                                    : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                                    ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white shadow-sm shadow-[#1A9FD3]/20'
+                                    : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-[#1A9FD3] hover:border-[#1A9FD3]/50 hover:bg-[#1A9FD3]/10'
                             }`}
                         >
                             <span>Türe Göre Grupla</span>
@@ -510,20 +559,19 @@ export default function HoldingsPage() {
                         {/* 3. KULLANICININ ÖZEL GRUPLARI */}
                         {groups.map(g => {
                             const count = holdings.filter(h => (assetGroups[h.symbol] || []).includes(g.id)).length;
+                            const isActive = activeTab === g.id;
                             return (
                                 <button
                                     key={g.id}
                                     onClick={() => setActiveTab(g.id)}
-                                    className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 cursor-pointer flex items-center gap-2 ${
-                                        activeTab === g.id
-                                            ? 'bg-slate-800 text-white border-2'
-                                            : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                                    className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition shrink-0 cursor-pointer flex items-center gap-2 border ${
+                                        isActive
+                                            ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white border-[#1A9FD3] shadow-sm shadow-[#1A9FD3]/20'
+                                            : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-[#1A9FD3] hover:border-[#1A9FD3]/50 hover:bg-[#1A9FD3]/10'
                                     }`}
-                                    style={activeTab === g.id ? { borderColor: g.color } : {}}
                                 >
-                                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: g.color }}></span>
                                     <span>{g.name}</span>
-                                    <span className="px-1.5 py-0.5 rounded-full bg-black/30 text-[10px] font-mono text-slate-300">
+                                    <span className={`px-1.5 py-0.5 rounded-full text-xs font-mono ${isActive ? 'bg-white/20 text-white font-bold' : 'bg-black/20 text-slate-300'}`}>
                                         {count}
                                     </span>
                                 </button>
@@ -531,43 +579,6 @@ export default function HoldingsPage() {
                         })}
                     </div>
                 </div>
-
-                {/* ÖZEL GRUP DETAY KARTI (Seçili grup varsa gösterilir) */}
-                {selectedGroupMeta && (
-                    <div className="bg-slate-900 border rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4" style={{ borderColor: `${selectedGroupMeta.group.color}40` }}>
-                        <div className="flex items-center gap-3">
-                            <span className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: selectedGroupMeta.group.color }}></span>
-                            <div>
-                                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                                    {selectedGroupMeta.group.name}
-                                    <span className="text-xs font-normal text-slate-400">({selectedGroupMeta.assetCount} Varlık)</span>
-                                </h2>
-                                <p className="text-xs text-slate-400">Bu gruba atanan varlıkların toplam performansı</p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-6">
-                            <div>
-                                <p className="text-[11px] text-slate-400">Grup Büyüklüğü</p>
-                                <p className="text-base font-bold text-white">{fmt(selectedGroupMeta.totalVal)}</p>
-                            </div>
-                            <div>
-                                <p className="text-[11px] text-slate-400">Grup Kâr / Zarar</p>
-                                <p className={`text-base font-bold flex items-center ${selectedGroupMeta.totalPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                    {selectedGroupMeta.totalPnl >= 0 ? '+' : ''}{fmt(selectedGroupMeta.totalPnl)}
-                                    <span className="text-xs ml-1 font-mono">({selectedGroupMeta.totalPnl >= 0 ? '+' : ''}{selectedGroupMeta.pnlPct.toFixed(2)}%)</span>
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => handleDeleteGroup(selectedGroupMeta.group.id)}
-                                className="p-2 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition cursor-pointer ml-2"
-                                title="Grubu Sil"
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
-                )}
 
                 {/* 4. ARAMA VE SIRALAMA KONTROLLERİ */}
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-2xl p-4">
@@ -579,7 +590,7 @@ export default function HoldingsPage() {
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             placeholder="Sembol veya hisse ara..."
-                            className="w-full bg-slate-800/80 border border-slate-700/70 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition"
+                            className="w-full bg-slate-800/80 border border-slate-700/70 rounded-xl pl-9 pr-3 py-2 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-[#1A9FD3] transition"
                         />
                     </div>
 
@@ -589,8 +600,8 @@ export default function HoldingsPage() {
                         <span className="text-xs text-slate-400">Sırala:</span>
                         <select
                             value={sortBy}
-                            onChange={e => setSortBy(e.target.value as any)}
-                            className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 transition cursor-pointer"
+                            onChange={e => setSortBy(e.target.value as typeof sortBy)}
+                            className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-[#1A9FD3] transition cursor-pointer"
                         >
                             <option value="val_desc">En Yüksek Değer (Azalan)</option>
                             <option value="pnl_desc">En Çok Kazandıranlar (Kâr %)</option>
@@ -612,26 +623,24 @@ export default function HoldingsPage() {
                             const typeVal = typeList.reduce((s, h) => s + h.total_value, 0);
 
                             return (
-                                <div key={typeKey} className="space-y-3">
-                                    <div className="flex items-center justify-between px-1">
-                                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                                            <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                                <div key={typeKey} className="space-y-2.5">
+                                    <div className="flex items-center justify-between px-2">
+                                        <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                                            <span className="w-2 h-2 rounded-full bg-[#1A9FD3]"></span>
                                             {typeTitle} ({typeList.length})
                                         </h3>
-                                        <span className="text-xs font-bold text-slate-400">{fmt(typeVal)}</span>
+                                        <span className="text-xs sm:text-sm font-bold text-slate-300 font-mono tabular-nums">{fmt(typeVal)}</span>
                                     </div>
-                                    <div className="grid grid-cols-1 gap-3">
-                                        {typeList.map(h => renderAssetCard(h))}
-                                    </div>
+                                    {renderHoldingsTable(typeList)}
                                 </div>
                             );
                         })}
                     </div>
                 ) : (
-                    // NORMAL VEYA ÖZEL GRUP LİSTESİ
-                    <div className="grid grid-cols-1 gap-3">
+                    // NORMAL VEYA ÖZEL GRUP LİSTESİ — GERÇEK TABLO DÜZENİ
+                    <div>
                         {processedHoldings.length > 0 ? (
-                            processedHoldings.map(h => renderAssetCard(h))
+                            renderHoldingsTable(processedHoldings)
                         ) : (
                             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
                                 <p className="text-base font-semibold text-white mb-1">Bu grupta veya aramada varlık bulunamadı.</p>
@@ -641,7 +650,7 @@ export default function HoldingsPage() {
                                 {activeTab !== 'all' && (
                                     <button
                                         onClick={() => setActiveTab('all')}
-                                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                                        className="px-4 py-2 bg-[#1A9FD3] hover:bg-[#0C6991] text-white font-bold rounded-xl text-xs sm:text-sm transition cursor-pointer shadow-sm shadow-[#1A9FD3]/20"
                                     >
                                         Tüm Varlıklara Git ve Gruba Ata
                                     </button>
@@ -654,14 +663,14 @@ export default function HoldingsPage() {
 
             {/* 6. YENİ GRUP OLUŞTURMA MODALI */}
             {isCreateGroupOpen && (
-                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-5">
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-5 max-h-[90dvh] overflow-y-auto">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <h3 className="text-base font-bold text-white flex items-center gap-2">
-                                <FolderPlus className="w-5 h-5 text-indigo-400" />
+                                <FolderPlus className="w-5 h-5 text-[#1A9FD3]" />
                                 Yeni Grup Oluştur
                             </h3>
-                            <button onClick={() => setIsCreateGroupOpen(false)} className="text-slate-400 hover:text-white">
+                            <button onClick={() => setIsCreateGroupOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
@@ -675,7 +684,7 @@ export default function HoldingsPage() {
                                     value={newGroupName}
                                     onChange={e => setNewGroupName(e.target.value)}
                                     placeholder="örn. Temettü Portföyüm, Teknoloji, Uzun Vade"
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#1A9FD3]"
                                 />
                             </div>
 
@@ -702,13 +711,13 @@ export default function HoldingsPage() {
                                 <button
                                     type="button"
                                     onClick={() => setIsCreateGroupOpen(false)}
-                                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
                                 >
                                     İptal
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-lg shadow-indigo-600/30"
+                                    className="px-5 py-2 rounded-xl text-xs font-bold bg-[#1A9FD3] hover:bg-[#0C6991] text-white transition shadow-sm shadow-[#1A9FD3]/20 cursor-pointer"
                                 >
                                     Grup Oluştur
                                 </button>
@@ -720,14 +729,14 @@ export default function HoldingsPage() {
 
             {/* 7. HİSSEYİ GRUPLARA ATAMA MODALI */}
             {assigningAsset && (
-                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[90dvh] overflow-y-auto">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <div>
                                 <h3 className="text-base font-bold text-white">Gruplara Ata: {assigningAsset.symbol}</h3>
                                 <p className="text-xs text-slate-400">{assigningAsset.asset_name}</p>
                             </div>
-                            <button onClick={() => setAssigningAsset(null)} className="text-slate-400 hover:text-white">
+                            <button onClick={() => setAssigningAsset(null)} className="text-slate-400 hover:text-white cursor-pointer">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
@@ -742,14 +751,14 @@ export default function HoldingsPage() {
                                             type="button"
                                             onClick={() => toggleAssetInGroup(assigningAsset.symbol, g.id)}
                                             className={`w-full flex items-center justify-between p-3 rounded-xl border transition text-left cursor-pointer ${
-                                                isAssigned ? 'bg-indigo-600/10 border-indigo-500/40 text-white' : 'bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800'
+                                                isAssigned ? 'bg-[#1A9FD3]/15 border-[#1A9FD3]/40 text-white' : 'bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800'
                                             }`}
                                         >
                                             <div className="flex items-center gap-2.5">
                                                 <span className="w-3 h-3 rounded-full" style={{ backgroundColor: g.color }}></span>
                                                 <span className="text-xs font-bold text-slate-200">{g.name}</span>
                                             </div>
-                                            <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${isAssigned ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-slate-700'}`}>
+                                            <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${isAssigned ? 'bg-[#1A9FD3] border-[#1A9FD3] text-white' : 'border-slate-700'}`}>
                                                 {isAssigned && <Check className="w-3.5 h-3.5" />}
                                             </div>
                                         </button>
@@ -766,13 +775,13 @@ export default function HoldingsPage() {
                                     setAssigningAsset(null);
                                     setIsCreateGroupOpen(true);
                                 }}
-                                className="text-xs font-bold text-indigo-400 hover:underline"
+                                className="text-xs font-bold text-[#1A9FD3] hover:underline cursor-pointer"
                             >
                                 + Yeni Grup Ekle
                             </button>
                             <button
                                 onClick={() => setAssigningAsset(null)}
-                                className="px-5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition"
+                                className="px-5 py-2 rounded-xl text-xs font-bold bg-[#1A9FD3] hover:bg-[#0C6991] text-white transition shadow-sm shadow-[#1A9FD3]/20 cursor-pointer"
                             >
                                 Tamamla
                             </button>
@@ -783,11 +792,11 @@ export default function HoldingsPage() {
 
             {/* 8. HIZLI İŞLEM EKLEME MODALI */}
             {isTxModalOpen && (
-                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[90dvh] overflow-y-auto">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <h3 className="text-base font-bold text-white">İşlem Ekle</h3>
-                            <button onClick={() => setIsTxModalOpen(false)} className="text-slate-400 hover:text-white">
+                            <button onClick={() => setIsTxModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
@@ -801,7 +810,7 @@ export default function HoldingsPage() {
                                     value={txSymbol}
                                     onChange={e => setTxSymbol(e.target.value.toUpperCase())}
                                     placeholder="örn. ASELS, THYAO"
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white uppercase font-bold"
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white uppercase font-bold focus:outline-none focus:border-[#1A9FD3]"
                                 />
                             </div>
 
@@ -809,14 +818,14 @@ export default function HoldingsPage() {
                                 <button
                                     type="button"
                                     onClick={() => setTxType('BUY')}
-                                    className={`py-2 rounded-xl text-xs font-bold transition cursor-pointer ${txType === 'BUY' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'}`}
+                                    className={`py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${txType === 'BUY' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'}`}
                                 >
                                     Alış (BUY)
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setTxType('SELL')}
-                                    className={`py-2 rounded-xl text-xs font-bold transition cursor-pointer ${txType === 'SELL' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-400'}`}
+                                    className={`py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${txType === 'SELL' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-400'}`}
                                 >
                                     Satış (SELL)
                                 </button>
@@ -833,7 +842,7 @@ export default function HoldingsPage() {
                                         value={txAmount}
                                         onChange={e => setTxAmount(e.target.value)}
                                         placeholder="100"
-                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-[#1A9FD3]"
                                     />
                                 </div>
                                 <div>
@@ -846,7 +855,7 @@ export default function HoldingsPage() {
                                         value={txPrice}
                                         onChange={e => setTxPrice(e.target.value)}
                                         placeholder="350.50"
-                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-[#1A9FD3]"
                                     />
                                 </div>
                             </div>
@@ -864,17 +873,34 @@ export default function HoldingsPage() {
                                     value={txCommission}
                                     onChange={e => setTxCommission(e.target.value)}
                                     placeholder="0.00"
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-[#1A9FD3]"
                                 />
+                                <p className="text-[11px] text-slate-400 mt-1">Komisyon girilirse alış maliyetine eklenir, kâr/zarar hesabını etkiler.</p>
                             </div>
 
                             {/* Toplam İşlem Tutarı Özeti */}
                             {parseFloat(txAmount) > 0 && parseFloat(txPrice) > 0 && (
-                                <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 flex justify-between items-center text-xs">
-                                    <span className="text-slate-400">Toplam İşlem Tutarı:</span>
-                                    <span className="font-bold text-white font-mono">
-                                        {((parseFloat(txAmount) || 0) * (parseFloat(txPrice) || 0)).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
-                                    </span>
+                                <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1.5 text-xs sm:text-sm">
+                                    <div className="flex justify-between items-center text-slate-400">
+                                        <span>İşlem Tutarı:</span>
+                                        <span className="font-mono text-slate-200 font-medium">
+                                            {((parseFloat(txAmount) || 0) * (parseFloat(txPrice) || 0)).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+                                        </span>
+                                    </div>
+                                    {parseFloat(txCommission) > 0 && (
+                                        <div className="flex justify-between items-center text-slate-300">
+                                            <span>+ Komisyon:</span>
+                                            <span className="font-mono font-medium">
+                                                {parseFloat(txCommission).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+                                            </span>
+                                        </div>
+                                    )}
+                                    <div className="pt-2 border-t border-slate-700 flex justify-between items-center">
+                                        <span className="text-slate-300 font-medium">Toplam {txType === 'BUY' ? 'Maliyet' : 'Net Tutar'}:</span>
+                                        <span className="font-bold text-white font-mono text-sm sm:text-base">
+                                            {(((parseFloat(txAmount) || 0) * (parseFloat(txPrice) || 0)) + (txType === 'BUY' ? (parseFloat(txCommission) || 0) : -(parseFloat(txCommission) || 0))).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+                                        </span>
+                                    </div>
                                 </div>
                             )}
 
@@ -889,7 +915,7 @@ export default function HoldingsPage() {
                                 <button
                                     type="submit"
                                     disabled={txSubmitting || isTxDateError}
-                                    className="px-5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition disabled:opacity-50 cursor-pointer"
+                                    className="px-5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-[#1A9FD3] hover:bg-[#0C6991] text-white transition disabled:opacity-50 cursor-pointer shadow-sm shadow-[#1A9FD3]/20"
                                 >
                                     {txSubmitting ? 'Kaydediliyor...' : 'Kaydet'}
                                 </button>
@@ -901,135 +927,319 @@ export default function HoldingsPage() {
         </div>
     );
 
-    // Varlık Kartı Render Fonksiyonu
-    function renderAssetCard(h: UserHolding) {
-        const costVal = h.average_cost * h.total_amount;
-        const pnl = h.profit_loss;
-        const pnlPct = costVal > 0 ? (pnl / costVal) * 100 : 0;
-        const isPos = pnl >= 0;
-
-        // Dönemsel Getiri
-        const sum = assetSummaries[h.symbol];
-        let periodRetVal: number | null = null;
-        if (sum && sum[selectedPeriod] !== undefined) {
-            periodRetVal = sum[selectedPeriod];
-        } else if (selectedPeriod === 'ALL') {
-            periodRetVal = pnlPct;
-        }
-
-        // Varlığın Atandığı Gruplar
-        const assignedGroupIds = assetGroups[h.symbol] || [];
-        const assignedGroupObjects = groups.filter(g => assignedGroupIds.includes(g.id));
+    // Gerçek Finansal Tablo Render Fonksiyonu
+    function renderHoldingsTable(items: UserHolding[]) {
+        const periodHeaderLabel = selectedPeriod === 'ALL'
+            ? 'Toplam Maliyet'
+            : selectedPeriod === '1D'
+            ? 'Günlük (1G) %'
+            : selectedPeriod === '1W'
+            ? 'Haftalık (1H) %'
+            : selectedPeriod === '1M'
+            ? 'Aylık (1A) %'
+            : selectedPeriod === '3M'
+            ? '3 Aylık (3A) %'
+            : selectedPeriod === '6M'
+            ? '6 Aylık (6A) %'
+            : selectedPeriod === 'YTD'
+            ? 'Yılbaşından Bugüne (YBB) %'
+            : selectedPeriod === '1Y'
+            ? 'Yıllık (1Y) %'
+            : selectedPeriod === '3Y'
+            ? '3 Yıllık (3Y) %'
+            : selectedPeriod === '5Y'
+            ? '5 Yıllık (5Y) %'
+            : `${selectedPeriod} %`;
 
         return (
-            <div
-                key={h.symbol}
-                className="bg-slate-900 border border-slate-800/90 hover:border-slate-700 rounded-2xl p-4 sm:p-5 transition shadow-sm hover:shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4 group"
-            >
-                {/* SOL: SEMBOL, ADI, DETAY SAYFASINA GİTME LİNKİ VE GRUP ROZETLERİ */}
-                <div className="flex items-start gap-3.5">
-                    <Link
-                        href={`/assets/${h.symbol}`}
-                        className="w-11 h-11 rounded-xl bg-slate-800 border border-slate-700/80 flex items-center justify-center font-bold text-white group-hover:border-indigo-500/50 group-hover:bg-indigo-950/30 transition shrink-0"
-                        title="Detaylı Grafik ve Analiz İçin Tıklayın"
-                    >
-                        <span className="text-xs font-black font-mono tracking-tight text-indigo-400">
-                            {h.symbol.slice(0, 4)}
-                        </span>
-                    </Link>
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+                {/* MASAÜSTÜ TABLO GÖRÜNÜMÜ */}
+                <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="border-b border-slate-800 bg-slate-900/80 text-[11px] uppercase tracking-wider font-semibold text-slate-400">
+                                <th scope="col" className="py-3.5 pl-5 pr-3">Varlık</th>
+                                <th scope="col" className="py-3.5 px-3">Tür</th>
+                                <th scope="col" className="py-3.5 px-3 text-right">Adet & Maliyet</th>
+                                <th scope="col" className="py-3.5 px-3 text-right">Güncel Fiyat</th>
+                                <th scope="col" className="py-3.5 px-3 text-right">{periodHeaderLabel}</th>
+                                <th scope="col" className="py-3.5 px-3 text-right">Piyasa Değeri</th>
+                                <th scope="col" className="py-3.5 px-3 text-right">Net Kâr / Zarar</th>
+                                <th scope="col" className="py-3.5 pl-3 pr-5 text-center w-12"></th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 text-sm">
+                            {items.map(h => {
+                                const costVal = h.average_cost * h.total_amount;
+                                const pnl = h.profit_loss;
+                                const pnlPct = costVal > 0 ? (pnl / costVal) * 100 : 0;
+                                const isPos = pnl >= 0;
 
-                    <div>
-                        <div className="flex items-center gap-2">
-                            {/* 🔗 KULLANICI İSTEĞİ: HİSSEYE TIKLAYINCA ASSETS DETAY SAYFASINA YÖNLENDİRME */}
-                            <Link
-                                href={`/assets/${h.symbol}`}
-                                className="text-base font-bold text-white hover:text-indigo-400 transition flex items-center gap-1"
-                            >
-                                <span>{h.symbol}</span>
-                                <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-indigo-400" />
-                            </Link>
+                                const sum = assetSummaries[h.symbol];
+                                let periodRetVal: number | null = null;
+                                if (selectedPeriod === 'ALL') {
+                                    periodRetVal = pnlPct;
+                                } else if (sum && sum[selectedPeriod] !== undefined) {
+                                    periodRetVal = sum[selectedPeriod];
+                                }
 
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
-                                {h.asset_type}
-                            </span>
-                        </div>
+                                const assignedGroupIds = assetGroups[h.symbol] || [];
+                                const assignedGroupObjects = groups.filter(g => assignedGroupIds.includes(g.id));
 
-                        <p className="text-xs text-slate-400 line-clamp-1">{h.asset_name}</p>
+                                return (
+                                    <tr key={h.symbol} className="hover:bg-slate-800/40 transition-colors group">
+                                        {/* VARLIK (Sembol & Şirket Adı & Grup Etiketleri) */}
+                                        <td className="py-3.5 pl-5 pr-3">
+                                            <div className="flex items-center gap-3">
+                                                <Link
+                                                    href={`/assets/${h.symbol}`}
+                                                    className="w-9 h-9 rounded-lg bg-slate-800 border border-slate-700/80 flex items-center justify-center font-bold text-white group-hover:border-[#1A9FD3]/50 group-hover:bg-[#1A9FD3]/10 transition shrink-0"
+                                                    title="Detaylı Grafik ve Analiz"
+                                                >
+                                                    <span className="text-xs font-black font-mono tracking-tight text-[#1A9FD3]">
+                                                        {h.symbol.slice(0, 4)}
+                                                    </span>
+                                                </Link>
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Link
+                                                            href={`/assets/${h.symbol}`}
+                                                            className="font-bold text-white group-hover:text-[#1A9FD3] transition flex items-center gap-1 text-sm sm:text-base"
+                                                        >
+                                                            <span>{h.symbol}</span>
+                                                            <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-[#1A9FD3]" />
+                                                        </Link>
+                                                    </div>
+                                                    <p className="text-xs text-slate-400 truncate max-w-[180px] lg:max-w-[240px]">
+                                                        {h.asset_name}
+                                                    </p>
+                                                    {/* Grup Etiketleri & Düzenle Butonu */}
+                                                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                                        {assignedGroupObjects.map(g => (
+                                                            <span
+                                                                key={g.id}
+                                                                className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border"
+                                                                style={{
+                                                                    backgroundColor: `${g.color}15`,
+                                                                    color: g.color,
+                                                                    borderColor: `${g.color}35`,
+                                                                }}
+                                                            >
+                                                                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: g.color }}></span>
+                                                                {g.name}
+                                                            </span>
+                                                        ))}
+                                                        <button
+                                                            onClick={() => setAssigningAsset(h)}
+                                                            className="text-[11px] text-slate-500 hover:text-[#1A9FD3] font-medium transition cursor-pointer flex items-center gap-0.5"
+                                                            title="Grupları Düzenle"
+                                                        >
+                                                            <Tag className="w-2.5 h-2.5" />
+                                                            <span>{assignedGroupObjects.length > 0 ? 'Düzenle' : '+ Gruba Ata'}</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
 
-                        {/* Atanan Grup Etiketleri */}
-                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                            {assignedGroupObjects.map(g => (
-                                <span
-                                    key={g.id}
-                                    className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border"
-                                    style={{
-                                        backgroundColor: `${g.color}15`,
-                                        color: g.color,
-                                        borderColor: `${g.color}35`,
-                                    }}
-                                >
-                                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: g.color }}></span>
-                                    {g.name}
-                                </span>
-                            ))}
+                                        {/* TÜR ROZETİ */}
+                                        <td className="py-3.5 px-3 whitespace-nowrap">
+                                            <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700/80">
+                                                {h.asset_type}
+                                            </span>
+                                        </td>
 
-                            <button
-                                onClick={() => setAssigningAsset(h)}
-                                className="text-[10px] text-slate-500 hover:text-indigo-400 font-semibold transition cursor-pointer flex items-center gap-0.5 ml-1"
-                                title="Grupları Düzenle"
-                            >
-                                <Tag className="w-3 h-3" />
-                                <span>{assignedGroupObjects.length > 0 ? '+ Değiştir' : '+ Gruba Ata'}</span>
-                            </button>
-                        </div>
-                    </div>
+                                        {/* ADET & ORT. MALİYET */}
+                                        <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                                            <div className="text-sm font-semibold text-slate-200 tabular-nums">
+                                                {h.total_amount.toLocaleString('tr-TR')} Adet
+                                            </div>
+                                            <div className="text-xs text-slate-400 tabular-nums">
+                                                Ort. {fmt(h.average_cost)}
+                                            </div>
+                                        </td>
+
+                                        {/* GÜNCEL FİYAT */}
+                                        <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                                            <div className="text-sm sm:text-base font-bold text-white font-mono tabular-nums">
+                                                {fmt(h.current_price)}
+                                            </div>
+                                        </td>
+
+                                        {/* DÖNEMSEL GETİRİ / TOPLAM MALİYET */}
+                                        <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                                            {selectedPeriod === 'ALL' ? (
+                                                <div className="text-sm font-semibold text-slate-300 tabular-nums">
+                                                    {fmt(costVal)}
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    {periodRetVal !== null ? (
+                                                        <div className={`text-sm sm:text-base font-black font-mono tabular-nums ${periodRetVal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                            {periodRetVal >= 0 ? '+' : ''}{periodRetVal.toFixed(2)}%
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-sm font-mono text-slate-500">—</div>
+                                                    )}
+                                                </>
+                                            )}
+                                        </td>
+
+                                        {/* PİYASA DEĞERİ */}
+                                        <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                                            <div className="text-sm sm:text-base font-black text-white tabular-nums">
+                                                {fmt(h.total_value)}
+                                            </div>
+                                        </td>
+
+                                        {/* NET KÂR / ZARAR */}
+                                        <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                                            <div className={`text-sm sm:text-base font-black font-mono tabular-nums ${isPos ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                {fmt(pnl, true)}
+                                            </div>
+                                            <div className={`text-xs font-bold font-mono tabular-nums ${isPos ? 'text-emerald-400/90' : 'text-rose-400/90'}`}>
+                                                {isPos ? '+' : ''}{pnlPct.toFixed(2)}%
+                                            </div>
+                                        </td>
+
+                                        {/* DETAY OKU */}
+                                        <td className="py-3.5 pl-3 pr-5 text-center">
+                                            <Link
+                                                href={`/assets/${h.symbol}`}
+                                                className="inline-flex p-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition"
+                                                title="Detaya Git"
+                                            >
+                                                <ChevronRight className="w-4 h-4" />
+                                            </Link>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
                 </div>
 
-                {/* SAĞ: DEĞERLER, MALİYET, FİYAT, PERİYOT GETİRİSİ VE KÂR/ZARAR */}
-                <div className="flex flex-wrap items-center justify-between md:justify-end gap-x-6 gap-y-2 pt-3 md:pt-0 border-t md:border-t-0 border-slate-800 text-right">
-                    {/* Lot & Maliyet */}
-                    <div>
-                        <p className="text-[10px] text-slate-400">Adet • Ort. Maliyet</p>
-                        <p className="text-xs font-semibold text-slate-200">
-                            {h.total_amount.toLocaleString('tr-TR')} Adet • {fmt(h.average_cost)}
-                        </p>
-                    </div>
+                {/* MOBİL GÖRÜNÜM (60 Yaşında Kullanıcı İçin Yüksek Kontrastlı, Okunaklı Kompakt Kart-Satır Düzeni) */}
+                <div className="md:hidden divide-y divide-slate-800/80">
+                    {items.map(h => {
+                        const costVal = h.average_cost * h.total_amount;
+                        const pnl = h.profit_loss;
+                        const pnlPct = costVal > 0 ? (pnl / costVal) * 100 : 0;
+                        const isPos = pnl >= 0;
 
-                    {/* Güncel Fiyat */}
-                    <div>
-                        <p className="text-[10px] text-slate-400">Güncel Fiyat</p>
-                        <p className="text-xs font-semibold text-white font-mono">{fmt(h.current_price)}</p>
-                    </div>
+                        const sum = assetSummaries[h.symbol];
+                        let periodRetVal: number | null = null;
+                        if (selectedPeriod === 'ALL') {
+                            periodRetVal = pnlPct;
+                        } else if (sum && sum[selectedPeriod] !== undefined) {
+                            periodRetVal = sum[selectedPeriod];
+                        }
 
-                    {/* Seçilen Periyot Getirisi (1D, 1W, 1M, vb.) */}
-                    <div>
-                        <p className="text-[10px] text-slate-400">{selectedPeriod} Getirisi</p>
-                        {periodRetVal !== null ? (
-                            <p className={`text-xs font-bold font-mono ${periodRetVal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                {periodRetVal >= 0 ? '+' : ''}{periodRetVal.toFixed(2)}%
-                            </p>
-                        ) : (
-                            <p className="text-xs font-mono text-slate-500">—</p>
-                        )}
-                    </div>
+                        const assignedGroupIds = assetGroups[h.symbol] || [];
+                        const assignedGroupObjects = groups.filter(g => assignedGroupIds.includes(g.id));
 
-                    {/* Toplam Tutar & Toplam Kâr/Zarar */}
-                    <div className="min-w-[120px]">
-                        <p className="text-sm font-black text-white">{fmt(h.total_value)}</p>
-                        <p className={`text-xs font-bold flex items-center justify-end ${isPos ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {isPos ? '+' : ''}{fmt(pnl)}
-                            <span className="text-[10px] ml-1 font-mono">({isPos ? '+' : ''}{pnlPct.toFixed(2)}%)</span>
-                        </p>
-                    </div>
+                        return (
+                            <div key={h.symbol} className="p-4 space-y-3">
+                                {/* ÜST BAŞLIK: Sembol, Tür, Değer, Detay linki */}
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-center gap-2.5">
+                                        <Link
+                                            href={`/assets/${h.symbol}`}
+                                            className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-white shrink-0"
+                                        >
+                                            <span className="text-xs font-black font-mono text-[#1A9FD3]">
+                                                {h.symbol.slice(0, 4)}
+                                            </span>
+                                        </Link>
+                                        <div>
+                                            <div className="flex items-center gap-1.5">
+                                                <Link href={`/assets/${h.symbol}`} className="text-base font-bold text-white">
+                                                    {h.symbol}
+                                                </Link>
+                                                <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-800 text-slate-300 border border-slate-700/80">
+                                                    {h.asset_type}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-slate-400 line-clamp-1">{h.asset_name}</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-base font-black text-white tabular-nums">
+                                            {fmt(h.total_value)}
+                                        </div>
+                                        <div className={`text-xs font-bold font-mono tabular-nums ${isPos ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {fmt(pnl, true)} ({isPos ? '+' : ''}{pnlPct.toFixed(2)}%)
+                                        </div>
+                                    </div>
+                                </div>
 
-                    {/* Detaya Gitme Butonu */}
-                    <Link
-                        href={`/assets/${h.symbol}`}
-                        className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
-                        title="Varlık Detayına Git"
-                    >
-                        <ChevronRight className="w-4 h-4" />
-                    </Link>
+                                {/* ORTA VERİ GRİDİ (2 Kolon) */}
+                                <div className="grid grid-cols-2 gap-2.5 py-2 px-3 bg-slate-800/40 rounded-xl border border-slate-800 text-xs">
+                                    <div>
+                                        <span className="text-slate-400 block mb-0.5">Adet • Ort. Maliyet</span>
+                                        <span className="font-semibold text-slate-200 tabular-nums">
+                                            {h.total_amount.toLocaleString('tr-TR')} • {fmt(h.average_cost)}
+                                        </span>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-slate-400 block mb-0.5">Güncel Fiyat</span>
+                                        <span className="font-bold text-white font-mono tabular-nums text-sm">
+                                            {fmt(h.current_price)}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-400 block mb-0.5">
+                                            {selectedPeriod === 'ALL' ? 'Toplam Maliyet' : `${selectedPeriod} Getirisi`}
+                                        </span>
+                                        {selectedPeriod === 'ALL' ? (
+                                            <span className="font-semibold text-slate-300 tabular-nums">
+                                                {fmt(costVal)}
+                                            </span>
+                                        ) : (
+                                            <span className={`font-bold font-mono tabular-nums ${periodRetVal !== null && periodRetVal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                {periodRetVal !== null ? `${periodRetVal >= 0 ? '+' : ''}${periodRetVal.toFixed(2)}%` : '—'}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="text-right flex items-center justify-end">
+                                        <Link
+                                            href={`/assets/${h.symbol}`}
+                                            className="inline-flex items-center gap-1 text-xs font-bold text-[#1A9FD3] hover:underline"
+                                        >
+                                            Grafik & Detay <ChevronRight className="w-3.5 h-3.5" />
+                                        </Link>
+                                    </div>
+                                </div>
+
+                                {/* ALT GRUP ETİKETLERİ */}
+                                <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                        {assignedGroupObjects.map(g => (
+                                            <span
+                                                key={g.id}
+                                                className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border"
+                                                style={{
+                                                    backgroundColor: `${g.color}15`,
+                                                    color: g.color,
+                                                    borderColor: `${g.color}35`,
+                                                }}
+                                            >
+                                                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: g.color }}></span>
+                                                {g.name}
+                                            </span>
+                                        ))}
+                                    </div>
+                                    <button
+                                        onClick={() => setAssigningAsset(h)}
+                                        className="text-[11px] text-slate-400 hover:text-[#1A9FD3] font-medium transition cursor-pointer flex items-center gap-1 ml-auto"
+                                    >
+                                        <Tag className="w-3 h-3" />
+                                        <span>{assignedGroupObjects.length > 0 ? 'Grupları Düzenle' : '+ Gruba Dahil Et'}</span>
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         );

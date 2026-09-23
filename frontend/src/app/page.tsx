@@ -98,11 +98,11 @@ export default function Home() {
     // Arama kutusuna yazıldığında dinamik piyasa keşfi yap (BIST veya TEFAS'taki her şeyi bulur)
     useEffect(() => {
         const q = searchQuery.trim();
+        if (!q) {
+            setDynamicMatches([]);
+            return;
+        }
         const timeout = setTimeout(async () => {
-            if (q.length < 2) {
-                setDynamicMatches([]);
-                return;
-            }
             try {
                 const res = await fetch(`/api/assets?q=${encodeURIComponent(q)}`, { cache: 'no-store' });
                 if (res.ok) {
@@ -114,7 +114,7 @@ export default function Home() {
             } catch {
                 // Hata durumunda yerel filtre devam eder
             }
-        }, 150);
+        }, 100);
         return () => clearTimeout(timeout);
     }, [searchQuery]);
 
@@ -149,44 +149,56 @@ export default function Home() {
             return assets.filter((a) => ['ASELS', 'TUPRS', 'THYAO', 'ALTIN', 'XU100', 'USDTRY'].includes(a.symbol)).slice(0, 6);
         }
 
-        // 1. Yerel veritabanı filtrelemesi
-        const localMatches = assets.filter((a) => {
-            const sym = cleanText(a.symbol);
-            const name = cleanText(a.name);
+        // Finansal varlık alaka düzeyi puanlama fonksiyonu (API ile %100 uyumlu)
+        const scoreAsset = (symbol: string, name: string, change?: string): number => {
+            const sym = cleanText(symbol);
+            const nm = cleanText(name);
 
-            if (sym.includes(q)) return true;
-            if (name.includes(q)) return true;
-            if (q.includes(sym) && sym.length >= 3) return true;
-
-            // Kelime bazlı eşleme (örn: "quick sigorta" yazıldığında her kelime eşleşmesi)
-            const words = q.split(/\s+/).filter(Boolean);
-            if (words.length > 1 && words.every((w) => sym.includes(w) || name.includes(w))) {
-                return true;
+            let score = 0;
+            if (sym === q) score = 10000;
+            else if (sym.startsWith(q)) score = 8000 - sym.length * 10;
+            else {
+                const words = nm.split(/\s+/);
+                if (words.some(w => w === q)) score = 6000;
+                else if (nm.startsWith(q)) score = 5000;
+                else if (words.some(w => w.startsWith(q))) score = 4000;
+                else if (sym.includes(q)) score = 3000;
+                const queryWords = q.split(/\s+/).filter(Boolean);
+                if (queryWords.length > 1 && queryWords.every(w => sym.includes(w) || nm.includes(w))) score = 2000;
+                else if (q.length >= 3 && nm.includes(q)) score = 1000;
             }
 
-            return false;
-        });
-
-        // 2. Dinamik piyasa aramasından gelenleri yerel ile tekilleştirerek birleştir
-        const combinedMap = new Map<string, Asset>();
-        localMatches.forEach((a) => combinedMap.set(a.symbol, a));
-        dynamicMatches.forEach((a) => {
-            if (!combinedMap.has(a.symbol)) {
-                combinedMap.set(a.symbol, a);
+            if (score > 0) {
+                // Canlı, dünden bugüne işlem gören (değişimi %0.00 olmayan) hareketli varlıklara +2000 öncelik bonusu
+                const hasActiveMovement = change && change !== '0.00' && change !== '+0.00' && change !== '-0.00';
+                if (hasActiveMovement) {
+                    score += 2000;
+                }
             }
-        });
 
-        // Eşleşme alaka düzeyine göre sırala (Tam sembol eşleşmesi en başta)
-        return Array.from(combinedMap.values())
+            return score;
+        };
+
+        // Eğer dinamik canlı arama sonuçları geldiyse öncelikle zenginleştirilmiş canlı sonuçları göster
+        if (dynamicMatches.length > 0) {
+            const dynamicSymbols = new Set(dynamicMatches.map(d => d.symbol));
+            const extraLocal = assets
+                .map(a => ({ asset: a, score: scoreAsset(a.symbol, a.name, a.change) }))
+                .filter(item => item.score > 0 && !dynamicSymbols.has(item.asset.symbol))
+                .sort((a, b) => b.score - a.score)
+                .map(item => item.asset);
+            return [...dynamicMatches, ...extraLocal].slice(0, 8);
+        }
+
+        // Sunucu yanıtı gelene kadar (ilk 100ms) anlık yerel puanlı filtre
+        return assets
+            .map(a => ({ asset: a, score: scoreAsset(a.symbol, a.name, a.change) }))
+            .filter(item => item.score > 0)
             .sort((a, b) => {
-                const aSym = cleanText(a.symbol);
-                const bSym = cleanText(b.symbol);
-                if (aSym === q && bSym !== q) return -1;
-                if (bSym === q && aSym !== q) return 1;
-                if (aSym.startsWith(q) && !bSym.startsWith(q)) return -1;
-                if (bSym.startsWith(q) && !aSym.startsWith(q)) return 1;
-                return 0;
+                if (a.score !== b.score) return b.score - a.score;
+                return a.asset.symbol.localeCompare(b.asset.symbol);
             })
+            .map(item => item.asset)
             .slice(0, 8);
     }, [searchQuery, assets, dynamicMatches]);
 
@@ -302,7 +314,7 @@ export default function Home() {
                         )}
                         <button
                             type="submit"
-                            className="bg-primary hover:bg-primary-hover text-slate-950 text-xs font-semibold px-4 py-2 rounded-full transition shrink-0 hidden sm:flex items-center gap-1.5 cursor-pointer"
+                            className="bg-primary hover:bg-primary-hover text-white text-xs font-bold px-4 py-2 rounded-full transition shrink-0 hidden sm:flex items-center gap-1.5 cursor-pointer"
                         >
                             Keşfet <ArrowRight className="size-3.5" />
                         </button>
@@ -361,18 +373,31 @@ export default function Home() {
                                                     <div className="text-sm font-bold font-mono text-white">
                                                         ₺{fmt(asset.current_price)}
                                                     </div>
-                                                    <div
-                                                        className={`text-[11px] font-mono flex items-center justify-end gap-0.5 ${
-                                                            asset.positive ? 'text-emerald-400' : 'text-rose-400'
-                                                        }`}
-                                                    >
-                                                        {asset.positive ? (
-                                                            <TrendingUp className="size-3" />
-                                                        ) : (
-                                                            <TrendingDown className="size-3" />
-                                                        )}
-                                                        <span>{asset.change}%</span>
-                                                    </div>
+                                                    {(() => {
+                                                        const num = parseFloat(String(asset.change || '0').replace('+', ''));
+                                                        const isZero = isNaN(num) || num === 0;
+                                                        const isPos = num > 0;
+                                                        return (
+                                                            <div
+                                                                className={`text-[11px] font-mono flex items-center justify-end gap-0.5 ${
+                                                                    isZero
+                                                                        ? 'text-slate-400'
+                                                                        : isPos
+                                                                        ? 'text-emerald-400'
+                                                                        : 'text-rose-400'
+                                                                }`}
+                                                            >
+                                                                {!isZero && (
+                                                                    isPos ? (
+                                                                        <TrendingUp className="size-3" />
+                                                                    ) : (
+                                                                        <TrendingDown className="size-3" />
+                                                                    )
+                                                                )}
+                                                                <span>{isZero ? '%0.00' : `${isPos ? '+' : ''}${num.toFixed(2)}%`}</span>
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </div>
                                         ))}
@@ -522,7 +547,7 @@ export default function Home() {
 
                             <Link
                                 href="/register"
-                                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-primary hover:bg-primary-hover text-slate-950 font-bold text-xs transition shadow-lg shadow-primary/20 mt-2"
+                                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-primary hover:bg-primary-hover text-white font-bold text-xs transition shadow-lg shadow-primary/20 mt-2"
                             >
                                 <span>Kendi Portföyünü Oluştur</span>
                                 <ArrowRight className="size-3.5" />

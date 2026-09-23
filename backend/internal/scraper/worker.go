@@ -11,6 +11,7 @@ import (
 	"yarmak/internal/database"
 )
 
+// StartScraperWorker — Tüm arka plan görevlerini (TEFAS, BIST, Backfill, Portfolio Snapshot) asenkron olarak başlatan ana yöneticidir.
 func StartScraperWorker(ctx context.Context, db *database.Queries, interval time.Duration, wg *sync.WaitGroup) {
 	slog.Info("Yeni Mimari (v2) Scraper Yöneticisi Başlatılıyor...")
 	
@@ -40,6 +41,7 @@ func StartScraperWorker(ctx context.Context, db *database.Queries, interval time
 	}()
 }
 
+// checkAndTriggerAlerts — Varlığın yeni fiyatı, kullanıcıların belirlediği fiyat alarmlarını geçiyorsa bu alarmları tetikler ve loglar.
 func checkAndTriggerAlerts(ctx context.Context, db *database.Queries, asset database.Asset, newPrice float64, priceStr string) {
 	alerts, err := db.GetPendingAlertsForAsset(ctx, asset.ID)
 	if err != nil {
@@ -66,6 +68,7 @@ func checkAndTriggerAlerts(ctx context.Context, db *database.Queries, asset data
 
 var lastSnapshotDay atomic.Int32
 
+// recordPortfolioSnapshots — Her akşam mesai bitiminden sonra kullanıcıların anlık portföy durumlarını hesaplayıp gün sonu snapshot olarak kaydeder.
 func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
 	loc, _ := time.LoadLocation("Europe/Istanbul")
 	now := time.Now().In(loc)
@@ -107,6 +110,7 @@ func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
 	lastSnapshotDay.Store(int32(now.YearDay()))
 }
 
+// CalculateAssetHoldingAndCost — Varlığın tüm işlem listesini alarak WAC metoduna göre ortalama maliyetini ve eldeki mevcut lot sayısını hesaplar.
 func CalculateAssetHoldingAndCost(transactions []database.Transaction) (currentLot float64, avgCost float64) {
 	runningLot := 0.0
 	runningCost := 0.0
@@ -116,7 +120,10 @@ func CalculateAssetHoldingAndCost(transactions []database.Transaction) (currentL
 		commission, _ := strconv.ParseFloat(tx.Commission, 64)
 		if tx.Type == "BUY" {
 			total := (amount * price) + commission
-			runningCost = (runningLot*runningCost + total) / (runningLot + amount)
+			// Sıfıra bölme koruması: bozuk veri gelirse NaN yayılmasını engelle
+			if (runningLot + amount) > 0 {
+				runningCost = (runningLot*runningCost + total) / (runningLot + amount)
+			}
 			runningLot = runningLot + amount
 		} else if tx.Type == "SELL" {
 			runningLot = runningLot - amount

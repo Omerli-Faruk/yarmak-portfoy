@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,6 +14,7 @@ import (
 	"yarmak/internal/scraper"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/lib/pq"
 )
 
 // @Summary Yeni Varlık Tanımla (Admin)
@@ -58,6 +61,7 @@ func (cfg *ApiConfig) HandlerCreateAsset(w http.ResponseWriter, r *http.Request)
 	respondWithJSON(w, http.StatusCreated, asset)
 }
 
+// HandlerListAssets — Sistemde kayıtlı olan tüm finansal varlıkları döner.
 // @Summary Tüm Varlıkları Listele
 // @Description Sistemde kayıtlı tüm BIST hisseleri, TEFAS fonları ve altınları anlık fiyatlarıyla döner
 // @Tags Assets
@@ -72,6 +76,7 @@ func (cfg *ApiConfig) HandlerListAssets(w http.ResponseWriter, r *http.Request) 
 	respondWithJSON(w, http.StatusOK, asset)
 }
 
+// HandlerGetAssetPriceHistory — Varlığın tarihsel fiyat grafiğini çizmek için geçmiş fiyat verilerini döndürür. Veri yoğunluğuna göre (1Y, ALL) haftalık veya aylık periyotlara sıkıştırır (downsampling).
 // @Summary Varlık Fiyat Geçmişi
 // @Description Belirli bir varlığın tarihsel fiyat değişim geçmişini listeler
 // @Tags Assets
@@ -87,9 +92,9 @@ func (cfg *ApiConfig) HandlerGetAssetPriceHistory(w http.ResponseWriter, r *http
 
 	rangeParam := r.URL.Query().Get("range")
 
-	// Eğer HISSE veya DOVIZ ise anlık olarak Yahoo'dan çek (Kullanıcı talebiyle esnetilen kural)
+	// Eğer HISSE, DOVIZ veya ALTIN ise anlık olarak Yahoo'dan çek (Kullanıcı talebiyle esnetilen kural)
 	assetObj, err := cfg.DB.GetAssetByID(r.Context(), assetID)
-	if err == nil && (assetObj.AssetType == "HISSE" || assetObj.AssetType == "DOVIZ") {
+	if err == nil && (assetObj.AssetType == "HISSE" || assetObj.AssetType == "DOVIZ" || assetObj.AssetType == "ALTIN" || assetObj.Symbol == "ALTIN") {
 		yhRange := "1mo"
 		switch rangeParam {
 		case "1D":
@@ -132,7 +137,7 @@ func (cfg *ApiConfig) HandlerGetAssetPriceHistory(w http.ResponseWriter, r *http
 		}
 	}
 
-	var price interface{}
+	var price []database.PriceHistory
 
 	if rangeParam == "1Y" {
 		cutoff := time.Now().AddDate(-1, 0, 0)
@@ -140,8 +145,8 @@ func (cfg *ApiConfig) HandlerGetAssetPriceHistory(w http.ResponseWriter, r *http
 			AssetID:    assetID,
 			RecordedAt: cutoff,
 		})
-	} else if rangeParam == "ALL" {
-		cutoff := time.Now().AddDate(-10, 0, 0) // 10 years for ALL
+	} else if rangeParam == "ALL" || rangeParam == "5Y" {
+		cutoff := time.Now().AddDate(-10, 0, 0) // 10 years for ALL / 5Y
 		price, err = cfg.DB.GetAssetPriceHistoryMonthly(r.Context(), database.GetAssetPriceHistoryMonthlyParams{
 			AssetID:    assetID,
 			RecordedAt: cutoff,
@@ -151,6 +156,29 @@ func (cfg *ApiConfig) HandlerGetAssetPriceHistory(w http.ResponseWriter, r *http
 		price, err = cfg.DB.GetAssetPriceHistory(r.Context(), assetID)
 	}
 
+	// Otomatik TEFAS Kurtarma: Eğer varlık bir TEFAS fonuysa ve veritabanında geçmiş veri yoksa (0 adet),
+	// kullanıcıyı boş grafikle karşılamamak için anında son 1 aylık TEFAS geçmişini çekip kaydeder
+	if err == nil && len(price) == 0 && assetObj.AssetType == "FON" {
+		_ = scraper.QuickSyncAsset(r.Context(), cfg.DB, assetObj)
+		_ = cfg.DB.AddToBackfillQueue(r.Context(), int32(assetID))
+
+		if rangeParam == "1Y" {
+			cutoff := time.Now().AddDate(-1, 0, 0)
+			price, err = cfg.DB.GetAssetPriceHistoryWeekly(r.Context(), database.GetAssetPriceHistoryWeeklyParams{
+				AssetID:    assetID,
+				RecordedAt: cutoff,
+			})
+		} else if rangeParam == "ALL" || rangeParam == "5Y" {
+			cutoff := time.Now().AddDate(-10, 0, 0)
+			price, err = cfg.DB.GetAssetPriceHistoryMonthly(r.Context(), database.GetAssetPriceHistoryMonthlyParams{
+				AssetID:    assetID,
+				RecordedAt: cutoff,
+			})
+		} else {
+			price, err = cfg.DB.GetAssetPriceHistory(r.Context(), assetID)
+		}
+	}
+
 	if err != nil {
 		respondWithError(w, http.StatusNotFound, "Fiyat geçmişi bulunamadı", err)
 		return
@@ -158,6 +186,7 @@ func (cfg *ApiConfig) HandlerGetAssetPriceHistory(w http.ResponseWriter, r *http
 	respondWithJSON(w, http.StatusOK, price)
 }
 
+// HandlerTriggerBackfill — Eksik geçmiş fiyat verilerini tamamlamak (backfill) için varlığı kuyruğa ekler ve arka planda bir hızlı senkronizasyon tetikler.
 func (cfg *ApiConfig) HandlerTriggerBackfill(w http.ResponseWriter, r *http.Request) {
 	assetParam := chi.URLParam(r, "id")
 	assetID, err := strconv.ParseInt(assetParam, 10, 64)
@@ -166,7 +195,7 @@ func (cfg *ApiConfig) HandlerTriggerBackfill(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	
-	assetObj, err := cfg.DB.GetAssetByID(r.Context(), int64(assetID))
+	assetObj, err := cfg.DB.GetAssetByID(r.Context(), assetID)
 	if err == nil {
 		go func() {
 			_ = scraper.QuickSyncAsset(context.Background(), cfg.DB, assetObj)
@@ -181,6 +210,7 @@ func (cfg *ApiConfig) HandlerTriggerBackfill(w http.ResponseWriter, r *http.Requ
 	respondWithJSON(w, http.StatusOK, map[string]string{"status": "queued"})
 }
 
+// HandlerLookupAsset — Parametre olarak verilen sembol ve türe göre (HISSE/FON vb.) varlığı sistemde arar, yoksa dış kaynaklardan çekip DB'ye kaydeder.
 // @Summary Akıllı Varlık Arama & Keşif
 // @Description Sembol ve türe göre varlık arar, sistemde yoksa piyasadan anında çeker
 // @Tags Assets
@@ -197,6 +227,10 @@ func (cfg *ApiConfig) HandlerLookupAsset(w http.ResponseWriter, r *http.Request)
 		assetType = "HISSE"
 	}
 	asset, err := cfg.GetOrCreateAssetBySymbol(r.Context(), symbol, assetType)
+	// Otomatik TEFAS Algılama: 3 harfli sembol BIST hisselerinde bulunamazsa TEFAS fonu olarak dene
+	if err != nil && assetType == "HISSE" && len(symbol) == 3 {
+		asset, err = cfg.GetOrCreateAssetBySymbol(r.Context(), symbol, "FON")
+	}
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Varlık bulunamadı", err)
 		return
@@ -204,6 +238,7 @@ func (cfg *ApiConfig) HandlerLookupAsset(w http.ResponseWriter, r *http.Request)
 	respondWithJSON(w, http.StatusOK, asset)
 }
 
+// HandlerGetAssetSummary — Bir varlığın 1G, 1H, 1A, YTD vb. farklı periyotlardaki getiri (return) yüzdelerini hesaplar.
 func (cfg *ApiConfig) HandlerGetAssetSummary(w http.ResponseWriter, r *http.Request) {
 	assetParam := chi.URLParam(r, "id")
 	assetID, err := strconv.ParseInt(assetParam, 10, 64)
@@ -261,4 +296,84 @@ func (cfg *ApiConfig) HandlerGetAssetSummary(w http.ResponseWriter, r *http.Requ
 	}
 
 	respondWithJSON(w, http.StatusOK, returns)
+}
+
+// HandlerGetAssetDailyChanges — Verilen varlık ID'leri (örn: ?ids=1852,219) veya tüm varlıklar için (?ids=all veya boş) dünden bugüne yüzde değişimleri tek bir SQL sorgusuyla (LATERAL JOIN) hesaplayıp döner.
+// Arama ve autocomplete sonuçlarının %0.00 yerine gerçek oranları göstermesini sağlar.
+func (cfg *ApiConfig) HandlerGetAssetDailyChanges(w http.ResponseWriter, r *http.Request) {
+	idsParam := strings.TrimSpace(r.URL.Query().Get("ids"))
+
+	var query string
+	var rows *sql.Rows
+	var err error
+
+	if idsParam == "" || idsParam == "all" {
+		query = `
+			SELECT 
+				a.id,
+				p1.price as latest_p,
+				p2.price as prev_p
+			FROM assets a
+			JOIN LATERAL (
+				SELECT price FROM price_history WHERE asset_id = a.id ORDER BY recorded_at DESC LIMIT 1
+			) p1 ON true
+			JOIN LATERAL (
+				SELECT price FROM price_history WHERE asset_id = a.id ORDER BY recorded_at DESC OFFSET 1 LIMIT 1
+			) p2 ON true
+			WHERE p2.price > 0;
+		`
+		rows, err = cfg.DBConn.QueryContext(r.Context(), query)
+	} else {
+		idStrs := strings.Split(idsParam, ",")
+		var ids []int64
+		for _, s := range idStrs {
+			id, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+			if err == nil {
+				ids = append(ids, id)
+			}
+		}
+		if len(ids) == 0 {
+			respondWithJSON(w, http.StatusOK, map[string]float64{})
+			return
+		}
+
+		query = `
+			SELECT 
+				a.id,
+				p1.price as latest_p,
+				p2.price as prev_p
+			FROM assets a
+			LEFT JOIN LATERAL (
+				SELECT price FROM price_history WHERE asset_id = a.id ORDER BY recorded_at DESC LIMIT 1
+			) p1 ON true
+			LEFT JOIN LATERAL (
+				SELECT price FROM price_history WHERE asset_id = a.id ORDER BY recorded_at DESC OFFSET 1 LIMIT 1
+			) p2 ON true
+			WHERE a.id = ANY($1);
+		`
+		rows, err = cfg.DBConn.QueryContext(r.Context(), query, pq.Array(ids))
+	}
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Değişimler alınamadı", err)
+		return
+	}
+	defer rows.Close()
+
+	result := make(map[string]float64)
+	for rows.Next() {
+		var id int64
+		var latestP, prevP sql.NullString
+		if err := rows.Scan(&id, &latestP, &prevP); err == nil {
+			if latestP.Valid && prevP.Valid {
+				p1, err1 := strconv.ParseFloat(latestP.String, 64)
+				p2, err2 := strconv.ParseFloat(prevP.String, 64)
+				if err1 == nil && err2 == nil && p2 > 0 {
+					pct := ((p1 - p2) / p2) * 100
+					result[strconv.FormatInt(id, 10)] = math.Round(pct*100) / 100
+				}
+			}
+		}
+	}
+
+	respondWithJSON(w, http.StatusOK, result)
 }

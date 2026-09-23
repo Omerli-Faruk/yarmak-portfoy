@@ -24,6 +24,7 @@ var (
 	userLocks = make(map[int64]*userLock)
 )
 
+// lockUser — Aynı kullanıcının eşzamanlı işlem yapmasını önleyen per-user mutex. Double-spending koruması sağlar.
 func lockUser(userID int64) func() {
 	globalMu.Lock()
 	mu, exists := userLocks[userID]
@@ -45,6 +46,7 @@ func lockUser(userID int64) func() {
 	}
 }
 
+// HandlerCreateTransaction — Kullanıcı portföyüne yeni bir alım (BUY) veya satım (SELL) işlemi kaydeder. İleri tarihli işlemleri engeller, split (bölünme) geçmişini hesaba katar.
 // @Summary Alım/Satım İşlemi Yap
 // @Description Kullanıcı portföyüne yeni bir alım (BUY) veya satım (SELL) işlemi kaydeder
 // @Tags Transactions
@@ -185,6 +187,7 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 	respondWithJSON(w, http.StatusCreated, transaction)
 }
 
+// HandlerGetUserHoldings — Kullanıcının portföyündeki varlıkları özet olarak listeler. Ortalama maliyet ve anlık fiyat farkına göre anlık Kâr/Zarar durumunu hesaplar.
 // @Summary Kullanıcının Varlıklarını (Holdings) Listele
 // @Description Kullanıcının sahip olduğu tüm varlıkları, lot sayılarını ve kâr/zararlarını döner
 // @Tags Portfolio
@@ -234,6 +237,7 @@ func (cfg *ApiConfig) HandlerGetUserHoldings(w http.ResponseWriter, r *http.Requ
 	respondWithJSON(w, http.StatusOK, res)
 }
 
+// HandlerGetUserTransactions — Kullanıcının işlem geçmişini sayfalayarak (pagination) getirir.
 // @Summary İşlem Geçmişi (Pagination)
 // @Description Kullanıcının geçmiş alım/satım işlemlerini sayfalanmış olarak listeler
 // @Tags Transactions
@@ -278,6 +282,7 @@ func (cfg *ApiConfig) HandlerGetUserTransactions(w http.ResponseWriter, r *http.
 	respondWithJSON(w, http.StatusOK, transactions)
 }
 
+// HandlerDeleteTransaction — Kullanıcının yaptığı işlemi iptal edip siler. Geçmişteki satışı patlatacak bir alım silme işlemi varsa engeller.
 // @Summary Alım/Satım İşlemini Sil
 // @Description Kullanıcının gerçekleştirdiği bir alım veya satım işlemini siler
 // @Tags Transactions
@@ -349,6 +354,7 @@ func (cfg *ApiConfig) HandlerDeleteTransaction(w http.ResponseWriter, r *http.Re
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "İşlem başarıyla silindi"})
 }
 
+// resolveAssetID — İşlem yapılmak istenen varlığın (asset) ID'si yoksa sembolü üzerinden veritabanından bulur veya yenisini oluşturur.
 func (cfg *ApiConfig) resolveAssetID(ctx context.Context, params *createTransactionRequest) error {
 	if params.AssetID > 0 {
 		if cfg.DB != nil {
@@ -374,6 +380,7 @@ func (cfg *ApiConfig) resolveAssetID(ctx context.Context, params *createTransact
 	return nil
 }
 
+// recalculateAssetRealizedPnL — Bir varlığın tüm alım-satım işlemlerini WAC (Ağırlıklı Ortalama Maliyet) yöntemiyle yeniden hesaplar ve her SELL işleminin realized PnL değerini günceller.
 func (cfg *ApiConfig) recalculateAssetRealizedPnL(ctx context.Context, userID, assetID int64) error {
 	if cfg.DB == nil {
 		return nil
@@ -396,7 +403,10 @@ func (cfg *ApiConfig) recalculateAssetRealizedPnL(ctx context.Context, userID, a
 
 		if tx.Type == "BUY" {
 			total := (amount * price) + commission
-			runningCost = (runningLot*runningCost + total) / (runningLot + amount)
+			// Sıfıra bölme koruması: amount parse edilemezse veya 0 ise WAC hesaplaması patlamasın
+			if (runningLot + amount) > 0 {
+				runningCost = (runningLot*runningCost + total) / (runningLot + amount)
+			}
 			runningLot += amount
 		} else if tx.Type == "SELL" {
 			pnl := amount*(price-runningCost) - commission

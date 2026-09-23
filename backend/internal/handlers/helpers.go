@@ -21,6 +21,7 @@ func HandlerReadiness(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("OK"))
 }
 
+// respondWithJSON — Verilen payload'ı JSON'a çevirir ve belirtilen HTTP status code ile HTTP response'a yazar.
 func respondWithJSON(w http.ResponseWriter, code int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	dat, err := json.Marshal(payload)
@@ -33,6 +34,7 @@ func respondWithJSON(w http.ResponseWriter, code int, payload any) {
 	_, _ = w.Write(dat)
 }
 
+// respondWithError — API'de oluşan hataları standart bir JSON formatında (message objesi) kullanıcıya döner.
 func respondWithError(w http.ResponseWriter, code int, msg string, err error) {
 	if code > 499 {
 		slog.Error(msg, "err", err)
@@ -42,7 +44,8 @@ func respondWithError(w http.ResponseWriter, code int, msg string, err error) {
 	respondWithJSON(w, code, map[string]string{"error": msg})
 }
 
-func (cfg *ApiConfig) GetOrCreateAssetBySymbol(ctx context.Context, symbol string, assetType string) (database.Asset, error) {
+// GetOrCreateAssetBySymbol — Verilen sembole ait varlığı veritabanında arar, bulamazsa dış API'lerden (TEFAS, Yahoo vb.) çekip veritabanına ekler.
+func (cfg *ApiConfig) GetOrCreateAssetBySymbol(ctx context.Context, symbol, assetType string) (database.Asset, error) {
 	symbol = strings.ToUpper(strings.TrimSpace(symbol))
 	assetType = strings.ToUpper(strings.TrimSpace(assetType))
 

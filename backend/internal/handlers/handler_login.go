@@ -9,14 +9,15 @@ import (
 	"yarmak/internal/database"
 )
 
+// HandlerLogin — Kullanıcı adı ve şifreyle sisteme giriş yapar. Başarılı girişte access_token ve refresh_token üretip HTTP-only cookie olarak döner.
 // @Summary Kullanıcı Girişi
-// @Description E-posta veya kullanıcı adı ve şifre ile giriş yapıp JWT token üretir
+// @Description Email ve şifre ile sisteme giriş yapar ve tokenları cookie olarak döner
 // @Tags Auth
 // @Accept json
 // @Produce json
-// @Param request body authRequest true "Kullanıcı Giriş Bilgileri"
+// @Param request body loginRequest true "Giriş Bilgileri"
 // @Success 200 {object} loginResponse
-// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
 // @Router /login [post]
 func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
@@ -58,7 +59,7 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusUnauthorized, "Geçersiz e-posta veya şifre", nil)
 		return
 	}
-	token, err := auth.MakeJWT(user.ID, cfg.JWTSecret, 30*24*time.Hour)
+	token, err := auth.MakeJWT(user.ID, cfg.JWTSecret, 1*time.Hour)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Token oluşturulurken hata oluştu", err)
 		return
@@ -71,7 +72,7 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 	_, err = cfg.DB.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
 		Token:     auth.HashToken(refreshToken),
 		UserID:    user.ID,
-		ExpiresAt: time.Now().Add(90 * 24 * time.Hour),
+		ExpiresAt: time.Now().Add(60 * 24 * time.Hour),
 	})
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Refresh token kaydedilemedi", err)
@@ -85,7 +86,7 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   30 * 24 * 3600,
+		MaxAge:   3600,
 	})
 
 	http.SetCookie(w, &http.Cookie{
@@ -95,7 +96,7 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   90 * 24 * 3600,
+		MaxAge:   60 * 24 * 3600,
 	})
 	respondWithJSON(w, http.StatusOK, loginResponse{
 		Token:        token,

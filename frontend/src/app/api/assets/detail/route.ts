@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 const BACKEND_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080/v1';
 
 // Bellek içi sembol önbelleği (her buton tıklamasında gereksiz lookup isteği atılmasını engeller)
-const assetCache = new Map<string, { id: number; isTefas: boolean }>();
+const assetCache = new Map<string, { id: number; isTefas: boolean; asset?: any }>();
 
 function getYahooTicker(symbol: string): string {
     const s = symbol.toUpperCase().trim();
@@ -49,6 +49,31 @@ async function getYahooCrumb(): Promise<{ cookie: string; crumb: string } | null
         yahooCrumbCache = crumb;
         yahooCrumbExpiry = now + 60 * 60 * 1000;
         return { cookie, crumb };
+    } catch {
+        return null;
+    }
+}
+
+// Spot Gram Altın (Truncgil / Kapalıçarşı Serbest Piyasa)
+async function fetchSpotGoldDetail(): Promise<{ price: number; change: string; positive: boolean } | null> {
+    try {
+        const res = await fetch('https://finans.truncgil.com/v4/today.json', {
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) return null;
+        const text = await res.text();
+        const m = text.match(/"GRA"\s*:\s*(\{[^}]+\})/);
+        if (!m) return null;
+        const gra = JSON.parse(m[1]);
+        const price = Number(gra.Selling || gra.Buying || 0);
+        if (price <= 0) return null;
+        const changePct = Number(gra.Change || 0);
+        return {
+            price,
+            change: (changePct >= 0 ? '+' : '') + changePct.toFixed(2),
+            positive: changePct >= 0,
+        };
     } catch {
         return null;
     }
@@ -217,40 +242,41 @@ export async function GET(request: Request) {
         // Step 1: Find the Asset ID (Önbellekten veya backend'den)
         let assetId: number;
         let isTefas: boolean;
+        let assetObj: any = null;
 
         if (assetCache.has(rawSymbol)) {
-            const cached = assetCache.get(rawSymbol)!;
+            const cached = assetCache.get(rawSymbol) as any;
             assetId = cached.id;
             isTefas = cached.isTefas;
+            assetObj = cached.asset;
         } else {
-            const assetsRes = await fetch(BACKEND_URL + '/assets/lookup?symbol=' + rawSymbol, { cache: 'no-store' });
+            let assetsRes = await fetch(BACKEND_URL + '/assets/lookup?symbol=' + rawSymbol, { cache: 'no-store' });
+            if (!assetsRes.ok && rawSymbol.length === 3) {
+                // 3 harfli sembol BIST'te bulunamadıysa TEFAS fonu olarak dene
+                assetsRes = await fetch(BACKEND_URL + '/assets/lookup?symbol=' + rawSymbol + '&type=FON', { cache: 'no-store' });
+            }
             if (!assetsRes.ok) throw new Error("Failed to fetch assets");
-            const asset = await assetsRes.json();
+            assetObj = await assetsRes.json();
             
-            if (!asset || (!asset.ID && !asset.id)) {
+            if (!assetObj || (!assetObj.ID && !assetObj.id)) {
                 return NextResponse.json({ chart: [], fundamentals: null, summary: null });
             }
             
-            assetId = asset.ID || asset.id;
-            isTefas = (asset.AssetType || asset.asset_type) === 'FON';
-            assetCache.set(rawSymbol, { id: assetId, isTefas });
+            assetId = assetObj.ID || assetObj.id;
+            isTefas = (assetObj.AssetType || assetObj.asset_type) === 'FON';
+            assetCache.set(rawSymbol, { id: assetId, isTefas, asset: assetObj });
         }
 
         const yahooTicker = getYahooTicker(rawSymbol);
 
         // Step 2: Fetch Chart Data + Backend Summary + Real Fundamentals/Summary in parallel
-        let historyRevalidate = 3600;
-        if (range === '1D') {
-            historyRevalidate = 300;
-        } else if (range === '1W') {
-            historyRevalidate = 1800;
-        }
-
-        const [historyRes, summaryRes, extraFundamentals, accurateSummary] = await Promise.all([
-            fetch(`${BACKEND_URL}/assets/${assetId}/price-history?range=${backendRange}`, { next: { revalidate: historyRevalidate } }),
+        // no-store kullanılır: TEFAS ve BIST için anlık ve taze veriler gecikmesiz gelir
+        const [historyRes, summaryRes, extraFundamentals, accurateSummary, spotGoldResult] = await Promise.all([
+            fetch(`${BACKEND_URL}/assets/${assetId}/price-history?range=${backendRange}`, { cache: 'no-store' }),
             fetch(`${BACKEND_URL}/assets/${assetId}/summary`, { cache: 'no-store' }),
             fetchFundamentals(yahooTicker, isTefas),
-            !isTefas ? getAccurateSummary(yahooTicker, isTefas, null) : Promise.resolve(null),
+            !isTefas && rawSymbol !== 'ALTIN' ? getAccurateSummary(yahooTicker, isTefas, null) : Promise.resolve(null),
+            rawSymbol === 'ALTIN' ? fetchSpotGoldDetail() : Promise.resolve(null),
         ]);
 
         let chartData: { date: string; price: number, rawDate?: Date }[] = [];
@@ -372,7 +398,7 @@ export async function GET(request: Request) {
                     } else if (range === '3Y') {
                         dateStr = d.toLocaleDateString('tr-TR', { ...tzOptions, day: 'numeric', month: 'short', year: '2-digit' });
                     } else if (range === 'ALL' || range === '5Y') {
-                        dateStr = d.toLocaleDateString('tr-TR', { ...tzOptions, month: 'short', year: '2-digit' });
+                        dateStr = d.toLocaleDateString('tr-TR', { ...tzOptions, day: 'numeric', month: 'short', year: '2-digit' });
                     } else if (range === 'CUSTOM') {
                         if (history.length <= 40) {
                             dateStr = d.toLocaleDateString('tr-TR', { ...tzOptions, day: 'numeric', month: 'short' });
@@ -400,7 +426,7 @@ export async function GET(request: Request) {
         // Fonlar ve 3Y eksik olan varlıklar için 3Y ve 5Y hesaplama desteği
         if (summaryData && (!summaryData['3Y'] || summaryData['3Y'] === 0)) {
             try {
-                const allHistRes = await fetch(`${BACKEND_URL}/assets/${assetId}/price-history?range=ALL`, { next: { revalidate: 3600 } });
+                const allHistRes = await fetch(`${BACKEND_URL}/assets/${assetId}/price-history?range=ALL`, { cache: 'no-store' });
                 if (allHistRes.ok) {
                     const allHist = await allHistRes.json();
                     if (allHist && allHist.length > 0) {
@@ -478,6 +504,36 @@ export async function GET(request: Request) {
             }
         }
 
+        if (rawSymbol === 'ALTIN') {
+            const spot = spotGoldResult || (await fetchSpotGoldDetail());
+            if (spot && spot.price > 0 && chartData.length > 0) {
+                const lastPt = chartData[chartData.length - 1];
+                if (lastPt && lastPt.price > 0) {
+                    const ratio = spot.price / lastPt.price;
+                    chartData.forEach(pt => {
+                        pt.price = Math.round(pt.price * ratio * 100) / 100;
+                    });
+                }
+                if (!summaryData) summaryData = {};
+                summaryData['1D'] = parseFloat(spot.change);
+            }
+
+            extraFundamentals.marketCap = '-';
+            extraFundamentals.peRatio = '-';
+            extraFundamentals.dividendYield = '-';
+            extraFundamentals.dividendRate = '-';
+            extraFundamentals.beta = '-';
+            if (chartData.length > 0) {
+                const prices = chartData.map(c => c.price).filter(p => p > 0);
+                if (prices.length > 0) {
+                    const minP = Math.min(...prices);
+                    const maxP = Math.max(...prices);
+                    extraFundamentals.fiftyTwoWeekLow = minP.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
+                    extraFundamentals.fiftyTwoWeekHigh = maxP.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
+                }
+            }
+        }
+
         const fundamentals: any = {
             marketCap: extraFundamentals.marketCap || '-',
             peRatio: extraFundamentals.peRatio || '-',
@@ -502,8 +558,49 @@ export async function GET(request: Request) {
             });
         }
 
+        let latestPrice = 0;
+        if (cleanChartData.length > 0) {
+            const last = cleanChartData[cleanChartData.length - 1];
+            if (typeof last.price === 'number' && last.price > 0) {
+                latestPrice = last.price;
+            }
+        }
+        if (latestPrice === 0 && assetObj) {
+            latestPrice = parseFloat(assetObj.CurrentPrice || assetObj.current_price || '0');
+        }
+
+        let latestChange = '0.00';
+        let latestPositive = true;
+        if (summaryData && typeof summaryData['1D'] === 'number' && !isNaN(summaryData['1D'])) {
+            const val = summaryData['1D'];
+            latestChange = (val >= 0 ? '+' : '') + val.toFixed(2);
+            latestPositive = val >= 0;
+        } else if (cleanChartData.length >= 2) {
+            const last = cleanChartData[cleanChartData.length - 1].price;
+            const prev = cleanChartData[0].price;
+            if (prev > 0) {
+                const pct = ((last - prev) / prev) * 100;
+                latestChange = (pct >= 0 ? '+' : '') + pct.toFixed(2);
+                latestPositive = pct >= 0;
+            }
+        }
+
+        const formatPriceLocal = (p: number): string => {
+            return p >= 100 ? p.toFixed(2) : (p >= 1 ? p.toFixed(2) : p.toFixed(4));
+        };
+
+        const assetInfo = assetObj ? {
+            id: assetId,
+            symbol: rawSymbol,
+            name: assetObj.Name || assetObj.name || rawSymbol,
+            asset_type: isTefas ? 'FON' : (assetObj.AssetType || assetObj.asset_type || 'HISSE'),
+            current_price: latestPrice > 0 ? formatPriceLocal(latestPrice) : (assetObj.CurrentPrice || assetObj.current_price || '0'),
+            change: latestChange,
+            positive: latestPositive,
+        } : null;
+
         return NextResponse.json(
-            { chart: cleanChartData, fundamentals, summary: summaryData },
+            { asset: assetInfo, chart: cleanChartData, fundamentals, summary: summaryData },
             { headers: { 'Cache-Control': 'no-store, max-age=0' } }
         );
     } catch (error) {

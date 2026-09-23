@@ -4,8 +4,7 @@ import React, {createContext, useEffect, useState, useContext} from "react";
 import {useRouter} from "next/navigation";
 import {AuthResponse, User} from "@/types";
 import api from "@/lib/api";
-import Image from "next/image";
-import { setCookie,removeCookie } from '@/lib/cookies'
+
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 
 

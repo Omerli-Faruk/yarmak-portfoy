@@ -11,6 +11,9 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// HandlerCreateDividend — Kullanıcının portföyüne temettü geliri kaydeder.
+// Hisse başına tutar (amount_per_share) verilirse, kullanıcının o varlıktaki lot sayısıyla çarpılır.
+// Brüt, vergi (%10 stopaj) ve net tutarlar otomatik hesaplanır.
 // @Summary Temettü Geliri Kaydet
 // @Description Kullanıcının aldığı nakit temettü ödemesini kaydeder
 // @Tags Dividends
@@ -124,6 +127,7 @@ func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Reque
 	respondWithJSON(w, http.StatusCreated, userDividend)
 }
 
+// HandlerGetUserDividends — Kullanıcının tüm temettü gelir kayıtlarını tarih sırasıyla döner.
 // @Summary Kullanıcının Temettü Geçmişi
 // @Description Kullanıcının aldığı tüm temettü ödemelerini listeler
 // @Tags Dividends
@@ -146,6 +150,8 @@ func (cfg *ApiConfig) HandlerGetUserDividends(w http.ResponseWriter, r *http.Req
 	respondWithJSON(w, http.StatusOK, dividends)
 }
 
+// HandlerDeleteDividend — Bir temettü kaydını soft-delete ile siler.
+// Silmeden önce kaydın gerçekten bu kullanıcıya ait olup olmadığını kontrol eder (IDOR koruması).
 // @Summary Temettü Kaydını Sil
 // @Description Kullanıcının kaydettiği bir temettü gelirini siler
 // @Tags Dividends

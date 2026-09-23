@@ -18,11 +18,6 @@ export default function LoginPage() {
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
 
-    useEffect(() => {
-        if (!authLoading && user) {
-            router.replace('/dashboard');
-        }
-    }, [user, authLoading, router]);
 
     async function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
         e.preventDefault();
@@ -42,12 +37,12 @@ export default function LoginPage() {
     }
 
     return (
-        <div className="flex-1 flex items-center justify-center p-4">
+        <div className="flex-1 flex flex-col items-center justify-center px-4 pt-12 pb-24 sm:pt-16 sm:pb-32 lg:pt-20 lg:pb-36 my-auto">
             <motion.div
                 initial={{opacity: 0, y: 16}}
                 animate={{opacity: 1, y: 0}}
                 transition={{duration: 0.35, ease: "easeOut"}}
-                className="w-full max-w-md border border-border bg-surface rounded-3xl p-8 sm:p-12 shadow-2xl flex items-center justify-center flex-col"
+                className="w-full max-w-md border border-border bg-surface rounded-3xl p-7 sm:p-10 shadow-2xl flex items-center justify-center flex-col my-auto"
             >
                 <Link href="/">
                     <Image src="/logo.png" alt="Yarmak Logo" width={64} height={64}
@@ -59,7 +54,17 @@ export default function LoginPage() {
                     <p className="text-slate-400 text-xs tracking-widest mt-1">Finansal kontrol paneline erişmek için giriş
                         yapın.</p>
                 </div>
-                <form onSubmit={handleSubmit} className="w-full space-y-4 mt-10">
+                {user && (
+                    <div className="w-full bg-primary/10 border border-primary/20 rounded-2xl p-4 mt-6 text-center">
+                        <p className="text-xs text-slate-300">
+                            Şu anda <span className="text-primary font-bold">{user.username}</span> hesabıyla oturumunuz açık.
+                        </p>
+                        <Link href="/dashboard" className="inline-block mt-2 text-xs font-bold text-primary hover:underline">
+                            Portföyüme Git (Dashboard) →
+                        </Link>
+                    </div>
+                )}
+                <form onSubmit={handleSubmit} className="w-full space-y-4 mt-8">
                     {error && <div
                         className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs p-4 rounded-xl text-center">{error}</div>}
                     <label className="text-xs text-slate-400 hover:text-primary">E-posta veya Kullanıcı Adı</label>
@@ -105,7 +110,7 @@ export default function LoginPage() {
                         </button>
                     </div>
                     <button type="submit" disabled={loading}
-                            className="w-full bg-primary hover:bg-primary-hover text-slate-950 font-semibold py-3 rounded-xl transition shadow-lg shadow-primary/20 cursor-pointer disabled:opacity-50 mt-6">{loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}</button>
+                            className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-3 rounded-xl transition shadow-lg shadow-primary/20 cursor-pointer disabled:opacity-50 mt-6">{loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}</button>
                     <p className="text-center text-xs text-slate-400 mt-6">Hesabınız yok mu?
                         <Link href="/register" className="text-xs font-bold text-white hover:text-primary transition cursor-pointer ml-2">Hemen Kayıt Ol</Link>
                     </p>

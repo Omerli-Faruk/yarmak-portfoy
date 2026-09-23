@@ -32,7 +32,7 @@ export interface ChartDataPoint {
     price?: number;
     raw?: number;
     rawDate?: Date | string;
-    [key: string]: any;
+    [key: string]: number | string | Date | undefined;
 }
 
 export interface InteractiveAreaChartProps {
@@ -54,7 +54,7 @@ export interface InteractiveAreaChartProps {
     loadingMessage?: string;
     emptyMessage?: string;
     height?: number;
-    colorMode?: 'dynamic' | 'indigo' | 'emerald';
+    colorMode?: 'dynamic' | 'cyan' | 'indigo' | 'emerald';
     onBrushChange?: (e: { startIndex?: number; endIndex?: number }) => void;
     headerExtra?: React.ReactNode;
 }
@@ -147,14 +147,14 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
         if (colorMode === 'emerald') {
             return { strokeColor: '#10b981', fillColor: '#10b981' };
         }
-        if (colorMode === 'indigo') {
-            return { strokeColor: '#6366f1', fillColor: '#6366f1' };
+        if (colorMode === 'cyan' || colorMode === 'indigo') {
+            return { strokeColor: '#1A9FD3', fillColor: '#1A9FD3' };
         }
         // Dynamic mode: Getiriye göre yeşil ya da kırmızı
         if (periodReturn >= 0) {
-            return { strokeColor: '#10b981', fillColor: '#10b981' }; // Emerald
+            return { strokeColor: '#10b981', fillColor: '#10b981' }; // Yeşil: Kâr
         }
-        return { strokeColor: '#f43f5e', fillColor: '#f43f5e' }; // Rose
+        return { strokeColor: '#f43f5e', fillColor: '#f43f5e' }; // Kırmızı: Zarar
     }, [colorMode, periodReturn]);
 
     // Standart değer biçimlendirici
@@ -167,12 +167,14 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
         })}`;
     }, [currencySymbol, valueFormatter]);
 
-    // Y Ekseni kompakt biçimlendirici (12.5K, 1.2M vb.)
+    // Y Ekseni kompakt biçimlendirici (12.5K, 1.2M vb.) — Kuruş altı fon fiyatlarını (0.0125 TL) hassas destekler
     const yAxisFormatter = useCallback((val: number): string => {
         if (val >= 1e6) return `${(val / 1e6).toFixed(1)}M`;
         if (val >= 1e3) return `${(val / 1e3).toFixed(0)}K`;
         if (val >= 100) return val.toFixed(0);
-        return val.toFixed(2);
+        if (val >= 1) return val.toFixed(2);
+        if (val >= 0.01) return val.toFixed(4);
+        return val.toFixed(6);
     }, []);
 
     // Brush değişim yöneticisi
@@ -189,13 +191,13 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
     const endDateLabel = data && data.length > 0 && data[currentEndIndex] ? String(data[currentEndIndex][dateKey] || '') : '';
 
     return (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm flex flex-col w-full transition-all">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col w-full transition-all">
             {/* 1. ÜST BAŞLIK VE PERİYOT SEÇİCİ */}
             <div className="flex flex-col xl:flex-row xl:items-center justify-between pb-4 gap-3 border-b border-slate-800/80">
                 <div className="flex items-start sm:items-center justify-between gap-4">
                     <div>
                         <div className="flex items-center gap-2.5">
-                            {icon || <Activity className="w-5 h-5 text-indigo-400 shrink-0" />}
+                            {icon || <Activity className="w-5 h-5 text-[#1A9FD3] shrink-0" />}
                             <h3 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
                                 {title}
                             </h3>
@@ -210,7 +212,7 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
 
                 {/* Periyot Butonları (Pills Bar) */}
                 <div className="flex items-center gap-1.5 self-start xl:self-auto max-w-full">
-                    <div className="flex bg-slate-800/90 rounded-xl p-1 border border-slate-700/60 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden max-w-full gap-0.5 sm:gap-1">
+                    <div className="flex bg-slate-800/90 rounded-xl p-1 border border-slate-700/60 overflow-x-auto no-scrollbar touch-pan-x max-w-full gap-1">
                         {periods.map(p => {
                             const isActive = activePeriod === p.id;
                             const hasChange = p.changePercent !== undefined && p.changePercent !== null;
@@ -221,23 +223,23 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
                                     key={p.id}
                                     type="button"
                                     onClick={() => onPeriodChange(p.id)}
-                                    className={`flex flex-col items-center justify-center px-2 sm:px-2.5 py-1 min-w-[38px] sm:min-w-[44px] min-h-[38px] text-[11px] sm:text-xs font-semibold rounded-lg transition-all shrink-0 cursor-pointer ${
+                                    className={`group/pill flex flex-col items-center justify-center px-2.5 sm:px-3 py-1.5 min-w-[42px] sm:min-w-[48px] text-xs font-bold rounded-lg transition-all shrink-0 cursor-pointer ${
                                         isActive
-                                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+                                            ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white font-bold shadow-sm shadow-[#1A9FD3]/20'
+                                            : 'text-slate-300 hover:text-[#1A9FD3] hover:bg-[#1A9FD3]/15'
                                     }`}
                                 >
-                                    <span className="leading-tight">
+                                    <span className={`leading-tight ${isActive ? 'text-white font-bold' : 'group-hover/pill:text-[#1A9FD3]'}`}>
                                         {p.label}
                                     </span>
                                     <span
-                                        className={`text-[9px] sm:text-[10px] font-bold mt-0.5 leading-tight ${
+                                        className={`text-[11px] font-bold mt-0.5 leading-tight font-mono tabular-nums transition-colors ${
                                             hasChange
                                                 ? changeVal > 0
-                                                    ? 'text-emerald-400'
+                                                    ? isActive ? 'text-emerald-300 font-bold' : 'text-emerald-400'
                                                     : changeVal < 0
-                                                    ? 'text-rose-400'
-                                                    : 'text-slate-400'
+                                                    ? isActive ? 'text-rose-300 font-bold' : 'text-rose-400'
+                                                    : isActive ? 'text-white font-bold' : 'text-slate-400'
                                                 : 'opacity-0 select-none'
                                         }`}
                                     >
@@ -314,14 +316,14 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
                         <p className="text-sm font-medium text-slate-400">{emptyMessage}</p>
                     </div>
                 ) : (
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
                         <AreaChart
                             data={data}
                             margin={{ top: 10, right: 10, left: -15, bottom: 0 }}
                         >
                             <defs>
                                 <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor={fillColor} stopOpacity={0.35} />
+                                    <stop offset="5%" stopColor={fillColor} stopOpacity={0.12} />
                                     <stop offset="95%" stopColor={fillColor} stopOpacity={0.0} />
                                 </linearGradient>
                             </defs>
@@ -347,7 +349,7 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
                                 fontSize={11}
                                 tickLine={false}
                                 axisLine={false}
-                                domain={['auto', 'auto']}
+                                domain={minVal > 0 && maxVal > 0 && minVal === maxVal ? [minVal * 0.98, maxVal * 1.02] : ['auto', 'auto']}
                                 tickFormatter={yAxisFormatter}
                             />
 

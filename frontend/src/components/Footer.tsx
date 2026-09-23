@@ -30,12 +30,12 @@ export default function Footer() {
                     <div>
                         <h4 className="text-white font-semibold mb-6">Platform</h4>
                         <ul className="flex flex-col gap-3 text-sm text-slate-400">
-                            <li><Link href="/#piyasalar" className="hover:text-indigo-400 transition-colors">Piyasalar</Link></li>
-                            <li><Link href="/#ozellikler" className="hover:text-indigo-400 transition-colors">Özellikler</Link></li>
+                            <li><Link href="/#piyasalar" className="hover:text-primary transition-colors">Piyasalar</Link></li>
+                            <li><Link href="/#ozellikler" className="hover:text-primary transition-colors">Özellikler</Link></li>
                             {user ? (
-                                <li><Link href="/dashboard" className="hover:text-indigo-400 transition-colors">Portföyüm</Link></li>
+                                <li><Link href="/dashboard" className="hover:text-primary transition-colors">Portföyüm</Link></li>
                             ) : (
-                                <li><Link href="/register" className="hover:text-indigo-400 transition-colors">Hesap Oluştur</Link></li>
+                                <li><Link href="/register" className="hover:text-primary transition-colors">Hesap Oluştur</Link></li>
                             )}
                         </ul>
                     </div>
@@ -44,10 +44,10 @@ export default function Footer() {
                     <div>
                         <h4 className="text-white font-semibold mb-6">Kaynaklar</h4>
                         <ul className="flex flex-col gap-3 text-sm text-slate-400">
-                            <li><a href="#" className="hover:text-indigo-400 transition-colors">Kullanım Rehberi</a></li>
-                            <li><a href="#" className="hover:text-indigo-400 transition-colors">Sıkça Sorulan Sorular</a></li>
-                            <li><a href="#" className="hover:text-indigo-400 transition-colors">Gizlilik Politikası</a></li>
-                            <li><a href="#" className="hover:text-indigo-400 transition-colors">Kullanım Şartları</a></li>
+                            <li><a href="#" className="hover:text-primary transition-colors">Kullanım Rehberi</a></li>
+                            <li><a href="#" className="hover:text-primary transition-colors">Sıkça Sorulan Sorular</a></li>
+                            <li><a href="#" className="hover:text-primary transition-colors">Gizlilik Politikası</a></li>
+                            <li><a href="#" className="hover:text-primary transition-colors">Kullanım Şartları</a></li>
                         </ul>
                     </div>
 
@@ -56,7 +56,7 @@ export default function Footer() {
                         <h4 className="text-white font-semibold mb-6">İletişim</h4>
                         <ul className="flex flex-col gap-3 text-sm text-slate-400">
                             <li className="flex items-center gap-3">
-                                <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                                <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
                                 <a href="mailto:destek@yarmak.com" className="hover:text-white transition-colors">destek@yarmak.com</a>
                             </li>
                         </ul>

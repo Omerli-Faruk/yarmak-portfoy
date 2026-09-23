@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -217,9 +218,79 @@ type StockHistoricalRecord struct {
 	Price float64
 }
 
+// FetchGoldHistory — Gram Altın (TL) geçmiş fiyat verisini Ons Altın (GC=F) ve Dolar/TL (USDTRY=X)
+// kurlarını zaman damgalarına göre eşleştirip çarparak (Ons * Dolar / 31.1034768) dinamik üretir.
+func FetchGoldHistory(rangeStr string) (float64, []StockHistoricalRecord, error) {
+	goldPrice, goldHist, err := FetchBISTHistory("GC=F", rangeStr)
+	if err != nil {
+		return 0, nil, fmt.Errorf("altın vadeli verisi alınamadı: %w", err)
+	}
+
+	usdPrice, usdHist, err := FetchBISTHistory("USDTRY=X", rangeStr)
+	if err != nil {
+		return 0, nil, fmt.Errorf("dolar/TL verisi alınamadı: %w", err)
+	}
+
+	// Anlık gram altın fiyatı (Ons * USDTRY / 31.1034768)
+	currentGram := (goldPrice * usdPrice) / 31.1034768
+
+	if len(goldHist) == 0 {
+		return currentGram, nil, nil
+	}
+
+	// USD/TRY verilerini tarih bazlı hızlı erişim için saatlik anahtarla saklıyoruz
+	usdMap := make(map[int64]float64)
+	for _, u := range usdHist {
+		usdMap[u.Date.Unix()/3600] = u.Price
+	}
+
+	lastKnownUSD := usdPrice
+	if len(usdHist) > 0 {
+		lastKnownUSD = usdHist[len(usdHist)-1].Price
+	}
+
+	var combined []StockHistoricalRecord
+	for _, g := range goldHist {
+		hourKey := g.Date.Unix() / 3600
+		uPrice, found := usdMap[hourKey]
+		if !found {
+			// En yakın önceki veya sonraki saati dene (-24h ... +24h)
+			for offset := int64(1); offset <= 48; offset++ {
+				if p, ok := usdMap[hourKey-offset]; ok {
+					uPrice = p
+					found = true
+					break
+				}
+				if p, ok := usdMap[hourKey+offset]; ok {
+					uPrice = p
+					found = true
+					break
+				}
+			}
+			if !found {
+				uPrice = lastKnownUSD
+			}
+		}
+
+		if g.Price > 0 && uPrice > 0 {
+			gram := (g.Price * uPrice) / 31.1034768
+			combined = append(combined, StockHistoricalRecord{
+				Date:  g.Date,
+				Price: math.Round(gram*100) / 100,
+			})
+		}
+	}
+
+	return currentGram, combined, nil
+}
+
 // FetchBISTHistory fetches the full daily price history and current price for a BIST stock
 func FetchBISTHistory(symbol string, rangeStr string) (currentPrice float64, history []StockHistoricalRecord, err error) {
 	ticker := strings.ToUpper(strings.TrimSpace(symbol))
+	if ticker == "ALTIN" || ticker == "GRAMALTIN" || ticker == "GRAM" || ticker == "XAUTRY" {
+		return FetchGoldHistory(rangeStr)
+	}
+
 	if custom, exists := customTickers[ticker]; exists {
 		ticker = custom
 	} else if !strings.Contains(ticker, "=") && !strings.Contains(ticker, ".") {

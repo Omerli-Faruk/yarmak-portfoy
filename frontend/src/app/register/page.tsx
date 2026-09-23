@@ -22,11 +22,6 @@ export default function RegisterPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-    useEffect(() => {
-        if (!authLoading && user) {
-            router.replace('/dashboard');
-        }
-    }, [user, authLoading, router]);
 
     async function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
         e.preventDefault()
@@ -58,12 +53,12 @@ export default function RegisterPage() {
     }
 
     return (
-        <div className="flex-1 flex items-center justify-center p-4">
+        <div className="flex-1 flex flex-col items-center justify-center px-4 pt-12 pb-24 sm:pt-16 sm:pb-32 lg:pt-20 lg:pb-36 my-auto">
             <motion.div
                 initial={{opacity: 0, y: 16}}
                 animate={{opacity: 1, y: 0}}
                 transition={{duration: 0.35, ease: "easeOut"}}
-                className="w-full max-w-md border border-border bg-surface rounded-3xl p-8 sm:p-12 shadow-2xl flex items-center justify-center flex-col"
+                className="w-full max-w-md border border-border bg-surface rounded-3xl p-7 sm:p-10 shadow-2xl flex items-center justify-center flex-col my-auto"
             >
                 <Link href="/">
                     <Image src="/logo.png" alt="Yarmak Logo" width={64} height={64}
@@ -146,7 +141,7 @@ export default function RegisterPage() {
                         </button>
                     </div>
                     <button type="submit" disabled={loading}
-                            className="w-full bg-primary hover:bg-primary-hover text-slate-950 font-semibold py-3 rounded-xl transition shadow-lg shadow-primary/20 cursor-pointer disabled:opacity-50 mt-6">{loading ? 'Hesap Oluşturuluyor...' : 'Ücretsiz Kayıt Ol'}
+                            className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-3 rounded-xl transition shadow-lg shadow-primary/20 cursor-pointer disabled:opacity-50 mt-6">{loading ? 'Hesap Oluşturuluyor...' : 'Ücretsiz Kayıt Ol'}
                     </button>
                     <p className="text-center text-xs text-slate-400 mt-6">Zaten bir hesabınız var mı?{" "}
                         <Link href="/login" className="text-xs font-bold text-white hover:text-primary transition cursor-pointer ml-2">

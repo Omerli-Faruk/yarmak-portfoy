@@ -211,6 +211,30 @@ async function getLiveMarketQuotes(): Promise<Record<string, ChartQuote>> {
     return quotes;
 }
 
+// 3.5. Tüm Aktif Varlıkların Günlük Değişim Haritası (2 Dakika Önbellek)
+let allDailyChangesCache: Record<string, number> = {};
+let lastAllDailyChangesFetchTime = 0;
+
+async function getAllDailyChanges(backendBase: string): Promise<Record<string, number>> {
+    const now = Date.now();
+    if (Object.keys(allDailyChangesCache).length > 0 && now - lastAllDailyChangesFetchTime < 2 * 60 * 1000) {
+        return allDailyChangesCache;
+    }
+    try {
+        const res = await fetch(`${backendBase}/assets/daily-changes`, { cache: 'no-store' });
+        if (res.ok) {
+            const data = await res.json();
+            if (data && typeof data === 'object') {
+                allDailyChangesCache = data;
+                lastAllDailyChangesFetchTime = now;
+            }
+        }
+    } catch (err) {
+        console.warn('Tüm günlük değişimler alınamadı:', err);
+    }
+    return allDailyChangesCache;
+}
+
 // 4. GET İşleyici
 export async function GET(request: Request) {
     try {
@@ -220,42 +244,67 @@ export async function GET(request: Request) {
         // Canlı piyasa kurları ve veritabanı varlıklarını al
         const backendBase = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080/v1';
 
-        const [liveQuotes, backendRes] = await Promise.all([
-            getLiveMarketQuotes(),
+        // Arama sorgusu varsa harici makro kurları tarayarak 20-30 saniye gecikme yaratma (0 ms hızlı autocomplete)
+        const [liveQuotes, backendRes, dailyChangesMap] = await Promise.all([
+            !query ? getLiveMarketQuotes() : Promise.resolve({} as Record<string, ChartQuote>),
             fetch(`${backendBase}/assets`, {
                 cache: 'no-store',
                 headers: { 'Accept': 'application/json' },
             }).catch(() => null),
+            getAllDailyChanges(backendBase),
         ]);
 
         const rawData: any[] = (backendRes?.ok && await backendRes.json().catch(() => [])) || [];
 
-        // Varlıkları normalize et
-        const normalized: NormalizedAsset[] = (Array.isArray(rawData) ? rawData : []).map((item: any) => {
-            const symbol = String(item.Symbol ?? item.symbol ?? '').trim().toUpperCase();
-            const name = String(item.Name ?? item.name ?? symbol).trim();
-            const assetType = String(item.AssetType ?? item.asset_type ?? 'HISSE').trim().toUpperCase();
-            let price = parseFloat(item.CurrentPrice ?? item.current_price ?? '0');
-            let change = '0.00';
-            let positive = true;
+        // Varlıkları normalize et & borsada işlem görmeyen (geçmiş fiyatı ve günlük değişimi olmayan) kapalı fonları filtrele
+        const normalized: NormalizedAsset[] = (Array.isArray(rawData) ? rawData : [])
+            .filter((item: any) => {
+                const assetType = String(item.AssetType ?? item.asset_type ?? 'HISSE').trim().toUpperCase();
+                const idStr = String(item.ID ?? item.id ?? 0);
+                // Borsada işlem görmeyen Girişim Sermayesi (GSYF), Gayrimenkul (GMYF) veya değişimi %0.00 olan durağan fonları güvenle gizle
+                if (assetType === 'FON') {
+                    const cleanName = String(item.Name ?? item.name ?? '').toUpperCase();
+                    if (cleanName.includes('GİRİŞİM SERMAYESİ') || cleanName.includes('GAYRİMENKUL YATIRIM FONU')) {
+                        return false;
+                    }
+                    const chg = dailyChangesMap[idStr];
+                    return chg !== undefined && chg !== 0;
+                }
+                return true;
+            })
+            .map((item: any) => {
+                const id = Number(item.ID ?? item.id ?? 0);
+                const symbol = String(item.Symbol ?? item.symbol ?? '').trim().toUpperCase();
+                const name = String(item.Name ?? item.name ?? symbol).trim();
+                const assetType = String(item.AssetType ?? item.asset_type ?? 'HISSE').trim().toUpperCase();
+                let price = parseFloat(item.CurrentPrice ?? item.current_price ?? '0');
+                
+                // Önceden hesaplanmış gerçek günlük değişim yüzdesi
+                let change = '0.00';
+                let positive = true;
+                const dbChange = dailyChangesMap[String(id)];
+                if (typeof dbChange === 'number' && !isNaN(dbChange)) {
+                    change = (dbChange >= 0 ? '+' : '') + dbChange.toFixed(2);
+                    positive = dbChange >= 0;
+                }
 
-            const live = liveQuotes[symbol];
-            if (live && live.price > 0) {
-                price = live.price;
-                change = live.change;
-                positive = live.positive;
-            }
+                const live = liveQuotes[symbol];
+                if (live && live.price > 0) {
+                    price = live.price;
+                    change = live.change;
+                    positive = live.positive;
+                }
 
-            return {
-                id: Number(item.ID ?? item.id ?? 0),
-                symbol,
-                name,
-                asset_type: assetType,
-                current_price: formatPrice(price),
-                change,
-                positive,
-            };
-        });
+                return {
+                    id,
+                    symbol,
+                    name,
+                    asset_type: assetType,
+                    current_price: formatPrice(price),
+                    change,
+                    positive,
+                };
+            });
 
         // Veritabanında henüz olmayan temel makro varlıkları (Döviz, BIST 100, Altın) ekle
         const existing = new Set(normalized.map((a) => a.symbol));
@@ -289,34 +338,136 @@ export async function GET(request: Request) {
         const queryWords = cleanQ.split(/\s+/).filter(Boolean);
         const resultMap = new Map<string, NormalizedAsset>();
 
-        // 1. Veritabanından ara (Sembol, isim veya çoklu kelime eşleşmesi)
+        // Finansal varlık alaka düzeyi puanlama fonksiyonu (Relevance Scoring Engine)
+        const scoreAsset = (sym: string, nm: string, change?: string): number => {
+            let score = 0;
+            // 1. Tam sembol eşleşmesi (örn: "SA" -> "SA")
+            if (sym === cleanQ) score = 10000;
+            // 2. Sembol arama ile başlıyorsa (örn: "SA" -> "SAS", "SASA", "SAFKR", "SAHOL")
+            // Kısa semboller daha öncelikli: SAS (3 harf) > SASA (4 harf) > SAFKR (5 harf)
+            else if (sym.startsWith(cleanQ)) score = 8000 - sym.length * 10;
+            else {
+                // 3. İsimdeki bir kelime tam olarak eşleşiyorsa (örn: "ALTIN" -> "Gram Altın")
+                const words = nm.split(/\s+/);
+                if (words.some(w => w === cleanQ)) score = 6000;
+                // 4. İsim arama terimi ile başlıyorsa (örn: "SA" -> "Sabancı Holding")
+                else if (nm.startsWith(cleanQ)) score = 5000;
+                // 5. İsimdeki herhangi bir kelime arama ile başlıyorsa (örn: "SA" -> "... Sabancı")
+                else if (words.some(w => w.startsWith(cleanQ))) score = 4000;
+                // 6. Sembol aramayı içeriyorsa (örn: "TH" -> "GRTHO", "BTH")
+                else if (sym.includes(cleanQ)) score = 3000;
+                // 7. Çoklu kelime araması (örn: "iş bankası")
+                else if (queryWords.length > 1 && queryWords.every(w => sym.includes(w) || nm.includes(w))) score = 2000;
+                // 8. İsim içinde alt dize (yalnızca >= 3 karakterde kabul edilir; 1-2 karakterde hece gürültüsü engellenir)
+                else if (cleanQ.length >= 3 && nm.includes(cleanQ)) score = 1000;
+            }
+
+            if (score > 0) {
+                // Canlı, dünden bugüne işlem gören (değişimi %0.00 olmayan) hareketli varlıklara +2000 öncelik bonusu
+                const hasActiveMovement = change && change !== '0.00' && change !== '+0.00' && change !== '-0.00';
+                if (hasActiveMovement) {
+                    score += 2000;
+                }
+            }
+
+            return score;
+        };
+
+        // 1. Veritabanından ara (Alaka puanı > 0 olanları topla)
         normalized.forEach((a) => {
             const sym = cleanText(a.symbol);
             const nm = cleanText(a.name);
-            if (
-                sym.includes(cleanQ) ||
-                nm.includes(cleanQ) ||
-                (cleanQ.includes(sym) && sym.length >= 3) ||
-                (queryWords.length > 1 && queryWords.every((w) => sym.includes(w) || nm.includes(w)))
-            ) {
+            const score = scoreAsset(sym, nm, a.change);
+            if (score > 0) {
                 resultMap.set(a.symbol, a);
             }
         });
 
-        // Veritabanında yeterli sonuç bulunduysa dış ağ beklemeden anında dön (Hızlı Autocomplete)
-        if (resultMap.size >= 5) {
-            const sortedResults = () => {
+        const sortedResults = (): NormalizedAsset[] => {
             const arr = Array.from(resultMap.values());
             arr.sort((a, b) => {
-                const aExact = cleanText(a.symbol) === cleanQ;
-                const bExact = cleanText(b.symbol) === cleanQ;
-                if (aExact && !bExact) return -1;
-                if (!aExact && bExact) return 1;
-                return 0;
+                const scoreA = scoreAsset(cleanText(a.symbol), cleanText(a.name), a.change);
+                const scoreB = scoreAsset(cleanText(b.symbol), cleanText(b.name), b.change);
+                if (scoreA !== scoreB) return scoreB - scoreA;
+                return a.symbol.localeCompare(b.symbol);
             });
             return arr.slice(0, 10);
         };
-        return NextResponse.json(sortedResults());
+
+        // Sonuçları gerçek günlük yüzdelerle (price_history dünden bugüne değişim) zenginleştir
+        const enrichResultsWithChanges = async (items: NormalizedAsset[]): Promise<NormalizedAsset[]> => {
+            const assetIds = items.map(a => a.id).filter(id => id > 0 && id < 70000);
+            if (assetIds.length > 0) {
+                try {
+                    const changesRes = await fetch(`${backendBase}/assets/daily-changes?ids=${assetIds.join(',')}`, { cache: 'no-store' });
+                    if (changesRes.ok) {
+                        const changesMap = await changesRes.json();
+                        items.forEach(a => {
+                            const val = changesMap[String(a.id)];
+                            if (typeof val === 'number' && !isNaN(val)) {
+                                a.change = (val >= 0 ? '+' : '') + val.toFixed(2);
+                                a.positive = val >= 0;
+                            }
+                        });
+                    }
+                } catch {
+                    // Sessiz hata yönetimi
+                }
+            }
+
+            // BIST Hisseleri için canlı Yahoo Finance fiyat ve günlük değişim zenginleştirmesi
+            // Veritabanındaki bayat kalmış fiyatları ve eski tavan/taban yüzdelerini anlık canlı verilerle yeniler
+            const hisseItems = items.filter(a => a.asset_type === 'HISSE').slice(0, 6);
+            if (hisseItems.length > 0) {
+                await Promise.all(hisseItems.map(async (stk) => {
+                    const cached = liveQuotesCache[stk.symbol];
+                    if (cached && cached.price > 0) {
+                        stk.current_price = formatPrice(cached.price);
+                        stk.change = cached.change;
+                        stk.positive = cached.positive;
+                        return;
+                    }
+
+                    const quote = await fetchYahooChart(stk.symbol + '.IS');
+                    if (quote && quote.price > 0) {
+                        stk.current_price = formatPrice(quote.price);
+                        if (quote.change) {
+                            stk.change = quote.change;
+                            stk.positive = quote.positive;
+                        }
+                        liveQuotesCache[stk.symbol] = quote;
+                    }
+                }));
+            }
+
+            // Makro varlıklar (ALTIN, Döviz, Endeks) için canlı piyasa kurları ile anlık zenginleştirme
+            const macroItems = items.filter(a => a.symbol === 'ALTIN' || a.asset_type === 'DOVIZ' || a.asset_type === 'ENDEKS' || a.asset_type === 'ALTIN');
+            if (macroItems.length > 0) {
+                await Promise.all(macroItems.map(async (m) => {
+                    let quote: ChartQuote | undefined = liveQuotesCache[m.symbol];
+                    if (!quote) {
+                        if (m.symbol === 'ALTIN') {
+                            quote = (await fetchSpotGold()) || undefined;
+                        } else if (MACRO_SYMBOLS[m.symbol]) {
+                            quote = (await fetchYahooChart(MACRO_SYMBOLS[m.symbol])) || undefined;
+                        }
+                        if (quote) liveQuotesCache[m.symbol] = quote;
+                    }
+                    if (quote && quote.price > 0) {
+                        m.current_price = formatPrice(quote.price);
+                        m.change = quote.change;
+                        m.positive = quote.positive;
+                    }
+                }));
+            }
+
+            return items;
+        };
+
+        // Veritabanında yeterli sonuç bulunduysa dış ağ beklemeden anında dön (Hızlı Autocomplete)
+        if (resultMap.size >= 5) {
+            const items = await enrichResultsWithChanges(sortedResults());
+            return NextResponse.json(items);
         }
 
         // 2. TEFAS fon kataloğunda ara (Bellekteki 2000+ fondan)
@@ -325,7 +476,7 @@ export async function GET(request: Request) {
             const matched = tefasFunds.filter((f) => {
                 const c = cleanText(f.symbol);
                 const n = cleanText(f.name);
-                return c === cleanQ || c.includes(cleanQ) || n.includes(cleanQ);
+                return scoreAsset(c, n) > 0;
             }).slice(0, 6);
 
             matched.forEach((f, idx) => {
@@ -407,18 +558,8 @@ export async function GET(request: Request) {
             // Yahoo arama hatası yutulur
         }
 
-        const sortedResults = () => {
-            const arr = Array.from(resultMap.values());
-            arr.sort((a, b) => {
-                const aExact = cleanText(a.symbol) === cleanQ;
-                const bExact = cleanText(b.symbol) === cleanQ;
-                if (aExact && !bExact) return -1;
-                if (!aExact && bExact) return 1;
-                return 0;
-            });
-            return arr.slice(0, 10);
-        };
-        return NextResponse.json(sortedResults());
+        const finalItems = await enrichResultsWithChanges(sortedResults());
+        return NextResponse.json(finalItems);
     } catch (err: any) {
         console.error('Next.js API assets proxy error:', err);
         return NextResponse.json({ error: 'Backend connection failed', message: err?.message }, { status: 500 });

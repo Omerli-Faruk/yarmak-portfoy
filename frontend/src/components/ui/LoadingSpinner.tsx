@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import Image from "next/image";
 
 interface LoadingSpinnerProps {
@@ -17,7 +17,7 @@ export default function LoadingSpinner({ message, withLogo = false, fullScreen =
             {withLogo && (
                 <Image src="/logo.png" alt="Yarmak Logo" width={80} height={80} className="size-20 object-contain" loading="eager" />
             )}
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1A9FD3]"></div>
             {message && <p className="text-slate-400 font-medium text-center">{message}</p>}
         </div>
     );

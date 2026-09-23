@@ -250,8 +250,12 @@ func GetLastTradingDay() time.Time {
 
 // FetchAllTEFASFunds fetches all funds for the latest available trading day
 func FetchAllTEFASFunds(tarih time.Time, fonTipi string) ([]TEFASFundData, error) {
-	if tarih.IsZero() || (tarih.Day() == time.Now().Day() && time.Now().Hour() < 19) {
-		tarih = GetLastTradingDay()
+	if tarih.IsZero() {
+		// Önce bugünün tarihini dene (TEFAS 18:00'den sonra yeni fiyatları yayınlamaya başlar)
+		tarih = time.Now()
+		for tarih.Weekday() == time.Saturday || tarih.Weekday() == time.Sunday {
+			tarih = tarih.AddDate(0, 0, -1)
+		}
 	}
 
 	for attempt := 0; attempt < 4; attempt++ {

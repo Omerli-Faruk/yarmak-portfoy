@@ -28,6 +28,8 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
+// keyByClientIP — Rate limiter için istemci IP'sini çıkarır.
+// Proxy arkasındaysa X-Forwarded-For'u, değilse doğrudan RemoteAddr kullanır.
 func keyByClientIP(r *http.Request) (string, error) {
 	ip := middleware.GetClientIP(r.Context())
 	if ip == "" {
@@ -41,6 +43,8 @@ func keyByClientIP(r *http.Request) (string, error) {
 	return httprate.CanonicalizeIP(ip), nil
 }
 
+// main — Uygulamanın giriş noktası. DB bağlantısı, router kurulumu,
+// scraper worker'ları ve HTTP sunucusunu başlatır. Graceful shutdown destekler.
 // @title Yarmak Borsa & Portföy Takip API
 // @version 1.0
 // @description BIST 100 hisseleri, TEFAS yatırım fonları, altın ve döviz portföy takip sistemi REST API dokümantasyonu.
@@ -162,6 +166,7 @@ func main() {
 	v1Router.Post("/assets", apiCFG.MiddleWareAuth(apiCFG.MiddleWareAdmin(apiCFG.HandlerCreateAsset)))
 	v1Router.Get("/assets", apiCFG.HandlerListAssets)
 	v1Router.Get("/assets/lookup", apiCFG.HandlerLookupAsset)
+	v1Router.Get("/assets/daily-changes", apiCFG.HandlerGetAssetDailyChanges)
 	v1Router.Post("/splits", apiCFG.MiddleWareAuth(apiCFG.MiddleWareAdmin(apiCFG.HandlerCreateSplit)))
 	v1Router.Get("/assets/{id}/splits", apiCFG.MiddleWareAuth(apiCFG.HandlerListSplitsByAsset))
 

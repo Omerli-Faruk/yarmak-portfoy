@@ -12,6 +12,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// HashPassword — Kullanıcının düz metin şifresini bcrypt algoritması ile güvenli şekilde hash'ler.
 func HashPassword(password string) (string, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -20,11 +21,13 @@ func HashPassword(password string) (string, error) {
 	return string(hashedPassword), nil
 }
 
+// CheckPasswordHash — Kullanıcının girdiği şifre ile veritabanındaki hash'lenmiş şifrenin eşleşip eşleşmediğini kontrol eder.
 func CheckPasswordHash(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }
 
+// MakeJWT — Kullanıcı oturumu için kısa ömürlü (ör. 1 saat) bir JSON Web Token (JWT) oluşturur ve imzalar.
 func MakeJWT(userID int64, tokenSecret string, expiresIn time.Duration) (string, error) {
 	signingKey := []byte(tokenSecret)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
@@ -40,6 +43,7 @@ func MakeJWT(userID int64, tokenSecret string, expiresIn time.Duration) (string,
 	return signedToken, nil
 }
 
+// ValidateJWT — Gelen JWT'nin süresinin geçip geçmediğini, imzasının doğruluğunu ve issuer (yayıncı) bilgisini kontrol eder. Geçerliyse UserID'yi döner.
 func ValidateJWT(tokenString, tokenSecret string) (int64, error) {
 	claims := &jwt.RegisteredClaims{}
 	_, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
@@ -61,6 +65,7 @@ func ValidateJWT(tokenString, tokenSecret string) (int64, error) {
 	return userID, nil
 }
 
+// MakeRefreshToken — Kullanıcının oturumunu uzun süre açık tutmak için rastgele, güvenli bir 32 baytlık (64 karakter hex) yenileme token'ı üretir.
 func MakeRefreshToken() (string, error) {
 	b := make([]byte, 32)
 	_, err := rand.Read(b)
@@ -70,6 +75,7 @@ func MakeRefreshToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+// HashToken — Veritabanında plain-text token saklamamak için, Refresh Token'ı SHA-256 ile hash'leyerek geri döndürür.
 func HashToken(token string) string {
 	hash := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(hash[:])

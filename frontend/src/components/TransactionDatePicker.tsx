@@ -170,7 +170,7 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
             <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                        <Calendar className="w-3.5 h-3.5 text-[#1A9FD3]" />
                         <span>İşlem Tarihi</span>
                     </label>
 
@@ -181,7 +181,7 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
                             onClick={() => handleDateChange(todayStr)}
                             className={`px-2 py-0.5 rounded text-[11px] font-bold transition cursor-pointer ${
                                 currentDate === todayStr
-                                    ? 'bg-indigo-600 text-white shadow-sm'
+                                    ? 'bg-[#1A9FD3] text-white shadow-sm'
                                     : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
                             }`}
                         >
@@ -192,7 +192,7 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
                             onClick={() => handleDateChange(yesterdayStr)}
                             className={`px-2 py-0.5 rounded text-[11px] font-bold transition cursor-pointer ${
                                 currentDate === yesterdayStr
-                                    ? 'bg-indigo-600 text-white shadow-sm'
+                                    ? 'bg-[#1A9FD3] text-white shadow-sm'
                                     : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
                             }`}
                         >
@@ -204,7 +204,7 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
                                 onClick={() => handleDateChange(lastTradingDayStr)}
                                 className={`px-2 py-0.5 rounded text-[11px] font-bold transition cursor-pointer ${
                                     currentDate === lastTradingDayStr
-                                        ? 'bg-indigo-600 text-white shadow-sm'
+                                        ? 'bg-[#1A9FD3] text-white shadow-sm'
                                         : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
                                 }`}
                             >
@@ -220,7 +220,7 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
                     max={todayStr}
                     value={currentDate}
                     onChange={(e) => handleDateChange(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs font-medium text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 [color-scheme:dark] cursor-pointer"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs font-medium text-white focus:outline-none focus:border-[#1A9FD3] focus:ring-1 focus:ring-[#1A9FD3] [color-scheme:dark] cursor-pointer"
                 />
             </div>
 
@@ -228,7 +228,7 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
             <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                        <Clock className="w-3.5 h-3.5 text-[#1A9FD3]" />
                         <span>İşlem Saati</span>
                     </label>
 
@@ -237,7 +237,7 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
                         <button
                             type="button"
                             onClick={() => handleTimeChange(getLocalTimeStr(new Date()))}
-                            className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-400 hover:text-indigo-300 hover:bg-slate-700 transition cursor-pointer"
+                            className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-400 hover:text-[#1A9FD3] hover:bg-slate-700 transition cursor-pointer"
                             title="Şu anki güncel saati seç"
                         >
                             Şimdi
@@ -250,7 +250,7 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
                                 is10FutureToday
                                     ? 'opacity-40 cursor-not-allowed bg-slate-800/50 text-slate-600'
                                     : currentTime === '10:00'
-                                        ? 'bg-indigo-600 text-white shadow-sm cursor-pointer'
+                                        ? 'bg-[#1A9FD3] text-white shadow-sm cursor-pointer'
                                         : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 cursor-pointer'
                             }`}
                             title={is10FutureToday ? "Bugün seans açılış saati (10:00) henüz gelmedi" : "Borsa İstanbul Açılışı (10:00)"}
@@ -265,7 +265,7 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
                                 is18FutureToday
                                     ? 'opacity-40 cursor-not-allowed bg-slate-800/50 text-slate-600'
                                     : currentTime === '18:00'
-                                        ? 'bg-indigo-600 text-white shadow-sm cursor-pointer'
+                                        ? 'bg-[#1A9FD3] text-white shadow-sm cursor-pointer'
                                         : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 cursor-pointer'
                             }`}
                             title={is18FutureToday ? "Bugün seans kapanış saati (18:00) henüz gelmedi" : "Borsa İstanbul Kapanışı (18:00)"}
@@ -281,7 +281,7 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
                     max={isToday ? nowTimeStr : undefined}
                     value={currentTime}
                     onChange={(e) => handleTimeChange(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs font-medium text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 [color-scheme:dark] cursor-pointer"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs font-medium text-white focus:outline-none focus:border-[#1A9FD3] focus:ring-1 focus:ring-[#1A9FD3] [color-scheme:dark] cursor-pointer"
                 />
             </div>
 
@@ -297,10 +297,10 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
             {!isFuture && (
                 <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg px-3 py-1.5 flex items-center justify-between text-[11px]">
                     <span className="text-slate-400 flex items-center gap-1">
-                        <Zap className="w-3 h-3 text-amber-400" />
+                        <Zap className="w-3 h-3 text-[#1A9FD3]" />
                         İşlem Zamanı:
                     </span>
-                    <span className="font-bold text-indigo-300 font-mono">
+                    <span className="font-bold text-[#1A9FD3] font-mono">
                         {formatPreview(currentDate, currentTime)}
                     </span>
                 </div>

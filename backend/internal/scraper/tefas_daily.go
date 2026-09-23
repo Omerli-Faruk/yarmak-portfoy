@@ -28,17 +28,22 @@ func StartTefasDailyWorker(ctx context.Context, db *database.Queries, wg *sync.W
 		for {
 			loc, _ := time.LoadLocation("Europe/Istanbul")
 			now := time.Now().In(loc)
-			// Hedef: Her akşam 20:00 ve sabah 09:00 (TEFAS fiyatları 18:30 ile sabah arası güncellenir)
-			var next time.Time
-			if now.Hour() < 9 {
-				next = time.Date(now.Year(), now.Month(), now.Day(), 9, 0, 0, 0, loc)
-			} else if now.Hour() < 20 {
-				next = time.Date(now.Year(), now.Month(), now.Day(), 20, 0, 0, 0, loc)
+			// Akşam 18:00 - 21:00 saatleri arasında TEFAS fonları parça parça açıklandığı için
+			// her 30 dakikada bir kontrol edilir. Gece ve gündüz saatlerinde sabah 09:00 ve akşam 18:15 hedeflenir.
+			var waitDuration time.Duration
+			if now.Hour() >= 18 && now.Hour() < 21 {
+				waitDuration = 30 * time.Minute
+			} else if now.Hour() < 9 {
+				next := time.Date(now.Year(), now.Month(), now.Day(), 9, 0, 0, 0, loc)
+				waitDuration = next.Sub(now)
+			} else if now.Hour() < 18 {
+				next := time.Date(now.Year(), now.Month(), now.Day(), 18, 15, 0, 0, loc)
+				waitDuration = next.Sub(now)
 			} else {
-				next = time.Date(now.Year(), now.Month(), now.Day()+1, 9, 0, 0, 0, loc)
+				next := time.Date(now.Year(), now.Month(), now.Day()+1, 9, 0, 0, 0, loc)
+				waitDuration = next.Sub(now)
 			}
 			
-			waitDuration := next.Sub(now)
 			slog.Info(fmt.Sprintf("Bir sonraki TEFAS Daily işlemi %v sonra başlayacak", waitDuration))
 
 			select {

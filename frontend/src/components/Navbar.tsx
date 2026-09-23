@@ -22,7 +22,7 @@ export default function Navbar() {
     }
 
     return (
-        <header className="w-full ">
+        <header className="w-full relative z-40">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
                 {/* LOGO */}
                 <Link className="flex justify-center items-center" href="/">
@@ -30,13 +30,13 @@ export default function Navbar() {
                 </Link>
 
                 {/* DESKTOP MENU */}
-                <div className="hidden md:flex items-center gap-x-8 text-slate-300 text-xs uppercase tracking-widest font-bold">
+                <div className="hidden md:flex items-center gap-x-8 text-xs uppercase tracking-widest font-bold">
                     {user ? (
                         <>
-                            <Link href="/dashboard" className="hover:text-primary transition-colors">Portföyüm</Link>
-                            <Link href="/holdings" className="hover:text-primary transition-colors">Varlıklarım</Link>
-                            <Link href="/transactions" className="hover:text-primary transition-colors">İşlemler</Link>
-                            <Link href="/alerts" className="hover:text-primary transition-colors">Alarmlar</Link>
+                            <Link href="/dashboard" className={`${pathname === '/dashboard' ? 'text-primary font-black' : 'text-slate-300 hover:text-primary'} transition-colors`}>Portföyüm</Link>
+                            <Link href="/holdings" className={`${pathname === '/holdings' ? 'text-primary font-black' : 'text-slate-300 hover:text-primary'} transition-colors`}>Varlıklarım</Link>
+                            <Link href="/transactions" className={`${pathname === '/transactions' ? 'text-primary font-black' : 'text-slate-300 hover:text-primary'} transition-colors`}>İşlemler</Link>
+                            <Link href="/alerts" className={`${pathname === '/alerts' ? 'text-primary font-black' : 'text-slate-300 hover:text-primary'} transition-colors`}>Alarmlar</Link>
                         </>
                     ) : (
                         <>
@@ -48,10 +48,12 @@ export default function Navbar() {
                 </div>
 
                 {/* DESKTOP RIGHT (USER ACTIONS) */}
-                <div className="hidden md:flex items-center gap-x-6">
-                    {user ? (
+                <div className="hidden md:flex items-center gap-x-6 min-w-[200px] justify-end">
+                    {loading ? (
+                        <div className="h-9 w-24 rounded-xl bg-slate-800/40 animate-pulse" />
+                    ) : user ? (
                         <>
-                            <Link href="/profile" className="text-emerald-400 hover:text-emerald-300 font-medium text-sm transition hover:underline">
+                            <Link href="/profile" className="text-[#1A9FD3] hover:text-[#0C6991] font-semibold text-sm transition hover:underline">
                                 {user?.username}
                             </Link>
                             <button onClick={() => logOut()}
@@ -61,11 +63,11 @@ export default function Navbar() {
                         </>
                     ) : (
                         <>
-                            <Link href="/login" className="text-sm font-semibold text-slate-300 hover:text-white transition">
+                            <Link href="/login" className="text-sm font-semibold text-slate-300 hover:text-[#1A9FD3] transition">
                                 Giriş Yap
                             </Link>
                             <Link href="/register"
-                                  className="bg-primary hover:bg-primary-hover text-slate-950 font-bold px-5 py-2.5 rounded-xl transition shadow-lg shadow-primary/20 text-sm">
+                                  className="bg-primary hover:bg-primary-hover text-white font-bold px-5 py-2.5 rounded-xl transition shadow-lg shadow-primary/20 text-sm">
                                 Ücretsiz Hesap Oluştur
                             </Link>
                         </>
@@ -74,8 +76,9 @@ export default function Navbar() {
 
                 {/* MOBILE MENU TOGGLE */}
                 <button 
-                    className="md:hidden text-slate-300 hover:text-white p-2"
+                    className="md:hidden text-slate-300 hover:text-white p-2.5 rounded-xl cursor-pointer"
                     onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    aria-label="Menüyü Aç/Kapat"
                 >
                     {isMobileMenuOpen ? <X className="size-6" /> : <Menu className="size-6" />}
                 </button>
@@ -88,17 +91,17 @@ export default function Navbar() {
                         initial={{ opacity: 0, y: -20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
-                        className="absolute top-20 left-0 w-full bg-ambient-spotlight border-b border-white/5 shadow-2xl flex flex-col p-4 md:hidden gap-4"
+                        className="absolute top-20 left-0 w-full bg-[#0A0E14]/95 backdrop-blur-xl border-b border-slate-800 shadow-2xl flex flex-col p-4 md:hidden gap-4 z-50"
                     >
                         {user ? (
                             <div className="flex flex-col gap-4 text-sm font-bold text-slate-300 uppercase tracking-wider mb-2">
-                                <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-primary p-2 bg-white/5 rounded-lg">Portföyüm</Link>
-                                <Link href="/holdings" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-primary p-2 bg-white/5 rounded-lg">Varlıklarım</Link>
-                                <Link href="/transactions" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-primary p-2 bg-white/5 rounded-lg">İşlemler</Link>
-                                <Link href="/alerts" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-primary p-2 bg-white/5 rounded-lg">Alarmlar</Link>
+                                <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className={`p-2 rounded-lg ${pathname === '/dashboard' ? 'text-primary bg-primary/10' : 'hover:text-primary bg-white/5'}`}>Portföyüm</Link>
+                                <Link href="/holdings" onClick={() => setIsMobileMenuOpen(false)} className={`p-2 rounded-lg ${pathname === '/holdings' ? 'text-primary bg-primary/10' : 'hover:text-primary bg-white/5'}`}>Varlıklarım</Link>
+                                <Link href="/transactions" onClick={() => setIsMobileMenuOpen(false)} className={`p-2 rounded-lg ${pathname === '/transactions' ? 'text-primary bg-primary/10' : 'hover:text-primary bg-white/5'}`}>İşlemler</Link>
+                                <Link href="/alerts" onClick={() => setIsMobileMenuOpen(false)} className={`p-2 rounded-lg ${pathname === '/alerts' ? 'text-primary bg-primary/10' : 'hover:text-primary bg-white/5'}`}>Alarmlar</Link>
                                 <div className="h-px bg-white/10 my-2"></div>
                                 <div className="flex items-center justify-between px-2">
-                                    <Link href="/profile" onClick={() => setIsMobileMenuOpen(false)} className="text-emerald-400 hover:text-emerald-300 font-medium normal-case">
+                                    <Link href="/profile" onClick={() => setIsMobileMenuOpen(false)} className="text-[#1A9FD3] hover:text-[#0C6991] font-semibold normal-case">
                                         {user?.username}
                                     </Link>
                                     <button onClick={() => { logOut(); setIsMobileMenuOpen(false); }}
@@ -114,11 +117,11 @@ export default function Navbar() {
                                 <Link href="/#destek" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-primary p-2 bg-white/5 rounded-lg">Destek</Link>
                                 <div className="h-px bg-white/10 my-2"></div>
                                 <div className="flex flex-col gap-3">
-                                    <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="text-center font-semibold text-white bg-slate-800 p-3 rounded-xl">
+                                    <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="text-center font-semibold text-slate-300 hover:text-[#1A9FD3] bg-slate-800 p-3 rounded-xl transition">
                                         Giriş Yap
                                     </Link>
                                     <Link href="/register" onClick={() => setIsMobileMenuOpen(false)}
-                                          className="text-center bg-primary text-slate-950 font-bold p-3 rounded-xl shadow-lg shadow-primary/20">
+                                          className="text-center bg-primary hover:bg-primary-hover text-white font-bold p-3 rounded-xl shadow-lg shadow-primary/20 transition">
                                         Ücretsiz Hesap Oluştur
                                     </Link>
                                 </div>

@@ -9,6 +9,9 @@ import (
 	"strconv"
 )
 
+// HandlerGetPortfolioSummary — Kullanıcının portföyünün tüm anlık resmini çıkarır.
+// Toplam değer, maliyet, kâr/zarar, dolar karşılığı, dönemsel getiriler (1D/1W/1M/3M/6M/YTD/1Y)
+// ve HISSE/FON/ALTIN/DOVIZ bazında kategori dağılımını tek seferde hesaplayıp döner.
 // @Summary Portföy Özeti (TL ve Dolar)
 // @Description Toplam portföy değeri, toplam maliyet, kâr/zarar, dolar karşılığı ve kategori dağılımını döner
 // @Tags Portfolio
@@ -119,7 +122,11 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 		latest_prices AS (
 			SELECT uh.asset_id, uh.qty,
 				COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id ORDER BY ph.recorded_at DESC LIMIT 1), 0) as p_cur,
-				COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at < CURRENT_DATE ORDER BY ph.recorded_at DESC LIMIT 1), 0) as p_1d,
+				COALESCE(
+					(SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at < CURRENT_DATE ORDER BY ph.recorded_at DESC LIMIT 1),
+					(SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id ORDER BY ph.recorded_at DESC OFFSET 1 LIMIT 1),
+					0
+				) as p_1d,
 				COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= CURRENT_DATE - INTERVAL '7 days' ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_1w,
 				COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= CURRENT_DATE - INTERVAL '30 days' ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_1m,
 				COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= CURRENT_DATE - INTERVAL '90 days' ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_3m,
@@ -204,6 +211,8 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 // @Produce json
 // @Success 200 {array} database.PortfolioSnapshot
 // @Failure 401 {object} map[string]string
+// HandlerGetUserPortfolioHistory — Kullanıcının portföy değer geçmişini döner.
+// Dashboard'daki çizgi grafiğinin veri kaynağı budur. Son 365 snapshot döner.
 // @Failure 500 {object} map[string]string
 // @Router /portfolio/history [get]
 func (cfg *ApiConfig) HandlerGetUserPortfolioHistory(w http.ResponseWriter, r *http.Request) {
@@ -223,6 +232,7 @@ func (cfg *ApiConfig) HandlerGetUserPortfolioHistory(w http.ResponseWriter, r *h
 	respondWithJSON(w, http.StatusOK, history)
 }
 
+// round2 — Finansal gösterim için 2 ondalık basamağa yuvarlar.
 func round2(val float64) float64 {
 	return math.Round(val*100) / 100
 }

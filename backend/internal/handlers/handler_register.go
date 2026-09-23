@@ -10,14 +10,16 @@ import (
 	"yarmak/internal/database"
 )
 
+// HandlerRegister — Yeni bir kullanıcı hesabı oluşturur. Şifreyi bcrypt ile hash'leyip veritabanına kaydeder.
 // @Summary Yeni Kullanıcı Kaydı
-// @Description Sisteme yeni bir kullanıcı kaydeder
+// @Description Yeni bir kullanıcı hesabı oluşturur
 // @Tags Auth
 // @Accept json
 // @Produce json
-// @Param request body authRequest true "Kullanıcı Kayıt Bilgileri"
-// @Success 201 {object} userResponse
+// @Param request body registerRequest true "Kayıt Bilgileri"
+// @Success 201 {object} database.User
 // @Failure 400 {object} map[string]string
+// @Failure 409 {object} map[string]string
 // @Router /register [post]
 func (cfg *ApiConfig) HandlerRegister(w http.ResponseWriter, r *http.Request) {
 	var req authRequest

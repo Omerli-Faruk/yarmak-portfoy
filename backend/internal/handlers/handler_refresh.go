@@ -7,6 +7,25 @@ import (
 	"yarmak/internal/database"
 )
 
+// clearAuthCookies — Tarayıcıdaki access_token ve refresh_token çerezlerini derhal siler (MaxAge: -1).
+func clearAuthCookies(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "access_token",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   -1,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   -1,
+	})
+}
+
+// HandlerRefreshToken — Refresh token ile yeni access/refresh token çifti üretir. Token rotation + grace period ile concurrent request desteği sağlar.
 // @Summary Access Token Yenile (Refresh)
 // @Description Süresi dolan access token yerine refresh token kullanarak yeni bir access token üretir
 // @Tags Auth
@@ -19,14 +38,17 @@ import (
 func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("refresh_token")
 	if err != nil {
+		clearAuthCookies(w)
 		respondWithError(w, http.StatusUnauthorized, "Refresh token bulunamadı", nil)
 		return
 	}
 	refreshTokenValue := cookie.Value
-	if err != nil || refreshTokenValue == "" {
-		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
+	if refreshTokenValue == "" {
+		respondWithError(w, http.StatusBadRequest, "Refresh token değeri boş", nil)
 		return
 	}
+
+	// Token rotation transaction'ı: Eski token'ı iptal et ve yeni token çiftini oluştur
 	tx, err := cfg.DBConn.BeginTx(r.Context(), nil)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "İşlem başlatılamadı", err)
@@ -48,24 +70,28 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 	rows, _ := res.RowsAffected()
 	var userID int64
 	if rows == 0 {
-		// Grace period (30 sn): Eşzamanlı paralel isteklerde token henüz yenilendiyse oturumu düşürme
+		// Grace period (30 sn): Eşzamanlı paralel isteklerde token henüz yenilendiyse oturumu düşürme.
+		// Bu sayede, aynı anda gelen isteklerde sadece ilk istek token'ı yeniler, diğerleri 30 saniye içinde
+		// bu tolerans aralığından yararlanır.
 		errGrace := tx.QueryRowContext(r.Context(), `
 			SELECT user_id FROM refresh_tokens 
 			WHERE token = $1 AND revoked_at > NOW() - INTERVAL '30 seconds' AND expires_at > NOW()
 		`, hashedToken).Scan(&userID)
 		if errGrace != nil {
+			clearAuthCookies(w)
 			respondWithError(w, http.StatusUnauthorized, "Geçersiz, süresi dolmuş veya daha önce kullanılmış token", nil)
 			return
 		}
 	} else {
 		err = tx.QueryRowContext(r.Context(), `SELECT user_id FROM refresh_tokens WHERE token = $1`, hashedToken).Scan(&userID)
 		if err != nil {
+			clearAuthCookies(w)
 			respondWithError(w, http.StatusUnauthorized, "Kullanıcı bulunamadı", err)
 			return
 		}
 	}
 
-	accessToken, err := auth.MakeJWT(userID, cfg.JWTSecret, 30*24*time.Hour)
+	accessToken, err := auth.MakeJWT(userID, cfg.JWTSecret, 1*time.Hour)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Token üretilemedi", err)
 		return
@@ -81,7 +107,7 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 	_, err = qtx.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
 		Token:     auth.HashToken(newRefreshToken),
 		UserID:    userID,
-		ExpiresAt: time.Now().Add(90 * 24 * time.Hour),
+		ExpiresAt: time.Now().Add(60 * 24 * time.Hour),
 	})
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Token veritabanına kaydedilemedi", err)
@@ -100,7 +126,7 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   30 * 24 * 3600,
+		MaxAge:   3600,
 	})
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
@@ -109,7 +135,7 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   90 * 24 * 3600,
+		MaxAge:   60 * 24 * 3600,
 	})
 
 	respondWithJSON(w, http.StatusOK, refreshTokenResponse{
@@ -118,6 +144,7 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 	})
 }
 
+// HandlerRevokeToken — Logout sırasında refresh token'ı DB'de iptal eder ve cookie'leri temizler.
 // @Summary Oturumu Kapat / Token İptal Et (Revoke)
 // @Description Kullanıcının refresh token'ını iptal ederek oturumunu kapatır (Logout)
 // @Tags Auth
@@ -128,24 +155,13 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 // @Failure 400 {object} map[string]string
 // @Router /revoke [post]
 func (cfg *ApiConfig) HandlerRevokeToken(w http.ResponseWriter, r *http.Request) {
+	// Her durumda istemci tarafındaki auth çerezlerini temizle
+	clearAuthCookies(w)
+
 	cookie, err := r.Cookie("refresh_token")
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Refresh token bulunamadı", nil)
-		return
-	}
-	refreshTokenValue := cookie.Value
-	if err != nil || refreshTokenValue == "" {
-		respondWithError(w, http.StatusBadRequest, "Geçersiz istek", err)
-		return
+	if err == nil && cookie.Value != "" {
+		_ = cfg.DB.RevokeRefreshToken(r.Context(), auth.HashToken(cookie.Value))
 	}
 
-	err = cfg.DB.RevokeRefreshToken(r.Context(), auth.HashToken(refreshTokenValue))
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Token iptal edilemedi", err)
-		return
-	}
-
-	http.SetCookie(w, &http.Cookie{Name: "access_token", Value: "", Path: "/", HttpOnly: true, MaxAge: -1})
-	http.SetCookie(w, &http.Cookie{Name: "refresh_token", Value: "", Path: "/", HttpOnly: true, MaxAge: -1})
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Oturum başarıyla kapatıldı"})
 }
