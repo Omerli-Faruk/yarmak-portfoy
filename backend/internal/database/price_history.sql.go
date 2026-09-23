@@ -8,6 +8,8 @@ package database
 import (
 	"context"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 const createPriceHistory = `-- name: CreatePriceHistory :one
@@ -32,6 +34,111 @@ func (q *Queries) CreatePriceHistory(ctx context.Context, arg CreatePriceHistory
 		&i.RecordedAt,
 	)
 	return i, err
+}
+
+const getAssetDailyChangesAll = `-- name: GetAssetDailyChangesAll :many
+SELECT 
+    a.id,
+    p1.price as latest_p,
+    p2.price as prev_p
+FROM assets a
+JOIN LATERAL (
+    SELECT price FROM price_history WHERE asset_id = a.id ORDER BY recorded_at DESC LIMIT 1
+) p1 ON true
+JOIN LATERAL (
+    SELECT price FROM price_history WHERE asset_id = a.id ORDER BY recorded_at DESC OFFSET 1 LIMIT 1
+) p2 ON true
+WHERE p2.price > 0
+`
+
+type GetAssetDailyChangesAllRow struct {
+	ID      int64
+	LatestP string
+	PrevP   string
+}
+
+func (q *Queries) GetAssetDailyChangesAll(ctx context.Context) ([]GetAssetDailyChangesAllRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAssetDailyChangesAll)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAssetDailyChangesAllRow
+	for rows.Next() {
+		var i GetAssetDailyChangesAllRow
+		if err := rows.Scan(&i.ID, &i.LatestP, &i.PrevP); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAssetDailyChangesByIDs = `-- name: GetAssetDailyChangesByIDs :many
+SELECT 
+    a.id,
+    p1.price as latest_p,
+    p2.price as prev_p
+FROM assets a
+LEFT JOIN LATERAL (
+    SELECT price FROM price_history WHERE asset_id = a.id ORDER BY recorded_at DESC LIMIT 1
+) p1 ON true
+LEFT JOIN LATERAL (
+    SELECT price FROM price_history WHERE asset_id = a.id ORDER BY recorded_at DESC OFFSET 1 LIMIT 1
+) p2 ON true
+WHERE a.id = ANY($1::bigint[])
+`
+
+type GetAssetDailyChangesByIDsRow struct {
+	ID      int64
+	LatestP string
+	PrevP   string
+}
+
+func (q *Queries) GetAssetDailyChangesByIDs(ctx context.Context, dollar_1 []int64) ([]GetAssetDailyChangesByIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAssetDailyChangesByIDs, pq.Array(dollar_1))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAssetDailyChangesByIDsRow
+	for rows.Next() {
+		var i GetAssetDailyChangesByIDsRow
+		if err := rows.Scan(&i.ID, &i.LatestP, &i.PrevP); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAssetPrice3Y = `-- name: GetAssetPrice3Y :one
+WITH current_price AS (
+    SELECT ph.price, ph.recorded_at FROM price_history ph WHERE ph.asset_id = $1 ORDER BY ph.recorded_at DESC LIMIT 1
+),
+price_3y AS (
+    SELECT ph.price FROM price_history ph WHERE ph.asset_id = $1 AND ph.recorded_at >= (SELECT cp.recorded_at FROM current_price cp) - INTERVAL '3 years' ORDER BY ph.recorded_at ASC LIMIT 1
+)
+SELECT COALESCE((SELECT p.price FROM price_3y p), '0')::text
+`
+
+func (q *Queries) GetAssetPrice3Y(ctx context.Context, assetID int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getAssetPrice3Y, assetID)
+	var column_1 string
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const getAssetPriceHistory = `-- name: GetAssetPriceHistory :many

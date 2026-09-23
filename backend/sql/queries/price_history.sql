@@ -72,3 +72,41 @@ SELECT
     COALESCE((SELECT p.price FROM price_ytd p), '0')::text as p_ytd,
     COALESCE((SELECT p.price FROM price_1y p), '0')::text as p_1y,
     COALESCE((SELECT p.price FROM price_5y p), '0')::text as p_all;
+
+-- name: GetAssetPrice3Y :one
+WITH current_price AS (
+    SELECT ph.price, ph.recorded_at FROM price_history ph WHERE ph.asset_id = $1 ORDER BY ph.recorded_at DESC LIMIT 1
+),
+price_3y AS (
+    SELECT ph.price FROM price_history ph WHERE ph.asset_id = $1 AND ph.recorded_at >= (SELECT cp.recorded_at FROM current_price cp) - INTERVAL '3 years' ORDER BY ph.recorded_at ASC LIMIT 1
+)
+SELECT COALESCE((SELECT p.price FROM price_3y p), '0')::text;
+
+-- name: GetAssetDailyChangesAll :many
+SELECT 
+    a.id,
+    p1.price as latest_p,
+    p2.price as prev_p
+FROM assets a
+JOIN LATERAL (
+    SELECT price FROM price_history WHERE asset_id = a.id ORDER BY recorded_at DESC LIMIT 1
+) p1 ON true
+JOIN LATERAL (
+    SELECT price FROM price_history WHERE asset_id = a.id ORDER BY recorded_at DESC OFFSET 1 LIMIT 1
+) p2 ON true
+WHERE p2.price > 0;
+
+-- name: GetAssetDailyChangesByIDs :many
+SELECT 
+    a.id,
+    p1.price as latest_p,
+    p2.price as prev_p
+FROM assets a
+LEFT JOIN LATERAL (
+    SELECT price FROM price_history WHERE asset_id = a.id ORDER BY recorded_at DESC LIMIT 1
+) p1 ON true
+LEFT JOIN LATERAL (
+    SELECT price FROM price_history WHERE asset_id = a.id ORDER BY recorded_at DESC OFFSET 1 LIMIT 1
+) p2 ON true
+WHERE a.id = ANY($1::bigint[]);
+

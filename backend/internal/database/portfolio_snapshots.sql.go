@@ -64,6 +64,77 @@ func (q *Queries) GetLatestPortfolioSnapshot(ctx context.Context, userID int64) 
 	return i, err
 }
 
+const getPortfolioPeriodValues = `-- name: GetPortfolioPeriodValues :one
+WITH user_holdings AS (
+    SELECT asset_id, SUM(CASE WHEN type = 'BUY' THEN amount ELSE -amount END) as qty
+    FROM transactions
+    WHERE user_id = $1 AND deleted_at IS NULL
+    GROUP BY asset_id
+    HAVING SUM(CASE WHEN type = 'BUY' THEN amount ELSE -amount END) > 0
+),
+latest_prices AS (
+    SELECT uh.asset_id, uh.qty,
+        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id ORDER BY ph.recorded_at DESC LIMIT 1), 0) as p_cur,
+        COALESCE(
+            (SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at < CURRENT_DATE ORDER BY ph.recorded_at DESC LIMIT 1),
+            (SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id ORDER BY ph.recorded_at DESC OFFSET 1 LIMIT 1),
+            0
+        ) as p_1d,
+        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= CURRENT_DATE - INTERVAL '7 days' ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_1w,
+        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= CURRENT_DATE - INTERVAL '30 days' ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_1m,
+        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= CURRENT_DATE - INTERVAL '90 days' ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_3m,
+        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= CURRENT_DATE - INTERVAL '180 days' ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_6m,
+        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= date_trunc('year', CURRENT_DATE) ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_ytd,
+        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= CURRENT_DATE - INTERVAL '1 year' ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_1y,
+        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= CURRENT_DATE - INTERVAL '3 years' ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_3y,
+        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= CURRENT_DATE - INTERVAL '5 years' ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_5y
+    FROM user_holdings uh
+)
+SELECT 
+    COALESCE(SUM(qty * CASE WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_cur,
+    COALESCE(SUM(qty * CASE WHEN p_1d > 0 THEN p_1d WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_1d,
+    COALESCE(SUM(qty * CASE WHEN p_1w > 0 THEN p_1w WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_1w,
+    COALESCE(SUM(qty * CASE WHEN p_1m > 0 THEN p_1m WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_1m,
+    COALESCE(SUM(qty * CASE WHEN p_3m > 0 THEN p_3m WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_3m,
+    COALESCE(SUM(qty * CASE WHEN p_6m > 0 THEN p_6m WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_6m,
+    COALESCE(SUM(qty * CASE WHEN p_ytd > 0 THEN p_ytd WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_ytd,
+    COALESCE(SUM(qty * CASE WHEN p_1y > 0 THEN p_1y WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_1y,
+    COALESCE(SUM(qty * CASE WHEN p_3y > 0 THEN p_3y WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_3y,
+    COALESCE(SUM(qty * CASE WHEN p_5y > 0 THEN p_5y WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_5y
+FROM latest_prices
+`
+
+type GetPortfolioPeriodValuesRow struct {
+	ValCur float64
+	Val1d  float64
+	Val1w  float64
+	Val1m  float64
+	Val3m  float64
+	Val6m  float64
+	ValYtd float64
+	Val1y  float64
+	Val3y  float64
+	Val5y  float64
+}
+
+func (q *Queries) GetPortfolioPeriodValues(ctx context.Context, userID int64) (GetPortfolioPeriodValuesRow, error) {
+	row := q.db.QueryRowContext(ctx, getPortfolioPeriodValues, userID)
+	var i GetPortfolioPeriodValuesRow
+	err := row.Scan(
+		&i.ValCur,
+		&i.Val1d,
+		&i.Val1w,
+		&i.Val1m,
+		&i.Val3m,
+		&i.Val6m,
+		&i.ValYtd,
+		&i.Val1y,
+		&i.Val3y,
+		&i.Val5y,
+	)
+	return i, err
+}
+
 const getUserPortfolioHistory = `-- name: GetUserPortfolioHistory :many
 SELECT id, user_id, total_value, total_cost, profit_loss, recorded_at
 FROM portfolio_snapshots
