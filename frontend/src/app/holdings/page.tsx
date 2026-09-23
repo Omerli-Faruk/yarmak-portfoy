@@ -26,7 +26,14 @@ import {
     ChevronRight,
     ArrowLeft,
     RefreshCw,
-    Clock
+    Clock,
+    ChevronUp,
+    ChevronDown,
+    MinusCircle,
+    AlertTriangle,
+    ArrowLeftRight,
+    Settings2,
+    GripVertical
 } from 'lucide-react';
 import TransactionDatePicker from '@/components/TransactionDatePicker';
 import { formatCurrency } from '@/lib/formatters';
@@ -50,8 +57,8 @@ export default function HoldingsPage() {
     // Para birimi seçimi: 'TRY' veya 'USD'
     const [currency, setCurrency] = useState<'TRY' | 'USD'>('TRY');
 
-    // Periyot Seçimi: 1D (Günlük), 1W, 1M, 3M, 6M, YTD, 1Y, 3Y, 5Y, ALL
-    type Period = '1D' | '1W' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '3Y' | '5Y' | 'ALL';
+    // Periyot Seçimi: 1D (Günlük), 1W, 1M, 3M, 6M, YTD, 1Y, 3Y, ALL
+    type Period = '1D' | '1W' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '3Y' | 'ALL';
     const [selectedPeriod, setSelectedPeriod] = useState<Period>('1D');
 
     // Her varlığın periyot getiri verileri (symbol -> { 1D: number, 1W: number, ... })
@@ -64,14 +71,29 @@ export default function HoldingsPage() {
     // Aktif Seçili Sekme: 'all' | 'by_type' | groupId
     const [activeTab, setActiveTab] = useState<string>('all');
 
-    // Arama ve Sıralama
+    // Arama ve Sıralama (Özel manuel sıralama desteği eklendi)
     const [searchQuery, setSearchQuery] = useState('');
-    const [sortBy, setSortBy] = useState<'pnl_desc' | 'pnl_asc' | 'val_desc' | 'name_asc' | 'amount_desc'>('val_desc');
+    const [sortBy, setSortBy] = useState<'custom' | 'val_desc' | 'pnl_desc' | 'pnl_asc' | 'name_asc' | 'amount_desc'>('val_desc');
+    const [customAssetOrder, setCustomAssetOrder] = useState<string[]>([]);
+
+    // Sürükle & Bırak (Drag & Drop) Sıralama State'leri
+    const [draggedGroupId, setDraggedGroupId] = useState<string | null>(null);
+    const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
+
+    const [draggedSymbol, setDraggedSymbol] = useState<string | null>(null);
+    const [dragOverSymbol, setDragOverSymbol] = useState<string | null>(null);
 
     // Modal Durumları
     const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
     const [newGroupName, setNewGroupName] = useState('');
     const [newGroupColor, setNewGroupColor] = useState('#6366f1');
+
+    // Grupları Yönet & Sırala Modalı
+    const [isManageGroupsOpen, setIsManageGroupsOpen] = useState(false);
+
+    // Varlık Silme Onay Modalı
+    const [deletingAsset, setDeletingAsset] = useState<UserHolding | null>(null);
+    const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
     const [assigningAsset, setAssigningAsset] = useState<UserHolding | null>(null);
 
@@ -97,7 +119,7 @@ export default function HoldingsPage() {
         '#ef4444', // Red
     ];
 
-    // Para birimi ve grupları localStorage'dan yükle
+    // Para birimi, özel sıra ve grupları localStorage'dan yükle
     useEffect(() => {
         if (typeof window !== 'undefined') {
             const savedCurr = localStorage.getItem('preferred_currency');
@@ -108,6 +130,23 @@ export default function HoldingsPage() {
             const userId = user?.id || 'default';
             const savedGroups = localStorage.getItem(`user_groups_${userId}`);
             const savedAssetGroups = localStorage.getItem(`asset_groups_${userId}`);
+            const savedOrder = localStorage.getItem(`custom_asset_order_${userId}`);
+            const savedSort = localStorage.getItem(`holdings_sort_by_${userId}`);
+
+            if (savedSort && ['custom', 'val_desc', 'pnl_desc', 'pnl_asc', 'name_asc', 'amount_desc'].includes(savedSort)) {
+                setSortBy(savedSort as any);
+            }
+
+            if (savedOrder) {
+                try {
+                    const parsedOrder = JSON.parse(savedOrder);
+                    if (Array.isArray(parsedOrder) && parsedOrder.length > 0) {
+                        setCustomAssetOrder(parsedOrder);
+                    }
+                } catch (e) {
+                    console.error('Özel sıra ayrıştırma hatası:', e);
+                }
+            }
 
             if (savedGroups) {
                 try {
@@ -242,6 +281,144 @@ export default function HoldingsPage() {
         saveGroups(groups, updatedAssetGroups);
     };
 
+    // Varlık Sürükle & Bırak ile Sıralama (Drag and Drop)
+    const handleDropAsset = (targetSymbol: string) => {
+        if (!draggedSymbol || draggedSymbol === targetSymbol) {
+            setDraggedSymbol(null);
+            setDragOverSymbol(null);
+            return;
+        }
+
+        const visibleSymbols = processedHoldings.map(h => h.symbol);
+        const fromIndex = visibleSymbols.indexOf(draggedSymbol);
+        const toIndex = visibleSymbols.indexOf(targetSymbol);
+        if (fromIndex === -1 || toIndex === -1) {
+            setDraggedSymbol(null);
+            setDragOverSymbol(null);
+            return;
+        }
+
+        const newVisible = [...visibleSymbols];
+        const [moved] = newVisible.splice(fromIndex, 1);
+        newVisible.splice(toIndex, 0, moved);
+
+        // Görünür olmayan diğer varlıkları sona ekle
+        const otherSymbols = holdings.map(h => h.symbol).filter(s => !newVisible.includes(s));
+        const finalOrder = [...newVisible, ...otherSymbols];
+
+        setCustomAssetOrder(finalOrder);
+        setSortBy('custom');
+        if (typeof window !== 'undefined') {
+            const userId = user?.id || 'default';
+            localStorage.setItem(`custom_asset_order_${userId}`, JSON.stringify(finalOrder));
+            localStorage.setItem(`holdings_sort_by_${userId}`, 'custom');
+        }
+
+        setDraggedSymbol(null);
+        setDragOverSymbol(null);
+    };
+
+    // Sıralama Değişimini Kaydet
+    const handleSortChange = (newSort: typeof sortBy) => {
+        setSortBy(newSort);
+        if (typeof window !== 'undefined') {
+            const userId = user?.id || 'default';
+            localStorage.setItem(`holdings_sort_by_${userId}`, newSort);
+        }
+    };
+
+    // Grupları Sürükle & Bırak ile Sıralama (Drag and Drop)
+    const handleDropGroup = (targetGroupId: string) => {
+        if (!draggedGroupId || draggedGroupId === targetGroupId) {
+            setDraggedGroupId(null);
+            setDragOverGroupId(null);
+            return;
+        }
+
+        const fromIndex = groups.findIndex(g => g.id === draggedGroupId);
+        const toIndex = groups.findIndex(g => g.id === targetGroupId);
+        if (fromIndex === -1 || toIndex === -1) {
+            setDraggedGroupId(null);
+            setDragOverGroupId(null);
+            return;
+        }
+
+        const updated = [...groups];
+        const [moved] = updated.splice(fromIndex, 1);
+        updated.splice(toIndex, 0, moved);
+
+        saveGroups(updated, assetGroups);
+        setDraggedGroupId(null);
+        setDragOverGroupId(null);
+    };
+
+    // Varlığı Manuel Yukarı / Aşağı Taşı (Alternatif buton desteği)
+    const handleMoveAsset = (symbol: string, direction: 'up' | 'down') => {
+        const visibleSymbols = processedHoldings.map(h => h.symbol);
+        const index = visibleSymbols.indexOf(symbol);
+        if (index === -1) return;
+        if (direction === 'up' && index === 0) return;
+        if (direction === 'down' && index === visibleSymbols.length - 1) return;
+
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        const newVisible = [...visibleSymbols];
+        const temp = newVisible[index];
+        newVisible[index] = newVisible[targetIndex];
+        newVisible[targetIndex] = temp;
+
+        // Görünür olmayan diğer varlıkları sona ekle
+        const otherSymbols = holdings.map(h => h.symbol).filter(s => !newVisible.includes(s));
+        const finalOrder = [...newVisible, ...otherSymbols];
+
+        setCustomAssetOrder(finalOrder);
+        setSortBy('custom');
+        if (typeof window !== 'undefined') {
+            const userId = user?.id || 'default';
+            localStorage.setItem(`custom_asset_order_${userId}`, JSON.stringify(finalOrder));
+            localStorage.setItem(`holdings_sort_by_${userId}`, 'custom');
+        }
+    };
+
+    // Grupları Sola / Sağa veya Yukarı / Aşağı Taşı
+    const handleMoveGroup = (groupId: string, direction: 'left' | 'right' | 'up' | 'down') => {
+        const index = groups.findIndex(g => g.id === groupId);
+        if (index === -1) return;
+        const isBack = direction === 'left' || direction === 'up';
+        const isForward = direction === 'right' || direction === 'down';
+        if (isBack && index === 0) return;
+        if (isForward && index === groups.length - 1) return;
+
+        const targetIndex = isBack ? index - 1 : index + 1;
+        const updated = [...groups];
+        const temp = updated[index];
+        updated[index] = updated[targetIndex];
+        updated[targetIndex] = temp;
+
+        saveGroups(updated, assetGroups);
+    };
+
+    // Seçili Gruptan Tek Tıkla Çıkar
+    const handleRemoveFromCurrentGroup = (symbol: string) => {
+        if (activeTab === 'all' || activeTab === 'by_type') return;
+        toggleAssetInGroup(symbol, activeTab);
+    };
+
+    // Varlığı Portföyden Tamamen Silme Onayı
+    const handleConfirmDeleteAsset = async () => {
+        if (!deletingAsset) return;
+        try {
+            setDeleteSubmitting(true);
+            await api.delete(`/portfolio/holdings/${encodeURIComponent(deletingAsset.symbol)}`);
+            invalidateAssetCache(deletingAsset.symbol);
+            setDeletingAsset(null);
+            await loadData(true);
+        } catch (err: any) {
+            alert(err.response?.data?.error || 'Varlık silinirken hata oluştu');
+        } finally {
+            setDeleteSubmitting(false);
+        }
+    };
+
     // Hızlı İşlem Kaydet (Al / Sat)
     const handleAddTx = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -292,6 +469,15 @@ export default function HoldingsPage() {
 
         // 3. Sıralama
         list.sort((a, b) => {
+            if (sortBy === 'custom') {
+                const aIdx = customAssetOrder.indexOf(a.symbol);
+                const bIdx = customAssetOrder.indexOf(b.symbol);
+                if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+                if (aIdx !== -1) return -1;
+                if (bIdx !== -1) return 1;
+                return b.total_value - a.total_value;
+            }
+
             const aVal = a.total_value;
             const bVal = b.total_value;
             const aCost = a.average_cost * a.total_amount;
@@ -308,7 +494,7 @@ export default function HoldingsPage() {
         });
 
         return list;
-    }, [holdings, activeTab, assetGroups, searchQuery, sortBy]);
+    }, [holdings, activeTab, assetGroups, searchQuery, sortBy, customAssetOrder]);
 
     // Seçili grup ve seçili periyoda göre dinamik portföy / grup getiri ve metrikleri
     const activeGroupMetrics = useMemo(() => {
@@ -338,21 +524,33 @@ export default function HoldingsPage() {
         } else {
             // Dönemsel baz fiyat ve getiri hesabı:
             // Her varlık için dönemsel getiri oranı r = assetSummaries[h.symbol][selectedPeriod]
-            // Varlığın dönem başındaki baz değeri: baseVal = curVal / (1 + r / 100)
             let totalBaseVal = 0;
             let hasAnyValidReturn = false;
 
             for (const h of targetAssets) {
                 const sum = assetSummaries[h.symbol];
                 const ret = sum?.[selectedPeriod];
+                const retAll = sum?.['ALL'];
                 const curVal = h.total_value;
+                const costVal = h.average_cost * h.total_amount;
 
-                if (ret !== undefined && !isNaN(ret) && ret !== 0) {
+                // Eğer hisse seçilen periyottan daha yeniyse (yani backend o periyot için ALL/halka arz getirisini dönmüşse
+                // veya varlık bu periyot başlangıcından sonra portföye girmişse), borsa ilk fiyatı yerine kullanıcının gerçek alış maliyeti baz alınır.
+                const isNewerThanPeriod = selectedPeriod !== '1D' && selectedPeriod !== '1W' && (
+                    ret === undefined ||
+                    isNaN(ret) ||
+                    (retAll !== undefined && !isNaN(retAll) && Math.abs(ret - retAll) < 0.0001)
+                );
+
+                if (isNewerThanPeriod) {
+                    hasAnyValidReturn = true;
+                    totalBaseVal += costVal > 0 ? costVal : curVal;
+                } else if (ret !== undefined && !isNaN(ret) && ret !== 0) {
                     hasAnyValidReturn = true;
                     const baseVal = ret <= -100 ? 0 : curVal / (1 + (ret / 100));
                     totalBaseVal += baseVal;
                 } else {
-                    totalBaseVal += curVal;
+                    totalBaseVal += costVal > 0 ? costVal : curVal;
                 }
             }
 
@@ -364,8 +562,8 @@ export default function HoldingsPage() {
                 pnlPercent = summary.period_returns[selectedPeriod];
                 pnlAmount = totalVal * (pnlPercent / (100 + pnlPercent));
             } else {
-                pnlAmount = 0;
-                pnlPercent = 0;
+                pnlAmount = totalVal - totalCost;
+                pnlPercent = totalCost > 0 ? (pnlAmount / totalCost) * 100 : 0;
             }
         }
 
@@ -452,13 +650,13 @@ export default function HoldingsPage() {
 
                 {/* 2. PERİYOT BUTONLARI & PORTFÖY TOPLAM ÖZETİ */}
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
-                    {/* PERİYOT SEÇİCİ: 1D, 1W, 1M, 3M, 6M, YTD, 1Y, 3Y, 5Y, ALL */}
+                    {/* PERİYOT SEÇİCİ: 1D, 1W, 1M, 3M, 6M, YTD, 1Y, 3Y, ALL */}
                     <div className="flex items-center gap-2 flex-wrap w-full lg:w-auto">
                         <span className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider mr-1 flex items-center gap-1.5 shrink-0">
                             <Clock className="w-4 h-4 text-[#1A9FD3]" /> Getiri Dönemi:
                         </span>
                         <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700/60 overflow-x-auto gap-1 no-scrollbar touch-pan-x max-w-full">
-                            {(['1D', '1W', '1M', '3M', '6M', 'YTD', '1Y', '3Y', '5Y', 'ALL'] as const).map(p => (
+                            {(['1D', '1W', '1M', '3M', '6M', 'YTD', '1Y', '3Y', 'ALL'] as const).map(p => (
                                 <button
                                     key={p}
                                     onClick={() => setSelectedPeriod(p)}
@@ -468,7 +666,7 @@ export default function HoldingsPage() {
                                             : 'text-slate-300 hover:text-[#1A9FD3] hover:bg-[#1A9FD3]/15'
                                     }`}
                                 >
-                                    {p === '1D' ? '1G' : p === '1W' ? '1H' : p === '1M' ? '1A' : p === '3M' ? '3A' : p === '6M' ? '6A' : p === 'YTD' ? 'YBB' : p === '1Y' ? '1Y' : p === '3Y' ? '3Y' : p === '5Y' ? '5Y' : 'Tümü'}
+                                    {p === '1D' ? '1G' : p === '1W' ? '1H' : p === '1M' ? '1A' : p === '3M' ? '3A' : p === '6M' ? '6A' : p === 'YTD' ? 'YBB' : p === '1Y' ? '1Y' : p === '3Y' ? '3Y' : 'Tümü'}
                                 </button>
                             ))}
                         </div>
@@ -502,32 +700,53 @@ export default function HoldingsPage() {
 
                 {/* 3. ÖZEL GRUP SEKMELERİ & YENİ GRUP OLUŞTURMA */}
                 <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <Layers className="w-3.5 h-3.5 text-[#1A9FD3]" /> Gruplar & Listeler
-                        </span>
-                        <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                <Layers className="w-3.5 h-3.5 text-[#1A9FD3]" /> Gruplar & Listeler
+                            </span>
+                            {groups.length > 1 && (
+                                <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
+                                    • Sıralamak için sekmeleri sürükleyip bırakabilirsiniz
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {/* Seçili Grubu Sil Butonu */}
                             {activeGroupMetrics.isCustomGroup && (
                                 <button
                                     onClick={() => handleDeleteGroup(activeTab)}
-                                    className="flex items-center gap-1.5 text-xs font-bold text-rose-400 hover:text-rose-300 transition cursor-pointer bg-rose-500/10 hover:bg-rose-500/20 px-3 py-1.5 rounded-lg border border-rose-500/25 active:scale-95"
+                                    className="flex items-center gap-1.5 text-xs font-bold text-rose-400 hover:text-white transition cursor-pointer bg-rose-500/10 hover:bg-rose-600 px-3 py-1.5 rounded-xl border border-rose-500/25 active:scale-95"
                                     title={`"${activeGroupMetrics.groupName}" Grubunu Sil`}
                                 >
                                     <Trash2 className="w-3.5 h-3.5" />
                                     <span>Grubu Sil</span>
                                 </button>
                             )}
+
+                            {/* Grupları Toplu Sırala ve Yönet */}
+                            {groups.length > 0 && (
+                                <button
+                                    onClick={() => setIsManageGroupsOpen(true)}
+                                    className="flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white transition cursor-pointer bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-xl border border-slate-700 active:scale-95"
+                                    title="Grupların Sırasını Değiştir & Yönet"
+                                >
+                                    <Settings2 className="w-3.5 h-3.5 text-[#1A9FD3]" />
+                                    <span>Grupları Yönet</span>
+                                </button>
+                            )}
+
                             <button
                                 onClick={() => setIsCreateGroupOpen(true)}
-                                className="flex items-center gap-1 text-xs font-bold text-[#1A9FD3] hover:text-white transition cursor-pointer bg-[#1A9FD3]/10 hover:bg-[#0C6991] px-2.5 py-1.5 rounded-lg border border-[#1A9FD3]/30"
+                                className="flex items-center gap-1 text-xs font-bold text-white transition cursor-pointer bg-[#1A9FD3] hover:bg-[#0C6991] px-3 py-1.5 rounded-xl border border-[#1A9FD3]/30 shadow-sm shadow-[#1A9FD3]/20"
                             >
                                 <FolderPlus className="w-3.5 h-3.5" />
-                                <span>+ Yeni Grup Oluştur</span>
+                                <span>+ Yeni Grup</span>
                             </button>
                         </div>
                     </div>
 
-                    {/* Grup Butonları / Sekmeleri (YÜKSEK KONTRASTLI VE SEÇİLİ DURUMDA NET OKUNUR) */}
+                    {/* Grup Butonları / Sekmeleri (SÜRÜKLE & BIRAK DESTEKLİ) */}
                     <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar touch-pan-x">
                         {/* 1. TÜMÜ */}
                         <button
@@ -535,7 +754,7 @@ export default function HoldingsPage() {
                             className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition shrink-0 cursor-pointer flex items-center gap-2 ${
                                 activeTab === 'all'
                                     ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white shadow-sm shadow-[#1A9FD3]/20'
-                                    : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-[#1A9FD3] hover:border-[#1A9FD3]/50 hover:bg-[#1A9FD3]/10'
+                                    : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-[#1A9FD3]/50 hover:bg-[#1A9FD3]/20'
                             }`}
                         >
                             <span>Tüm Varlıklar</span>
@@ -550,31 +769,65 @@ export default function HoldingsPage() {
                             className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition shrink-0 cursor-pointer flex items-center gap-2 ${
                                 activeTab === 'by_type'
                                     ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white shadow-sm shadow-[#1A9FD3]/20'
-                                    : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-[#1A9FD3] hover:border-[#1A9FD3]/50 hover:bg-[#1A9FD3]/10'
+                                    : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-[#1A9FD3]/50 hover:bg-[#1A9FD3]/20'
                             }`}
                         >
                             <span>Türe Göre Grupla</span>
                         </button>
 
-                        {/* 3. KULLANICININ ÖZEL GRUPLARI */}
+                        {/* 3. KULLANICININ ÖZEL GRUPLARI (SÜRÜKLENEBİLİR) */}
                         {groups.map(g => {
                             const count = holdings.filter(h => (assetGroups[h.symbol] || []).includes(g.id)).length;
                             const isActive = activeTab === g.id;
+                            const isDragging = draggedGroupId === g.id;
+                            const isOver = dragOverGroupId === g.id;
+
                             return (
-                                <button
+                                <div
                                     key={g.id}
-                                    onClick={() => setActiveTab(g.id)}
-                                    className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition shrink-0 cursor-pointer flex items-center gap-2 border ${
-                                        isActive
-                                            ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white border-[#1A9FD3] shadow-sm shadow-[#1A9FD3]/20'
-                                            : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-[#1A9FD3] hover:border-[#1A9FD3]/50 hover:bg-[#1A9FD3]/10'
-                                    }`}
+                                    draggable
+                                    onDragStart={(e) => {
+                                        e.dataTransfer.setData('text/plain', g.id);
+                                        e.dataTransfer.effectAllowed = 'move';
+                                        setDraggedGroupId(g.id);
+                                    }}
+                                    onDragOver={(e) => {
+                                        e.preventDefault();
+                                        e.dataTransfer.dropEffect = 'move';
+                                        if (dragOverGroupId !== g.id) setDragOverGroupId(g.id);
+                                    }}
+                                    onDragLeave={() => {
+                                        if (dragOverGroupId === g.id) setDragOverGroupId(null);
+                                    }}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        handleDropGroup(g.id);
+                                    }}
+                                    onDragEnd={() => {
+                                        setDraggedGroupId(null);
+                                        setDragOverGroupId(null);
+                                    }}
+                                    className={`transition-all duration-150 shrink-0 cursor-grab active:cursor-grabbing rounded-xl ${
+                                        isDragging ? 'opacity-30 scale-95' : ''
+                                    } ${isOver ? 'ring-2 ring-[#1A9FD3] ring-offset-2 ring-offset-slate-900' : ''}`}
+                                    title="Sırasını değiştirmek için sürükleyip bırakabilirsiniz"
                                 >
-                                    <span>{g.name}</span>
-                                    <span className={`px-1.5 py-0.5 rounded-full text-xs font-mono ${isActive ? 'bg-white/20 text-white font-bold' : 'bg-black/20 text-slate-300'}`}>
-                                        {count}
-                                    </span>
-                                </button>
+                                    <button
+                                        onClick={() => setActiveTab(g.id)}
+                                        className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 border select-none w-full ${
+                                            isActive
+                                                ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white border-[#1A9FD3] shadow-sm shadow-[#1A9FD3]/20'
+                                                : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:border-[#1A9FD3]/50 hover:bg-[#1A9FD3]/20'
+                                        }`}
+                                    >
+                                        <GripVertical className="w-3.5 h-3.5 text-slate-400 group-hover:text-white opacity-70 -ml-1 cursor-grab" />
+                                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: g.color }}></span>
+                                        <span>{g.name}</span>
+                                        <span className={`px-1.5 py-0.5 rounded-full text-xs font-mono ${isActive ? 'bg-white/20 text-white font-bold' : 'bg-black/20 text-slate-300'}`}>
+                                            {count}
+                                        </span>
+                                    </button>
+                                </div>
                             );
                         })}
                     </div>
@@ -582,33 +835,45 @@ export default function HoldingsPage() {
 
                 {/* 4. ARAMA VE SIRALAMA KONTROLLERİ */}
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-2xl p-4">
-                    {/* Arama Kutusu */}
-                    <div className="relative w-full sm:w-72">
+                    {/* Arama Kutusu (Hızlı Temizle X Butonu ile) */}
+                    <div className="relative w-full sm:w-80">
                         <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                         <input
                             type="text"
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             placeholder="Sembol veya hisse ara..."
-                            className="w-full bg-slate-800/80 border border-slate-700/70 rounded-xl pl-9 pr-3 py-2 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-[#1A9FD3] transition"
+                            className="w-full bg-slate-800/80 border border-slate-700/70 rounded-xl pl-9 pr-9 py-2 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-[#1A9FD3] transition"
                         />
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery('')}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5 rounded-full transition"
+                                title="Aramayı Temizle"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
 
                     {/* Sıralama Açılır Menüsü */}
                     <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                        <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="text-xs text-slate-400">Sırala:</span>
-                        <select
-                            value={sortBy}
-                            onChange={e => setSortBy(e.target.value as typeof sortBy)}
-                            className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-[#1A9FD3] transition cursor-pointer"
-                        >
-                            <option value="val_desc">En Yüksek Değer (Azalan)</option>
-                            <option value="pnl_desc">En Çok Kazandıranlar (Kâr %)</option>
-                            <option value="pnl_asc">En Çok Kaybettirenler (Zarar %)</option>
-                            <option value="name_asc">Alfabetik (A-Z)</option>
-                            <option value="amount_desc">Adet / Lot (Azalan)</option>
-                        </select>
+                        <div className="flex items-center gap-1.5">
+                            <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
+                            <span className="text-xs text-slate-400">Sırala:</span>
+                            <select
+                                value={sortBy}
+                                onChange={e => handleSortChange(e.target.value as typeof sortBy)}
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-[#1A9FD3] transition cursor-pointer"
+                            >
+                                <option value="custom">⭐ Özel Sıralamam (Manuel)</option>
+                                <option value="val_desc">En Yüksek Değer (Azalan)</option>
+                                <option value="pnl_desc">En Çok Kazandıranlar (Kâr %)</option>
+                                <option value="pnl_asc">En Çok Kaybettirenler (Zarar %)</option>
+                                <option value="name_asc">Alfabetik (A-Z)</option>
+                                <option value="amount_desc">Adet / Lot (Azalan)</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -924,13 +1189,189 @@ export default function HoldingsPage() {
                     </div>
                 </div>
             )}
+
+            {/* 9. GRUPLARI YÖNET & SIRALA MODALI */}
+            {isManageGroupsOpen && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[90dvh] overflow-y-auto">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <h3 className="text-base font-bold text-white flex items-center gap-2">
+                                <Settings2 className="w-5 h-5 text-[#1A9FD3]" />
+                                Grupların Sırasını Değiştir & Yönet
+                            </h3>
+                            <button onClick={() => setIsManageGroupsOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <p className="text-xs text-slate-400">
+                            Grupların sekme çubuğundaki sırasını yukarı/aşağı butonlarıyla dilediğiniz gibi düzenleyebilirsiniz.
+                        </p>
+
+                        <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
+                            {groups.map((g, idx) => {
+                                const count = holdings.filter(h => (assetGroups[h.symbol] || []).includes(g.id)).length;
+                                const isDragging = draggedGroupId === g.id;
+                                const isOver = dragOverGroupId === g.id;
+
+                                return (
+                                    <div
+                                        key={g.id}
+                                        draggable
+                                        onDragStart={(e) => {
+                                            e.dataTransfer.setData('text/plain', g.id);
+                                            e.dataTransfer.effectAllowed = 'move';
+                                            setDraggedGroupId(g.id);
+                                        }}
+                                        onDragOver={(e) => {
+                                            e.preventDefault();
+                                            e.dataTransfer.dropEffect = 'move';
+                                            if (dragOverGroupId !== g.id) setDragOverGroupId(g.id);
+                                        }}
+                                        onDragLeave={() => {
+                                            if (dragOverGroupId === g.id) setDragOverGroupId(null);
+                                        }}
+                                        onDrop={(e) => {
+                                            e.preventDefault();
+                                            handleDropGroup(g.id);
+                                        }}
+                                        onDragEnd={() => {
+                                            setDraggedGroupId(null);
+                                            setDragOverGroupId(null);
+                                        }}
+                                        className={`flex items-center justify-between p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 transition select-none ${
+                                            isDragging ? 'opacity-30' : ''
+                                        } ${isOver ? 'border-[#1A9FD3] bg-[#1A9FD3]/15' : ''}`}
+                                    >
+                                        <div className="flex items-center gap-2.5 cursor-grab active:cursor-grabbing">
+                                            <GripVertical className="w-4 h-4 text-slate-500 hover:text-white" />
+                                            <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: g.color }}></span>
+                                            <div>
+                                                <p className="text-sm font-bold text-white">{g.name}</p>
+                                                <p className="text-xs text-slate-400">{count} varlık kayıtlı</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-1.5">
+                                            {/* Yukarı Taşı */}
+                                            <button
+                                                disabled={idx === 0}
+                                                onClick={() => handleMoveGroup(g.id, 'up')}
+                                                className="p-1.5 rounded-lg bg-slate-700/60 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition"
+                                                title="Yukarı Taşı"
+                                            >
+                                                <ChevronUp className="w-4 h-4" />
+                                            </button>
+
+                                            {/* Aşağı Taşı */}
+                                            <button
+                                                disabled={idx === groups.length - 1}
+                                                onClick={() => handleMoveGroup(g.id, 'down')}
+                                                className="p-1.5 rounded-lg bg-slate-700/60 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition"
+                                                title="Aşağı Taşı"
+                                            >
+                                                <ChevronDown className="w-4 h-4" />
+                                            </button>
+
+                                            {/* Grubu Sil */}
+                                            <button
+                                                onClick={() => handleDeleteGroup(g.id)}
+                                                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white transition ml-1 cursor-pointer"
+                                                title="Grubu Sil"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+                            <button
+                                onClick={() => {
+                                    setIsManageGroupsOpen(false);
+                                    setIsCreateGroupOpen(true);
+                                }}
+                                className="text-xs font-bold text-[#1A9FD3] hover:underline cursor-pointer"
+                            >
+                                + Yeni Grup Ekle
+                            </button>
+                            <button
+                                onClick={() => setIsManageGroupsOpen(false)}
+                                className="px-5 py-2 rounded-xl text-xs font-bold bg-[#1A9FD3] hover:bg-[#0C6991] text-white transition shadow-sm shadow-[#1A9FD3]/20 cursor-pointer"
+                            >
+                                Tamamla
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 10. DOĞRUDAN PORTFÖYDEN VARLIK SİLME ONAY MODALI */}
+            {deletingAsset && (
+                <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-4">
+                        <div className="flex items-center gap-3 text-rose-400 border-b border-slate-800 pb-3">
+                            <div className="w-10 h-10 rounded-xl bg-rose-500/15 flex items-center justify-center shrink-0 border border-rose-500/30">
+                                <AlertTriangle className="w-5 h-5 text-rose-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-bold text-white">Varlığı Portföyden Sil</h3>
+                                <p className="text-xs text-rose-400/90 font-medium">Bu işlem geri alınamaz</p>
+                            </div>
+                        </div>
+
+                        <div className="p-3.5 bg-slate-800/60 rounded-xl border border-slate-700/60 space-y-1">
+                            <p className="text-xs text-slate-400">Silinecek Varlık:</p>
+                            <p className="text-base font-black text-white font-mono">{deletingAsset.symbol} <span className="text-xs font-normal text-slate-400 font-sans">({deletingAsset.asset_name})</span></p>
+                            <p className="text-xs text-slate-300">
+                                Mevcut Adet: <strong className="text-white">{deletingAsset.total_amount.toLocaleString('tr-TR')}</strong> • Toplam Değer: <strong className="text-white">{fmt(deletingAsset.total_value)}</strong>
+                            </p>
+                        </div>
+
+                        <p className="text-xs text-slate-400 leading-relaxed">
+                            Bu hisseye ait sistemde kayıtlı <strong className="text-white">tüm geçmiş alım-satım işlemleri</strong> silinecektir ve varlık portföyünüzden tamamen kaldırılacaktır.
+                        </p>
+
+                        <div className="flex items-center justify-end gap-3 pt-2">
+                            <button
+                                type="button"
+                                disabled={deleteSubmitting}
+                                onClick={() => setDeletingAsset(null)}
+                                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                            >
+                                Vazgeç
+                            </button>
+                            <button
+                                type="button"
+                                disabled={deleteSubmitting}
+                                onClick={handleConfirmDeleteAsset}
+                                className="px-5 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition shadow-sm shadow-rose-600/30 cursor-pointer flex items-center gap-1.5"
+                            >
+                                {deleteSubmitting ? (
+                                    <>
+                                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                        <span>Siliniyor...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        <span>Evet, Portföyden Sil</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 
     // Gerçek Finansal Tablo Render Fonksiyonu
     function renderHoldingsTable(items: UserHolding[]) {
         const periodHeaderLabel = selectedPeriod === 'ALL'
-            ? 'Toplam Maliyet'
+            ? 'Tüm Zamanlar %'
             : selectedPeriod === '1D'
             ? 'Günlük (1G) %'
             : selectedPeriod === '1W'
@@ -947,8 +1388,6 @@ export default function HoldingsPage() {
             ? 'Yıllık (1Y) %'
             : selectedPeriod === '3Y'
             ? '3 Yıllık (3Y) %'
-            : selectedPeriod === '5Y'
-            ? '5 Yıllık (5Y) %'
             : `${selectedPeriod} %`;
 
         return (
@@ -958,38 +1397,78 @@ export default function HoldingsPage() {
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="border-b border-slate-800 bg-slate-900/80 text-[11px] uppercase tracking-wider font-semibold text-slate-400">
-                                <th scope="col" className="py-3.5 pl-5 pr-3">Varlık</th>
+                                <th scope="col" className="py-3.5 pl-4 pr-1 text-center w-16">Sıra</th>
+                                <th scope="col" className="py-3.5 pl-2 pr-3">Varlık</th>
                                 <th scope="col" className="py-3.5 px-3">Tür</th>
                                 <th scope="col" className="py-3.5 px-3 text-right">Adet & Maliyet</th>
                                 <th scope="col" className="py-3.5 px-3 text-right">Güncel Fiyat</th>
                                 <th scope="col" className="py-3.5 px-3 text-right">{periodHeaderLabel}</th>
-                                <th scope="col" className="py-3.5 px-3 text-right">Piyasa Değeri</th>
+                                <th scope="col" className="py-3.5 px-3 text-right">Piyasa Değeri & Pay</th>
                                 <th scope="col" className="py-3.5 px-3 text-right">Net Kâr / Zarar</th>
-                                <th scope="col" className="py-3.5 pl-3 pr-5 text-center w-12"></th>
+                                <th scope="col" className="py-3.5 pl-2 pr-5 text-right w-40">İşlemler</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/60 text-sm">
-                            {items.map(h => {
+                            {items.map((h, idx) => {
                                 const costVal = h.average_cost * h.total_amount;
                                 const pnl = h.profit_loss;
                                 const pnlPct = costVal > 0 ? (pnl / costVal) * 100 : 0;
                                 const isPos = pnl >= 0;
 
                                 const sum = assetSummaries[h.symbol];
-                                let periodRetVal: number | null = null;
-                                if (selectedPeriod === 'ALL') {
-                                    periodRetVal = pnlPct;
-                                } else if (sum && sum[selectedPeriod] !== undefined) {
-                                    periodRetVal = sum[selectedPeriod];
-                                }
+                                const periodRetVal: number | null = (sum && sum[selectedPeriod] !== undefined) ? sum[selectedPeriod] : null;
 
                                 const assignedGroupIds = assetGroups[h.symbol] || [];
                                 const assignedGroupObjects = groups.filter(g => assignedGroupIds.includes(g.id));
+                                const sharePct = totalPortfolioVal > 0 ? (h.total_value / totalPortfolioVal) * 100 : 0;
+
+                                const isDragging = draggedSymbol === h.symbol;
+                                const isOver = dragOverSymbol === h.symbol;
 
                                 return (
-                                    <tr key={h.symbol} className="hover:bg-slate-800/40 transition-colors group">
+                                    <tr
+                                        key={h.symbol}
+                                        draggable
+                                        onDragStart={(e) => {
+                                            e.dataTransfer.setData('text/plain', h.symbol);
+                                            e.dataTransfer.effectAllowed = 'move';
+                                            setDraggedSymbol(h.symbol);
+                                        }}
+                                        onDragOver={(e) => {
+                                            e.preventDefault();
+                                            e.dataTransfer.dropEffect = 'move';
+                                            if (dragOverSymbol !== h.symbol) setDragOverSymbol(h.symbol);
+                                        }}
+                                        onDragLeave={() => {
+                                            if (dragOverSymbol === h.symbol) setDragOverSymbol(null);
+                                        }}
+                                        onDrop={(e) => {
+                                            e.preventDefault();
+                                            handleDropAsset(h.symbol);
+                                        }}
+                                        onDragEnd={() => {
+                                            setDraggedSymbol(null);
+                                            setDragOverSymbol(null);
+                                        }}
+                                        className={`hover:bg-slate-800/40 transition-colors group select-none ${
+                                            isDragging ? 'opacity-30 bg-slate-800/90' : ''
+                                        } ${isOver ? 'border-t-2 border-[#1A9FD3] bg-[#1A9FD3]/15' : ''}`}
+                                    >
+                                        {/* SIRA & SÜRÜKLE TUTAMACI */}
+                                        <td className="py-3.5 pl-4 pr-1 text-center whitespace-nowrap">
+                                            <div
+                                                className="flex items-center justify-center gap-1 cursor-grab active:cursor-grabbing text-slate-500 hover:text-white transition py-1 rounded"
+                                                title="Sırasını değiştirmek için tutup sürükleyin"
+                                            >
+                                                <GripVertical className="w-4 h-4 text-slate-500 group-hover:text-[#1A9FD3] transition" />
+                                                <span className="text-xs font-mono font-bold text-slate-400 w-4 text-center">
+                                                    {idx + 1}
+                                                </span>
+                                            </div>
+                                        </td>
+
                                         {/* VARLIK (Sembol & Şirket Adı & Grup Etiketleri) */}
-                                        <td className="py-3.5 pl-5 pr-3">
+                                        <td className="py-3.5 pl-2 pr-3">
                                             <div className="flex items-center gap-3">
                                                 <Link
                                                     href={`/assets/${h.symbol}`}
@@ -1066,30 +1545,27 @@ export default function HoldingsPage() {
                                             </div>
                                         </td>
 
-                                        {/* DÖNEMSEL GETİRİ / TOPLAM MALİYET */}
+                                        {/* DÖNEMSEL GETİRİ */}
                                         <td className="py-3.5 px-3 text-right whitespace-nowrap">
-                                            {selectedPeriod === 'ALL' ? (
-                                                <div className="text-sm font-semibold text-slate-300 tabular-nums">
-                                                    {fmt(costVal)}
+                                            {periodRetVal !== null ? (
+                                                <div className={`text-sm sm:text-base font-black font-mono tabular-nums ${periodRetVal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                    {periodRetVal >= 0 ? '+' : ''}{periodRetVal.toFixed(2)}%
                                                 </div>
                                             ) : (
-                                                <>
-                                                    {periodRetVal !== null ? (
-                                                        <div className={`text-sm sm:text-base font-black font-mono tabular-nums ${periodRetVal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                            {periodRetVal >= 0 ? '+' : ''}{periodRetVal.toFixed(2)}%
-                                                        </div>
-                                                    ) : (
-                                                        <div className="text-sm font-mono text-slate-500">—</div>
-                                                    )}
-                                                </>
+                                                <div className="text-sm font-mono text-slate-500">—</div>
                                             )}
                                         </td>
 
-                                        {/* PİYASA DEĞERİ */}
+                                        {/* PİYASA DEĞERİ & PAY */}
                                         <td className="py-3.5 px-3 text-right whitespace-nowrap">
                                             <div className="text-sm sm:text-base font-black text-white tabular-nums">
                                                 {fmt(h.total_value)}
                                             </div>
+                                            {totalPortfolioVal > 0 && (
+                                                <div className="text-[11px] font-bold text-slate-400 font-mono mt-0.5">
+                                                    %{sharePct.toFixed(1)} Pay
+                                                </div>
+                                            )}
                                         </td>
 
                                         {/* NET KÂR / ZARAR */}
@@ -1102,15 +1578,50 @@ export default function HoldingsPage() {
                                             </div>
                                         </td>
 
-                                        {/* DETAY OKU */}
-                                        <td className="py-3.5 pl-3 pr-5 text-center">
-                                            <Link
-                                                href={`/assets/${h.symbol}`}
-                                                className="inline-flex p-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition"
-                                                title="Detaya Git"
-                                            >
-                                                <ChevronRight className="w-4 h-4" />
-                                            </Link>
+                                        {/* HIZLI İŞLEMLER (HIZLI İŞLEM EKLE, GRUPTAN ÇIKAR, PORTFÖYDEN SİL, DETAY) */}
+                                        <td className="py-3.5 pl-2 pr-5 text-right whitespace-nowrap">
+                                            <div className="flex items-center justify-end gap-1.5">
+                                                {/* Hızlı İşlem Ekle */}
+                                                <button
+                                                    onClick={() => {
+                                                        setTxSymbol(h.symbol);
+                                                        setIsTxModalOpen(true);
+                                                    }}
+                                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-[#1A9FD3] text-[#1A9FD3] hover:text-white border border-[#1A9FD3]/30 transition cursor-pointer"
+                                                    title="Hızlı İşlem Ekle (Alış/Satış)"
+                                                >
+                                                    <Plus className="w-3.5 h-3.5" />
+                                                </button>
+
+                                                {/* Özel Gruptaysa: Gruptan Çıkar */}
+                                                {activeGroupMetrics.isCustomGroup && (
+                                                    <button
+                                                        onClick={() => handleRemoveFromCurrentGroup(h.symbol)}
+                                                        className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-500/25 transition cursor-pointer"
+                                                        title={`Bu hisseyi "${activeGroupMetrics.groupName}" grubundan çıkar`}
+                                                    >
+                                                        <MinusCircle className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+
+                                                {/* Portföyden Sil */}
+                                                <button
+                                                    onClick={() => setDeletingAsset(h)}
+                                                    className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/25 transition cursor-pointer"
+                                                    title="Hisseyi ve Tüm İşlemlerini Portföyden Sil"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+
+                                                {/* Detay */}
+                                                <Link
+                                                    href={`/assets/${h.symbol}`}
+                                                    className="p-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition"
+                                                    title="Detaylı Analiz & Grafik"
+                                                >
+                                                    <ChevronRight className="w-4 h-4" />
+                                                </Link>
+                                            </div>
                                         </td>
                                     </tr>
                                 );
@@ -1121,7 +1632,7 @@ export default function HoldingsPage() {
 
                 {/* MOBİL GÖRÜNÜM (60 Yaşında Kullanıcı İçin Yüksek Kontrastlı, Okunaklı Kompakt Kart-Satır Düzeni) */}
                 <div className="md:hidden divide-y divide-slate-800/80">
-                    {items.map(h => {
+                    {items.map((h, idx) => {
                         const costVal = h.average_cost * h.total_amount;
                         const pnl = h.profit_loss;
                         const pnlPct = costVal > 0 ? (pnl / costVal) * 100 : 0;
@@ -1137,12 +1648,52 @@ export default function HoldingsPage() {
 
                         const assignedGroupIds = assetGroups[h.symbol] || [];
                         const assignedGroupObjects = groups.filter(g => assignedGroupIds.includes(g.id));
+                        const sharePct = totalPortfolioVal > 0 ? (h.total_value / totalPortfolioVal) * 100 : 0;
+
+                        const isDragging = draggedSymbol === h.symbol;
+                        const isOver = dragOverSymbol === h.symbol;
 
                         return (
-                            <div key={h.symbol} className="p-4 space-y-3">
-                                {/* ÜST BAŞLIK: Sembol, Tür, Değer, Detay linki */}
+                            <div
+                                key={h.symbol}
+                                draggable
+                                onDragStart={(e) => {
+                                    e.dataTransfer.setData('text/plain', h.symbol);
+                                    e.dataTransfer.effectAllowed = 'move';
+                                    setDraggedSymbol(h.symbol);
+                                }}
+                                onDragOver={(e) => {
+                                    e.preventDefault();
+                                    e.dataTransfer.dropEffect = 'move';
+                                    if (dragOverSymbol !== h.symbol) setDragOverSymbol(h.symbol);
+                                }}
+                                onDragLeave={() => {
+                                    if (dragOverSymbol === h.symbol) setDragOverSymbol(null);
+                                }}
+                                onDrop={(e) => {
+                                    e.preventDefault();
+                                    handleDropAsset(h.symbol);
+                                }}
+                                onDragEnd={() => {
+                                    setDraggedSymbol(null);
+                                    setDragOverSymbol(null);
+                                }}
+                                className={`p-4 space-y-3 transition-all select-none ${
+                                    isDragging ? 'opacity-30 bg-slate-800/90' : ''
+                                } ${isOver ? 'border-t-2 border-[#1A9FD3] bg-[#1A9FD3]/15' : ''}`}
+                            >
+                                {/* ÜST BAŞLIK: Sürükle Tutamacı, Sıra, Sembol, Tür, Değer, % Pay */}
                                 <div className="flex items-start justify-between gap-2">
-                                    <div className="flex items-center gap-2.5">
+                                    <div className="flex items-center gap-2">
+                                        {/* Sürükle Tutamacı */}
+                                        <div
+                                            className="flex items-center gap-1 bg-slate-800/80 px-2 py-1.5 rounded-lg border border-slate-700/60 cursor-grab active:cursor-grabbing text-slate-400 hover:text-white shrink-0"
+                                            title="Sırasını değiştirmek için tutup sürükleyin"
+                                        >
+                                            <GripVertical className="w-3.5 h-3.5 text-[#1A9FD3]" />
+                                            <span className="text-xs font-mono font-bold text-slate-300">#{idx + 1}</span>
+                                        </div>
+
                                         <Link
                                             href={`/assets/${h.symbol}`}
                                             className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-white shrink-0"
@@ -1151,7 +1702,7 @@ export default function HoldingsPage() {
                                                 {h.symbol.slice(0, 4)}
                                             </span>
                                         </Link>
-                                        <div>
+                                        <div className="min-w-0">
                                             <div className="flex items-center gap-1.5">
                                                 <Link href={`/assets/${h.symbol}`} className="text-base font-bold text-white">
                                                     {h.symbol}
@@ -1163,12 +1714,20 @@ export default function HoldingsPage() {
                                             <p className="text-xs text-slate-400 line-clamp-1">{h.asset_name}</p>
                                         </div>
                                     </div>
-                                    <div className="text-right">
+
+                                    <div className="text-right shrink-0">
                                         <div className="text-base font-black text-white tabular-nums">
                                             {fmt(h.total_value)}
                                         </div>
-                                        <div className={`text-xs font-bold font-mono tabular-nums ${isPos ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                            {fmt(pnl, true)} ({isPos ? '+' : ''}{pnlPct.toFixed(2)}%)
+                                        <div className="flex items-center justify-end gap-1.5 mt-0.5">
+                                            {totalPortfolioVal > 0 && (
+                                                <span className="text-[10px] font-bold text-slate-400 font-mono bg-slate-800/80 px-1 py-0.5 rounded border border-slate-700/60">
+                                                    %{sharePct.toFixed(1)} Pay
+                                                </span>
+                                            )}
+                                            <span className={`text-xs font-bold font-mono tabular-nums ${isPos ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                {fmt(pnl, true)} ({isPos ? '+' : ''}{pnlPct.toFixed(2)}%)
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -1189,17 +1748,11 @@ export default function HoldingsPage() {
                                     </div>
                                     <div>
                                         <span className="text-slate-400 block mb-0.5">
-                                            {selectedPeriod === 'ALL' ? 'Toplam Maliyet' : `${selectedPeriod} Getirisi`}
+                                            {selectedPeriod === 'ALL' ? 'Tüm Zamanlar Getirisi' : `${selectedPeriod} Getirisi`}
                                         </span>
-                                        {selectedPeriod === 'ALL' ? (
-                                            <span className="font-semibold text-slate-300 tabular-nums">
-                                                {fmt(costVal)}
-                                            </span>
-                                        ) : (
-                                            <span className={`font-bold font-mono tabular-nums ${periodRetVal !== null && periodRetVal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                {periodRetVal !== null ? `${periodRetVal >= 0 ? '+' : ''}${periodRetVal.toFixed(2)}%` : '—'}
-                                            </span>
-                                        )}
+                                        <span className={`font-bold font-mono tabular-nums ${periodRetVal !== null && periodRetVal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {periodRetVal !== null ? `${periodRetVal >= 0 ? '+' : ''}${periodRetVal.toFixed(2)}%` : '—'}
+                                        </span>
                                     </div>
                                     <div className="text-right flex items-center justify-end">
                                         <Link
@@ -1211,8 +1764,9 @@ export default function HoldingsPage() {
                                     </div>
                                 </div>
 
-                                {/* ALT GRUP ETİKETLERİ */}
-                                <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1">
+                                {/* ALT GRUP ETİKETLERİ & HIZLI İŞLEM BUTONLARI */}
+                                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+                                    {/* Sol: Grup Etiketleri */}
                                     <div className="flex flex-wrap items-center gap-1.5">
                                         {assignedGroupObjects.map(g => (
                                             <span
@@ -1228,14 +1782,50 @@ export default function HoldingsPage() {
                                                 {g.name}
                                             </span>
                                         ))}
+                                        <button
+                                            onClick={() => setAssigningAsset(h)}
+                                            className="text-[11px] text-slate-400 hover:text-[#1A9FD3] font-medium transition cursor-pointer flex items-center gap-1"
+                                        >
+                                            <Tag className="w-3 h-3" />
+                                            <span>{assignedGroupObjects.length > 0 ? 'Düzenle' : '+ Gruba Ata'}</span>
+                                        </button>
                                     </div>
-                                    <button
-                                        onClick={() => setAssigningAsset(h)}
-                                        className="text-[11px] text-slate-400 hover:text-[#1A9FD3] font-medium transition cursor-pointer flex items-center gap-1 ml-auto"
-                                    >
-                                        <Tag className="w-3 h-3" />
-                                        <span>{assignedGroupObjects.length > 0 ? 'Grupları Düzenle' : '+ Gruba Dahil Et'}</span>
-                                    </button>
+
+                                    {/* Sağ: Hızlı İşlem & Silme Butonları */}
+                                    <div className="flex items-center gap-1.5 ml-auto">
+                                        {/* Hızlı İşlem */}
+                                        <button
+                                            onClick={() => {
+                                                setTxSymbol(h.symbol);
+                                                setIsTxModalOpen(true);
+                                            }}
+                                            className="px-2.5 py-1 rounded-lg bg-[#1A9FD3]/15 hover:bg-[#1A9FD3] text-[#1A9FD3] hover:text-white border border-[#1A9FD3]/30 text-xs font-bold transition flex items-center gap-1"
+                                            title="İşlem Ekle"
+                                        >
+                                            <Plus className="w-3 h-3" />
+                                            <span>İşlem</span>
+                                        </button>
+
+                                        {/* Özel Gruptaysa: Gruptan Çıkar */}
+                                        {activeGroupMetrics.isCustomGroup && (
+                                            <button
+                                                onClick={() => handleRemoveFromCurrentGroup(h.symbol)}
+                                                className="p-1 rounded-lg bg-amber-500/10 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-500/25 transition"
+                                                title={`"${activeGroupMetrics.groupName}" grubundan çıkar`}
+                                            >
+                                                <MinusCircle className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+
+                                        {/* Portföyden Sil */}
+                                        <button
+                                            onClick={() => setDeletingAsset(h)}
+                                            className="p-1 rounded-lg bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/25 transition"
+                                            title="Portföyden Sil"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         );

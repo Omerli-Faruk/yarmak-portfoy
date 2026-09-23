@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"yarmak/internal/database"
@@ -352,6 +353,60 @@ func (cfg *ApiConfig) HandlerDeleteTransaction(w http.ResponseWriter, r *http.Re
 	}
 	_ = cfg.recalculateAssetRealizedPnL(r.Context(), userID, tx.AssetID)
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "İşlem başarıyla silindi"})
+}
+
+// HandlerDeleteUserAssetHoldings — Kullanıcının belirli bir varlıktaki (sembol) TÜM alım-satım işlemlerini siler (portföyden varlığı tamamen kaldırır).
+// @Summary Varlığı Portföyden Tamamen Sil
+// @Description Kullanıcının belirtilen sembole ait tüm işlemlerini soft-delete yaparak portföyünden kaldırır.
+// @Tags Portfolio
+// @Security BearerAuth
+// @Produce json
+// @Param symbol path string true "Varlık Sembolü (örn. THYAO, ASELS)"
+// @Success 200 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /portfolio/holdings/{symbol} [delete]
+func (cfg *ApiConfig) HandlerDeleteUserAssetHoldings(w http.ResponseWriter, r *http.Request) {
+	symbol := chi.URLParam(r, "symbol")
+	if symbol == "" {
+		respondWithError(w, http.StatusBadRequest, "Varlık sembolü belirtilmedi", nil)
+		return
+	}
+	userID, ok := r.Context().Value(UserIDKey).(int64)
+	if !ok {
+		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
+		return
+	}
+	unlock := lockUser(userID)
+	defer unlock()
+
+	cleanSymbol := strings.ToUpper(strings.TrimSpace(symbol))
+	asset, err := cfg.DB.GetAssetBySymbol(r.Context(), cleanSymbol)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "Varlık bulunamadı", err)
+		return
+	}
+
+	txs, err := cfg.DB.GetUserTransactionsForAsset(r.Context(), database.GetUserTransactionsForAssetParams{
+		UserID:  userID,
+		AssetID: asset.ID,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Varlık işlemleri sorgulanamadı", err)
+		return
+	}
+
+	for _, tx := range txs {
+		_ = cfg.DB.DeleteTransaction(r.Context(), database.DeleteTransactionParams{
+			ID:     tx.ID,
+			UserID: userID,
+		})
+	}
+
+	respondWithJSON(w, http.StatusOK, map[string]string{
+		"message": fmt.Sprintf("%s varlığı ve tüm işlemleri portföyünüzden başarıyla silindi", cleanSymbol),
+	})
 }
 
 // resolveAssetID — İşlem yapılmak istenen varlığın (asset) ID'si yoksa sembolü üzerinden veritabanından bulur veya yenisini oluşturur.
