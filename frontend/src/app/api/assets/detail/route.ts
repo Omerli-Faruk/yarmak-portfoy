@@ -119,6 +119,9 @@ async function fetchFundamentals(ticker: string, isTefas: boolean): Promise<Reco
             return `${num.toLocaleString('tr-TR')} ₺`;
         };
 
+        const exDateTimestamp = typeof sd?.exDividendDate === 'number' ? sd.exDividendDate : (sd?.exDividendDate?.raw || 0);
+        const isExDateFuture = Boolean(exDateTimestamp && (exDateTimestamp * 1000 > Date.now()));
+
         const formatExDate = (val: any) => {
             if (!val) return '-';
             const timestamp = typeof val === 'number' ? val : (val.raw || 0);
@@ -132,6 +135,8 @@ async function fetchFundamentals(ticker: string, isTefas: boolean): Promise<Reco
             dividendYield: sd?.dividendYield?.fmt || (sd?.dividendYield?.raw ? `%${(sd.dividendYield.raw * 100).toFixed(2)}` : '-'),
             dividendRate: sd?.dividendRate?.fmt ? `${sd.dividendRate.fmt} ₺` : (sd?.dividendRate?.raw ? `${sd.dividendRate.raw.toFixed(2)} ₺` : '-'),
             exDividendDate: formatExDate(sd?.exDividendDate),
+            isExDateFuture: isExDateFuture ? 'true' : 'false',
+            exDividendLabel: isExDateFuture ? 'Açıklanan Temettü' : 'Son Temettü Tarihi',
             beta: sd?.beta?.fmt || ks?.beta?.fmt || (typeof sd?.beta === 'number' ? sd.beta.toFixed(2) : '-'),
             fiftyTwoWeekHigh: sd?.fiftyTwoWeekHigh?.fmt ? `${sd.fiftyTwoWeekHigh.fmt} ₺` : (sd?.fiftyTwoWeekHigh?.raw ? `${sd.fiftyTwoWeekHigh.raw.toFixed(2)} ₺` : '-'),
             fiftyTwoWeekLow: sd?.fiftyTwoWeekLow?.fmt ? `${sd.fiftyTwoWeekLow.fmt} ₺` : (sd?.fiftyTwoWeekLow?.raw ? `${sd.fiftyTwoWeekLow.raw.toFixed(2)} ₺` : '-'),
@@ -145,17 +150,23 @@ async function fetchFundamentals(ticker: string, isTefas: boolean): Promise<Reco
     }
 }
 
-// Getiri Özeti Önbelleği (5 dakika)
-const summaryHistoryCache = new Map<string, { summary: Record<string, number>; timestamp: number }>();
+interface AccurateSummaryResult {
+    summary: Record<string, number>;
+    previousClose?: number;
+    currentPrice?: number;
+}
 
-async function getAccurateSummary(ticker: string, isTefas: boolean, backendSummary: any): Promise<Record<string, number> | null> {
+// Getiri Özeti Önbelleği (5 dakika)
+const summaryHistoryCache = new Map<string, { data: AccurateSummaryResult; timestamp: number }>();
+
+async function getAccurateSummary(ticker: string, isTefas: boolean, backendSummary: any): Promise<AccurateSummaryResult | null> {
     if (isTefas) {
-        return backendSummary;
+        return backendSummary ? { summary: backendSummary } : null;
     }
 
     const cached = summaryHistoryCache.get(ticker);
     if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
-        return cached.summary;
+        return cached.data;
     }
 
     try {
@@ -163,23 +174,25 @@ async function getAccurateSummary(ticker: string, isTefas: boolean, backendSumma
             headers: { 'User-Agent': 'Mozilla/5.0' },
             signal: AbortSignal.timeout(5000),
         });
-        if (!res.ok) return backendSummary;
+        if (!res.ok) return backendSummary ? { summary: backendSummary } : null;
 
         const data = await res.json();
         const meta = data.chart?.result?.[0]?.meta;
         const timestamps = data.chart?.result?.[0]?.timestamp || [];
         const closes = data.chart?.result?.[0]?.indicators?.quote?.[0]?.close || [];
+        const adjcloses = data.chart?.result?.[0]?.indicators?.adjclose?.[0]?.adjclose || closes;
 
         const points: { time: number; price: number }[] = [];
         for (let i = 0; i < timestamps.length; i++) {
-            if (closes[i] !== null && closes[i] !== undefined) {
-                points.push({ time: timestamps[i] * 1000, price: closes[i] });
+            const p = adjcloses[i] !== null && adjcloses[i] !== undefined ? adjcloses[i] : closes[i];
+            if (p !== null && p !== undefined && p > 0) {
+                points.push({ time: timestamps[i] * 1000, price: p });
             }
         }
 
-        if (points.length === 0) return backendSummary;
+        if (points.length === 0) return backendSummary ? { summary: backendSummary } : null;
 
-        const current = meta?.regularMarketPrice || points[points.length - 1].price;
+        const current = Number(meta?.regularMarketPrice) || points[points.length - 1].price;
         const now = points[points.length - 1].time;
 
         const calcRet = (targetTime: number) => {
@@ -192,6 +205,14 @@ async function getAccurateSummary(ticker: string, isTefas: boolean, backendSumma
         if (!ret1D && points.length >= 2) {
             const prev = points[points.length - 2].price;
             ret1D = ((current - prev) / prev) * 100;
+        }
+
+        // Dünkü resmi kapanış fiyatı (1D başlangıç noktası)
+        let prevClose = 0;
+        if (ret1D !== 0 && current > 0) {
+            prevClose = Math.round((current / (1 + ret1D / 100)) * 100) / 100;
+        } else if (points.length >= 2) {
+            prevClose = points[points.length - 2].price;
         }
 
         const ret1W = calcRet(now - 7 * 86400000);
@@ -218,10 +239,16 @@ async function getAccurateSummary(ticker: string, isTefas: boolean, backendSumma
             'ALL': retALL,
         };
 
-        summaryHistoryCache.set(ticker, { summary: summaryResult, timestamp: Date.now() });
-        return summaryResult;
+        const resultObj: AccurateSummaryResult = {
+            summary: summaryResult,
+            previousClose: prevClose > 0 ? prevClose : undefined,
+            currentPrice: current > 0 ? current : undefined
+        };
+
+        summaryHistoryCache.set(ticker, { data: resultObj, timestamp: Date.now() });
+        return resultObj;
     } catch {
-        return backendSummary;
+        return backendSummary ? { summary: backendSummary } : null;
     }
 }
 
@@ -271,7 +298,7 @@ export async function GET(request: Request) {
 
         // Step 2: Fetch Chart Data + Backend Summary + Real Fundamentals/Summary in parallel
         // no-store kullanılır: TEFAS ve BIST için anlık ve taze veriler gecikmesiz gelir
-        const [historyRes, summaryRes, extraFundamentals, accurateSummary, spotGoldResult] = await Promise.all([
+        const [historyRes, summaryRes, extraFundamentals, accurateResult, spotGoldResult] = await Promise.all([
             fetch(`${BACKEND_URL}/assets/${assetId}/price-history?range=${backendRange}`, { cache: 'no-store' }),
             fetch(`${BACKEND_URL}/assets/${assetId}/summary`, { cache: 'no-store' }),
             fetchFundamentals(yahooTicker, isTefas),
@@ -418,9 +445,17 @@ export async function GET(request: Request) {
             }
         }
 
-        let summaryData = accurateSummary;
+        let summaryData = accurateResult?.summary || null;
         if (!summaryData && summaryRes.ok) {
             summaryData = await summaryRes.json();
+        }
+
+        let previousClose = accurateResult?.previousClose;
+        if (!previousClose && spotGoldResult?.price && spotGoldResult.change) {
+            const chg = parseFloat(spotGoldResult.change);
+            if (!isNaN(chg) && chg !== -100) {
+                previousClose = spotGoldResult.price / (1 + chg / 100);
+            }
         }
 
         // Fonlar ve 3Y eksik olan varlıklar için 3Y ve 5Y hesaplama desteği
@@ -551,7 +586,12 @@ export async function GET(request: Request) {
 
         // Clean rawDate before sending to client
         const cleanChartData = chartData.map(d => ({ date: d.date, price: d.price }));
-        if (cleanChartData.length === 1) {
+        if (range === '1D' && previousClose && previousClose > 0) {
+            cleanChartData.unshift({
+                date: 'Dün',
+                price: previousClose
+            });
+        } else if (cleanChartData.length === 1) {
             cleanChartData.unshift({
                 date: 'Önceki',
                 price: cleanChartData[0].price
@@ -600,7 +640,7 @@ export async function GET(request: Request) {
         } : null;
 
         return NextResponse.json(
-            { asset: assetInfo, chart: cleanChartData, fundamentals, summary: summaryData },
+            { asset: assetInfo, chart: cleanChartData, fundamentals, summary: summaryData, previousClose },
             { headers: { 'Cache-Control': 'no-store, max-age=0' } }
         );
     } catch (error) {

@@ -22,6 +22,7 @@ export interface UserHolding {
     average_cost: number;
     total_value: number;
     profit_loss: number;
+    first_buy_date?: string;
 }
 
 export interface CategorySummary {
@@ -50,17 +51,32 @@ export interface PortfolioSummary {
 }
 
 export interface Transaction {
-    id: number;
-    asset_id: number;
-    symbol: string;
-    asset_name: string;
-    asset_type: string;
-    type: 'BUY' | 'SELL';
-    amount: string;
-    price: string;
-    commission: string;
-    realized_pnl: string;
-    transaction_date: string;
+    id?: number;
+    ID?: number;
+    user_id?: number;
+    UserID?: number;
+    asset_id?: number;
+    AssetID?: number;
+    symbol?: string;
+    Symbol?: string;
+    asset_name?: string;
+    AssetName?: string;
+    asset_type?: string;
+    AssetType?: string;
+    type?: 'BUY' | 'SELL' | string;
+    Type?: 'BUY' | 'SELL' | string;
+    amount?: string;
+    Amount?: string;
+    price?: string;
+    Price?: string;
+    commission?: string;
+    Commission?: string;
+    realized_pnl?: string;
+    RealizedPnl?: string;
+    transaction_date?: string;
+    TransactionDate?: string;
+    created_at?: string;
+    CreatedAt?: string;
 }
 
 export interface PortfolioSnapshot {

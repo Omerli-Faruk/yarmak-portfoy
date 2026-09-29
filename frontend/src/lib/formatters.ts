@@ -28,12 +28,19 @@ export function formatMoney(amount: number): string {
 }
 
 // Tarih formatlama (Türkçe, gün ay yıl saat:dakika)
-export function formatDate(dateStr: string): string {
-    return new Intl.DateTimeFormat('tr-TR', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    }).format(new Date(dateStr));
+export function formatDate(dateStr?: string | Date | null): string {
+    if (!dateStr) return '—';
+    try {
+        const d = dateStr instanceof Date ? dateStr : new Date(dateStr);
+        if (isNaN(d.getTime())) return '—';
+        return new Intl.DateTimeFormat('tr-TR', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        }).format(d);
+    } catch {
+        return '—';
+    }
 }

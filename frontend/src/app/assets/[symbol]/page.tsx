@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, History, Activity, TrendingUp, TrendingDown, Clock, X } from 'lucide-react';
+import { ArrowLeft, Plus, History, Activity, TrendingUp, TrendingDown, Clock, X, Bell } from 'lucide-react';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
@@ -55,6 +55,8 @@ export interface AssetFundamentals {
     dividendYield?: string;
     dividendRate?: string;
     exDividendDate?: string;
+    isExDateFuture?: string;
+    exDividendLabel?: string;
     beta?: string;
     fiftyTwoWeekHigh?: string;
     fiftyTwoWeekLow?: string;
@@ -175,10 +177,14 @@ export default function AssetDetailPage() {
         if (cached && cached.chart && cached.chart.length > 0) {
             setChartData(cached.chart);
             setIsChartLoading(false);
-            const firstPrice = Number(cached.chart[0]?.price || 0);
-            const lastPrice = Number(cached.chart[cached.chart.length - 1]?.price || 0);
-            if (!isNaN(firstPrice) && !isNaN(lastPrice) && firstPrice > 0) {
-                setPeriodReturn(((lastPrice - firstPrice) / firstPrice) * 100);
+            if (timeRange === '1D' && summaryData?.['1D'] !== undefined && !isNaN(summaryData['1D'])) {
+                setPeriodReturn(summaryData['1D']);
+            } else {
+                const firstPrice = Number(cached.chart[0]?.price || 0);
+                const lastPrice = Number(cached.chart[cached.chart.length - 1]?.price || 0);
+                if (!isNaN(firstPrice) && !isNaN(lastPrice) && firstPrice > 0) {
+                    setPeriodReturn(((lastPrice - firstPrice) / firstPrice) * 100);
+                }
             }
             if (Date.now() - cached.timestamp < 45000) {
                 return;
@@ -198,12 +204,16 @@ export default function AssetDetailPage() {
                     setPollCount(0); // Reset polling
                     
                     // Calculate period return
-                    const firstPrice = Number(det.chart[0]?.price || 0);
-                    const lastPrice = Number(det.chart[det.chart.length - 1]?.price || 0);
-                    if (!isNaN(firstPrice) && !isNaN(lastPrice) && firstPrice > 0) {
-                        setPeriodReturn(((lastPrice - firstPrice) / firstPrice) * 100);
+                    if (timeRange === '1D' && det.summary?.['1D'] !== undefined && !isNaN(det.summary['1D'])) {
+                        setPeriodReturn(det.summary['1D']);
                     } else {
-                        setPeriodReturn(null);
+                        const firstPrice = Number(det.chart[0]?.price || 0);
+                        const lastPrice = Number(det.chart[det.chart.length - 1]?.price || 0);
+                        if (!isNaN(firstPrice) && !isNaN(lastPrice) && firstPrice > 0) {
+                            setPeriodReturn(((lastPrice - firstPrice) / firstPrice) * 100);
+                        } else {
+                            setPeriodReturn(null);
+                        }
                     }
                 } else if (!cached) {
                     setChartData([]);
@@ -327,7 +337,7 @@ export default function AssetDetailPage() {
         return list.map(item => {
             let sumVal: number | null = null;
             if (item.id === '1D') {
-                if (summaryData && typeof summaryData['1D'] === 'number' && !isNaN(summaryData['1D']) && summaryData['1D'] !== 0) {
+                if (summaryData && typeof summaryData['1D'] === 'number' && !isNaN(summaryData['1D'])) {
                     sumVal = summaryData['1D'];
                 } else if (assetData?.change !== undefined && assetData.change !== '' && assetData.change !== '0.00' && assetData.change !== '0') {
                     const parsed = parseFloat(String(assetData.change).replace('+', ''));
@@ -361,6 +371,15 @@ export default function AssetDetailPage() {
         });
     }, [assetData, summaryData, periodReturn, timeRange]);
 
+    const formattedChartData = useMemo(() => {
+        if (!chartData || chartData.length === 0) return [];
+        return chartData.map(pt => ({
+            date: pt.date,
+            value: typeof pt.price === 'number' ? pt.price : parseFloat(String(pt.price || 0)),
+            raw: typeof pt.price === 'number' ? pt.price : parseFloat(String(pt.price || 0)),
+        }));
+    }, [chartData]);
+
     if (loading) {
         return <LoadingSpinner />;
     }
@@ -386,13 +405,23 @@ export default function AssetDetailPage() {
 
 
                     {isLoggedIn ? (
-                        <button 
-                            onClick={() => setIsModalOpen(true)}
-                            className="bg-[#1A9FD3] hover:bg-[#0C6991] text-white font-bold px-4 py-2 rounded-xl text-xs sm:text-sm flex items-center transition cursor-pointer shadow-sm shadow-[#1A9FD3]/20"
-                        >
-                            <Plus className="w-4 h-4 mr-1 stroke-[2.5]" />
-                            İşlem Ekle
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <Link
+                                href={`/alerts?symbol=${encodeURIComponent(rawSymbol)}`}
+                                className="bg-slate-800 hover:bg-slate-750 border border-slate-700/80 hover:border-amber-500/50 text-slate-200 hover:text-white font-bold px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center transition cursor-pointer gap-1.5"
+                                title="Fiyat Alarmı Kur"
+                            >
+                                <Bell className="w-3.5 h-3.5 text-amber-400" />
+                                <span>Alarm Kur</span>
+                            </Link>
+                            <button 
+                                onClick={() => setIsModalOpen(true)}
+                                className="bg-[#1A9FD3] hover:bg-[#0C6991] text-white font-bold px-4 py-2 rounded-xl text-xs sm:text-sm flex items-center transition cursor-pointer shadow-sm shadow-[#1A9FD3]/20"
+                            >
+                                <Plus className="w-4 h-4 mr-1 stroke-[2.5]" />
+                                İşlem Ekle
+                            </button>
+                        </div>
                     ) : (
                         <button 
                             onClick={() => router.push('/register')}
@@ -448,7 +477,7 @@ export default function AssetDetailPage() {
                             
                             {(() => {
                                 let dailyChangeVal: number | null = null;
-                                if (summaryData && typeof summaryData['1D'] === 'number' && !isNaN(summaryData['1D']) && summaryData['1D'] !== 0) {
+                                if (summaryData && typeof summaryData['1D'] === 'number' && !isNaN(summaryData['1D'])) {
                                     dailyChangeVal = summaryData['1D'];
                                 } else if (assetData?.change !== undefined && assetData.change !== '' && assetData.change !== '0.00' && assetData.change !== '0') {
                                     const parsed = parseFloat(String(assetData.change).replace('+', ''));
@@ -489,11 +518,7 @@ export default function AssetDetailPage() {
                         <InteractiveAreaChart
                             title="Fiyat Grafiği"
                             subtitle={assetData ? `${assetData.symbol} detaylı zaman ve fiyat analizi` : undefined}
-                            data={chartData.map(pt => ({
-                                date: pt.date,
-                                value: typeof pt.price === 'number' ? pt.price : parseFloat(String(pt.price || 0)),
-                                raw: typeof pt.price === 'number' ? pt.price : parseFloat(String(pt.price || 0)),
-                            }))}
+                            data={formattedChartData}
                             dataKey="value"
                             dateKey="date"
                             periods={assetPeriods}
@@ -682,7 +707,14 @@ export default function AssetDetailPage() {
                             )}
                             {fundamentals.exDividendDate !== '-' && (
                                 <div>
-                                    <p className="text-xs text-slate-500 mb-1">Son Temettü Tarihi</p>
+                                    <p className="text-xs text-slate-500 mb-1 flex items-center gap-1.5">
+                                        <span>{fundamentals.exDividendLabel || (fundamentals.isExDateFuture === 'true' ? 'Açıklanan Temettü' : 'Son Temettü Tarihi')}</span>
+                                        {fundamentals.isExDateFuture === 'true' && (
+                                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                                Planlanan
+                                            </span>
+                                        )}
+                                    </p>
                                     <p className="font-semibold text-slate-200">{fundamentals.exDividendDate}</p>
                                 </div>
                             )}

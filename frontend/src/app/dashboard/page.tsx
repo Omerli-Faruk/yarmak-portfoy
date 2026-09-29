@@ -761,6 +761,7 @@ export default function DashboardPage() {
                                                 outerRadius={75}
                                                 paddingAngle={4}
                                                 dataKey="value"
+                                                isAnimationActive={false}
                                             >
                                                 {categoryData.map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.color} />
@@ -840,7 +841,7 @@ export default function DashboardPage() {
                                                 'Kâr / Zarar',
                                             ]}
                                         />
-                                        <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
+                                        <Bar dataKey="pnl" radius={[4, 4, 0, 0]} isAnimationActive={false}>
                                             {categoryPerformanceData.map((entry, index) => (
                                                 <Cell key={`cell-${index}`} fill={entry.rawPnl >= 0 ? '#10b981' : '#f43f5e'} />
                                             ))}

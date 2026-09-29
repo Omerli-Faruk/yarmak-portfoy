@@ -81,14 +81,7 @@ export default function LoginPage() {
                         />
                     </div>
                     <div className="flex justify-between items-center mb-1 mt-6">
-                        <label className="text-xs text-slate-400 hover:text-primary">Şifre</label>
-                        <button
-                            type="button"
-                            onClick={() => alert("Lütfen sistem yöneticisi ile iletişime geçin.")}
-                            className="text-xs font-bold text-primary hover:text-white transition cursor-pointer"
-                        >
-                            Şifremi Unuttum?
-                        </button>
+                        <label className="text-xs text-slate-400">Şifre</label>
                     </div>
                     <div
                         className="flex items-center gap-4 bg-black/30 border border-border rounded-xl px-4 py-3 focus-within:border-primary transition mt-1">

@@ -54,3 +54,13 @@ ORDER BY transaction_date ASC, id ASC;
 UPDATE transactions
 SET realized_pnl = $1
 WHERE id = $2 AND user_id = $3 AND deleted_at IS NULL;
+
+-- name: UpdateTransaction :one
+UPDATE transactions
+SET type = $1,
+    amount = $2,
+    price = $3,
+    transaction_date = $4,
+    commission = $5
+WHERE id = $6 AND user_id = $7 AND deleted_at IS NULL
+RETURNING *;

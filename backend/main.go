@@ -177,6 +177,7 @@ func main() {
 	v1Router.Delete("/portfolio/holdings/{symbol}", apiCFG.MiddleWareAuth(apiCFG.HandlerDeleteUserAssetHoldings))
 	v1Router.Get("/portfolio/summary", apiCFG.MiddleWareAuth(apiCFG.HandlerGetPortfolioSummary))
 	v1Router.Delete("/transactions/{id}", apiCFG.MiddleWareAuth(apiCFG.HandlerDeleteTransaction))
+	v1Router.Put("/transactions/{id}", apiCFG.MiddleWareAuth(apiCFG.HandlerUpdateTransaction))
 	v1Router.Get("/assets/{id}/price-history", apiCFG.HandlerGetAssetPriceHistory)
 	v1Router.Get("/assets/{id}/summary", apiCFG.HandlerGetAssetSummary)
 	v1Router.With(lookupRateLimiter).Post("/assets/{id}/backfill", apiCFG.HandlerTriggerBackfill)

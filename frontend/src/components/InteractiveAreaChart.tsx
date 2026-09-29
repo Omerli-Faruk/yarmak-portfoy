@@ -142,6 +142,27 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
         return { minVal: min, maxVal: max, firstVal: first, lastVal: last, periodReturn: ret };
     }, [visibleData, getVal]);
 
+    // Brush çubuğunun kullanılıp kullanılmadığını tespit et (varsayılandan daraltılmış mı?)
+    const isCustomRangeSelected = useMemo(() => {
+        if (!data || data.length === 0) return false;
+        const isStartMoved = brushRange.start !== undefined && brushRange.start > 0;
+        const isEndMoved = brushRange.end !== undefined && brushRange.end < data.length - 1;
+        return isStartMoved || isEndMoved;
+    }, [brushRange, data]);
+
+    const activePeriodObj = useMemo(() => {
+        return periods.find(p => p.id === activePeriod);
+    }, [periods, activePeriod]);
+
+    // Eğer kullanıcı fırçayı (brush) daraltmadıysa ve seçili periyodun resmi getiri değeri varsa onu kullan;
+    // aksi halde (fırça ile özel bir aralık seçildiğinde) o aralığın ilk ve son veri noktası arasındaki getiriyi kullan.
+    const effectiveReturn = useMemo(() => {
+        if (!isCustomRangeSelected && activePeriodObj && activePeriodObj.changePercent !== undefined && activePeriodObj.changePercent !== null) {
+            return activePeriodObj.changePercent;
+        }
+        return periodReturn;
+    }, [isCustomRangeSelected, activePeriodObj, periodReturn]);
+
     // Dinamik renk belirleme
     const { strokeColor, fillColor } = useMemo(() => {
         if (colorMode === 'emerald') {
@@ -151,11 +172,11 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
             return { strokeColor: '#1A9FD3', fillColor: '#1A9FD3' };
         }
         // Dynamic mode: Getiriye göre yeşil ya da kırmızı
-        if (periodReturn >= 0) {
+        if (effectiveReturn >= 0) {
             return { strokeColor: '#10b981', fillColor: '#10b981' }; // Yeşil: Kâr
         }
         return { strokeColor: '#f43f5e', fillColor: '#f43f5e' }; // Kırmızı: Zarar
-    }, [colorMode, periodReturn]);
+    }, [colorMode, effectiveReturn]);
 
     // Standart değer biçimlendirici
     const defaultFormat = useCallback((val: number): string => {
@@ -177,13 +198,32 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
         return val.toFixed(6);
     }, []);
 
-    // Brush değişim yöneticisi
-    const handleInternalBrushChange = (e: any) => {
-        if (e && e.startIndex !== undefined && e.endIndex !== undefined) {
+    // Brush değişim yöneticisi (requestAnimationFrame ile 60fps akıcı throttle ve jank önleme)
+    const rafRef = React.useRef<number | null>(null);
+    const lastRangeRef = React.useRef<{ start?: number; end?: number }>({});
+
+    React.useEffect(() => {
+        return () => {
+            if (rafRef.current) {
+                cancelAnimationFrame(rafRef.current);
+            }
+        };
+    }, []);
+
+    const handleInternalBrushChange = useCallback((e: any) => {
+        if (!e || e.startIndex === undefined || e.endIndex === undefined) return;
+        if (e.startIndex === lastRangeRef.current.start && e.endIndex === lastRangeRef.current.end) return;
+        lastRangeRef.current = { start: e.startIndex, end: e.endIndex };
+
+        if (rafRef.current) {
+            cancelAnimationFrame(rafRef.current);
+        }
+        rafRef.current = requestAnimationFrame(() => {
             setBrushRange({ start: e.startIndex, end: e.endIndex });
             if (onBrushChange) onBrushChange(e);
-        }
-    };
+            rafRef.current = null;
+        });
+    }, [onBrushChange]);
 
     const currentStartIndex = brushRange.start !== undefined ? brushRange.start : 0;
     const currentEndIndex = brushRange.end !== undefined ? brushRange.end : (data && data.length > 0 ? data.length - 1 : 0);
@@ -255,50 +295,53 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
 
             {/* 2. DÖNEM VE GRAFİK İSTATİSTİKLERİ (Seçili Getiri, Zirve, Dip) */}
             {showStats && (
-                <div className="flex flex-wrap items-center justify-between py-3 gap-2 text-xs">
+                <div className="flex items-center justify-between py-2.5 gap-2 text-xs min-h-[46px] overflow-x-auto no-scrollbar">
                     {/* Seçili Periyot Getirisi ve Tarih Aralığı */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-slate-400 font-medium">Seçili Aralık:</span>
+                    <div className="flex items-center gap-2 shrink-0 whitespace-nowrap">
+                        <span className="text-slate-400 font-medium">
+                            {isCustomRangeSelected ? 'Seçili Aralık:' : `${activePeriodObj?.label || activePeriod} Getirisi:`}
+                        </span>
                         {startDateLabel && endDateLabel && (
                             <span className="px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700/60 font-mono text-[11px] text-slate-300">
                                 {startDateLabel} — {endDateLabel}
                             </span>
                         )}
                         <span
+                            title={!isCustomRangeSelected ? "Borsa resmi dönem kapanış fiyatına göre hesaplanan getiri" : "Grafikte seçilen zaman aralığındaki fiyat değişimi"}
                             className={`px-2.5 py-1 rounded-lg font-bold flex items-center border ${
-                                periodReturn >= 0
+                                effectiveReturn >= 0
                                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                                     : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
                             }`}
                         >
-                            {periodReturn >= 0 ? (
+                            {effectiveReturn >= 0 ? (
                                 <TrendingUp className="w-3.5 h-3.5 mr-1" />
                             ) : (
                                 <TrendingDown className="w-3.5 h-3.5 mr-1" />
                             )}
-                            {periodReturn >= 0 ? '+' : ''}
-                            {periodReturn.toFixed(2)}%
+                            {effectiveReturn >= 0 ? '+' : ''}
+                            {effectiveReturn.toFixed(2)}%
                         </span>
                     </div>
 
                     {/* Zirve ve Dip Değerleri */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2.5 shrink-0 whitespace-nowrap">
                         {minVal > 0 && maxVal > 0 && (
                             <>
                                 <div className="flex items-center gap-1 text-slate-300 bg-slate-800/60 px-2.5 py-1 rounded-lg border border-slate-700/40">
                                     <ArrowDownRight className="w-3.5 h-3.5 text-rose-400" />
                                     <span className="text-slate-400">Dip:</span>
-                                    <span className="font-semibold text-slate-200">{defaultFormat(minVal)}</span>
+                                    <span className="font-semibold text-slate-200 tabular-nums">{defaultFormat(minVal)}</span>
                                 </div>
                                 <div className="flex items-center gap-1 text-slate-300 bg-slate-800/60 px-2.5 py-1 rounded-lg border border-slate-700/40">
                                     <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
                                     <span className="text-slate-400">Zirve:</span>
-                                    <span className="font-semibold text-slate-200">{defaultFormat(maxVal)}</span>
+                                    <span className="font-semibold text-slate-200 tabular-nums">{defaultFormat(maxVal)}</span>
                                 </div>
                             </>
                         )}
-                        <span className="text-[11px] text-slate-500 font-mono hidden sm:inline">
-                            {currency === 'USD' ? 'Değerler Dolar ($) bazındadır' : 'Değerler TL (₺) bazındadır'}
+                        <span className="text-[11px] text-slate-500 font-mono hidden xl:inline">
+                            {currency === 'USD' ? '($)' : '(₺)'}
                         </span>
                     </div>
                 </div>
@@ -316,10 +359,10 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
                         <p className="text-sm font-medium text-slate-400">{emptyMessage}</p>
                     </div>
                 ) : (
-                    <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                         <AreaChart
                             data={data}
-                            margin={{ top: 10, right: 10, left: -15, bottom: 0 }}
+                            margin={{ top: 10, right: 10, left: -15, bottom: showBrush ? 10 : 0 }}
                         >
                             <defs>
                                 <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -339,14 +382,16 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
                                 dataKey={dateKey}
                                 stroke="#64748b"
                                 fontSize={11}
+                                height={24}
                                 tickLine={false}
                                 axisLine={false}
-                                minTickGap={25}
+                                minTickGap={35}
                             />
 
                             <YAxis
                                 stroke="#64748b"
                                 fontSize={11}
+                                width={56}
                                 tickLine={false}
                                 axisLine={false}
                                 domain={minVal > 0 && maxVal > 0 && minVal === maxVal ? [minVal * 0.98, maxVal * 1.02] : ['auto', 'auto']}
@@ -374,16 +419,17 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
                                 fillOpacity={1}
                                 fill={`url(#${gradientId})`}
                                 activeDot={{ r: 5, fill: strokeColor, stroke: '#0f172a', strokeWidth: 2 }}
+                                isAnimationActive={false}
                             />
 
                             {/* ZAMAN KAYDIRICI (BRUSH) - HER PERİYOT İÇİN AYARLAMA ÇUBUĞU */}
                             {showBrush && data.length > 1 && (
                                 <Brush
                                     dataKey={dateKey}
-                                    height={24}
+                                    height={28}
                                     stroke={strokeColor}
                                     fill="#1e293b"
-                                    travellerWidth={8}
+                                    travellerWidth={10}
                                     onChange={handleInternalBrushChange}
                                     tickFormatter={() => ''}
                                 />
@@ -395,17 +441,17 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
 
             {/* 4. BRUSH BAŞLANGIÇ - BİTİŞ GÖSTERGE ÇUBUĞU */}
             {showBrush && data && data.length > 1 && (
-                <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-800/80 px-1 text-xs">
-                    <div className="flex items-center gap-1.5 bg-slate-800/90 px-2.5 py-1 rounded-lg border border-slate-700/60 font-mono text-[11px] text-slate-200 shadow-xs">
+                <div className="flex items-center justify-between mt-4 pt-3.5 border-t border-slate-800/80 px-1 text-xs min-h-[44px] whitespace-nowrap overflow-hidden">
+                    <div className="flex items-center gap-1.5 bg-slate-800/90 px-2.5 py-1 rounded-lg border border-slate-700/60 font-mono text-[11px] text-slate-200 shadow-xs shrink-0">
                         <span className="text-emerald-400 font-bold">Başlangıç:</span>
                         <span>{startDateLabel || '-'}</span>
                     </div>
 
-                    <span className="text-[11px] text-slate-500 hidden sm:inline select-none">
+                    <span className="text-[11px] text-slate-500 hidden md:inline select-none truncate px-2 text-center">
                         Aralığı değiştirmek için çubuğun kenarlarını kaydırın
                     </span>
 
-                    <div className="flex items-center gap-1.5 bg-slate-800/90 px-2.5 py-1 rounded-lg border border-slate-700/60 font-mono text-[11px] text-slate-200 shadow-xs">
+                    <div className="flex items-center gap-1.5 bg-slate-800/90 px-2.5 py-1 rounded-lg border border-slate-700/60 font-mono text-[11px] text-slate-200 shadow-xs shrink-0">
                         <span className="text-emerald-400 font-bold">Bitiş:</span>
                         <span>{endDateLabel || '-'}</span>
                     </div>

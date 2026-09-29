@@ -334,6 +334,54 @@ func (q *Queries) GetUserTransactionsPaginated(ctx context.Context, arg GetUserT
 	return items, nil
 }
 
+const updateTransaction = `-- name: UpdateTransaction :one
+UPDATE transactions
+SET type = $1,
+    amount = $2,
+    price = $3,
+    transaction_date = $4,
+    commission = $5
+WHERE id = $6 AND user_id = $7 AND deleted_at IS NULL
+RETURNING id, user_id, asset_id, type, amount, price, transaction_date, created_at, deleted_at, realized_pnl, commission
+`
+
+type UpdateTransactionParams struct {
+	Type            string
+	Amount          string
+	Price           string
+	TransactionDate time.Time
+	Commission      string
+	ID              int64
+	UserID          int64
+}
+
+func (q *Queries) UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) (Transaction, error) {
+	row := q.db.QueryRowContext(ctx, updateTransaction,
+		arg.Type,
+		arg.Amount,
+		arg.Price,
+		arg.TransactionDate,
+		arg.Commission,
+		arg.ID,
+		arg.UserID,
+	)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.AssetID,
+		&i.Type,
+		&i.Amount,
+		&i.Price,
+		&i.TransactionDate,
+		&i.CreatedAt,
+		&i.DeletedAt,
+		&i.RealizedPnl,
+		&i.Commission,
+	)
+	return i, err
+}
+
 const updateTransactionRealizedPnL = `-- name: UpdateTransactionRealizedPnL :exec
 UPDATE transactions
 SET realized_pnl = $1

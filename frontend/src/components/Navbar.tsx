@@ -25,7 +25,7 @@ export default function Navbar() {
         <header className="w-full relative z-40">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
                 {/* LOGO */}
-                <Link className="flex justify-center items-center" href="/">
+                <Link className="flex justify-center items-center" href={user ? "/dashboard" : "/"}>
                     <Image src="/logo.png" alt="Yarmak Logo" width={48} height={48} className="size-12 object-contain" loading="eager"/>
                 </Link>
 
@@ -35,12 +35,12 @@ export default function Navbar() {
                         <>
                             <Link href="/dashboard" className={`${pathname === '/dashboard' ? 'text-primary font-black' : 'text-slate-300 hover:text-primary'} transition-colors`}>Portföyüm</Link>
                             <Link href="/holdings" className={`${pathname === '/holdings' ? 'text-primary font-black' : 'text-slate-300 hover:text-primary'} transition-colors`}>Varlıklarım</Link>
-                            <Link href="/transactions" className={`${pathname === '/transactions' ? 'text-primary font-black' : 'text-slate-300 hover:text-primary'} transition-colors`}>İşlemler</Link>
+                            <Link href="/markets" className={`${pathname === '/markets' ? 'text-primary font-black' : 'text-slate-300 hover:text-primary'} transition-colors`}>Piyasalar</Link>
                             <Link href="/alerts" className={`${pathname === '/alerts' ? 'text-primary font-black' : 'text-slate-300 hover:text-primary'} transition-colors`}>Alarmlar</Link>
                         </>
                     ) : (
                         <>
-                            <Link href="/#piyasalar" className="hover:text-primary transition-colors">Piyasalar</Link>
+                            <Link href="/markets" className={`${pathname === '/markets' ? 'text-primary font-black' : 'text-slate-300 hover:text-primary'} transition-colors`}>Piyasalar</Link>
                             <Link href="/#ozellikler" className="hover:text-primary transition-colors">Özellikler</Link>
                             <Link href="/#destek" className="hover:text-primary transition-colors">Destek</Link>
                         </>
@@ -97,7 +97,7 @@ export default function Navbar() {
                             <div className="flex flex-col gap-4 text-sm font-bold text-slate-300 uppercase tracking-wider mb-2">
                                 <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className={`p-2 rounded-lg ${pathname === '/dashboard' ? 'text-primary bg-primary/10' : 'hover:text-primary bg-white/5'}`}>Portföyüm</Link>
                                 <Link href="/holdings" onClick={() => setIsMobileMenuOpen(false)} className={`p-2 rounded-lg ${pathname === '/holdings' ? 'text-primary bg-primary/10' : 'hover:text-primary bg-white/5'}`}>Varlıklarım</Link>
-                                <Link href="/transactions" onClick={() => setIsMobileMenuOpen(false)} className={`p-2 rounded-lg ${pathname === '/transactions' ? 'text-primary bg-primary/10' : 'hover:text-primary bg-white/5'}`}>İşlemler</Link>
+                                <Link href="/markets" onClick={() => setIsMobileMenuOpen(false)} className={`p-2 rounded-lg ${pathname === '/markets' ? 'text-primary bg-primary/10' : 'hover:text-primary bg-white/5'}`}>Piyasalar</Link>
                                 <Link href="/alerts" onClick={() => setIsMobileMenuOpen(false)} className={`p-2 rounded-lg ${pathname === '/alerts' ? 'text-primary bg-primary/10' : 'hover:text-primary bg-white/5'}`}>Alarmlar</Link>
                                 <div className="h-px bg-white/10 my-2"></div>
                                 <div className="flex items-center justify-between px-2">
@@ -112,7 +112,7 @@ export default function Navbar() {
                             </div>
                         ) : (
                             <div className="flex flex-col gap-4 text-sm font-bold text-slate-300 uppercase tracking-wider mb-2">
-                                <Link href="/#piyasalar" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-primary p-2 bg-white/5 rounded-lg">Piyasalar</Link>
+                                <Link href="/markets" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-primary p-2 bg-white/5 rounded-lg">Piyasalar</Link>
                                 <Link href="/#ozellikler" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-primary p-2 bg-white/5 rounded-lg">Özellikler</Link>
                                 <Link href="/#destek" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-primary p-2 bg-white/5 rounded-lg">Destek</Link>
                                 <div className="h-px bg-white/10 my-2"></div>

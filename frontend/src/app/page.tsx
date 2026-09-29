@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
+import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import {
     Search,
@@ -50,6 +51,7 @@ interface Asset {
 import { popularTags, SLIDER_CONFIG } from '@/data/homeData';
 import FeatureCardsSection from '@/components/home/FeatureCardsSection';
 import FaqSection from '@/components/home/FaqSection';
+import PortfolioShowcase from '@/components/home/PortfolioShowcase';
 
 
 /* ═══════════════════════════════════════════════════════════════
@@ -57,6 +59,15 @@ import FaqSection from '@/components/home/FaqSection';
    ═══════════════════════════════════════════════════════════════ */
 export default function Home() {
     const router = useRouter();
+    const { user, loading: authLoading } = useAuth();
+
+    // Giriş yapmış kullanıcıları doğrudan Dashboard kokpitine yönlendir
+    useEffect(() => {
+        if (!authLoading && user) {
+            router.replace('/dashboard');
+        }
+    }, [user, authLoading, router]);
+
     const [searchQuery, setSearchQuery] = useState('');
     const [openFaq, setOpenFaq] = useState<number | null>(null);
     const [assets, setAssets] = useState<Asset[]>([]);
@@ -231,10 +242,16 @@ export default function Home() {
         return items;
     }, [assets, fmt]);
 
-    const bistAsset = assets.find((a) => a.symbol === 'XU100');
-    const usdAsset = assets.find((a) => a.symbol === 'USDTRY');
-    const eurAsset = assets.find((a) => a.symbol === 'EURTRY');
-    const goldAsset = assets.find((a) => a.symbol === 'ALTIN');
+    if (!authLoading && user) {
+        return (
+            <div className="flex-1 flex items-center justify-center min-h-[60vh]">
+                <div className="flex flex-col items-center gap-3 text-slate-400">
+                    <span className="size-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs font-mono">Portföyünüze yönlendiriliyorsunuz...</span>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex-1 flex flex-col items-center justify-start w-full overflow-hidden">
@@ -430,131 +447,8 @@ export default function Home() {
                     </div>
                 </motion.div>
 
-                {/* ═══════════════ 2. DASHBOARD MOCKUP ═══════════════ */}
-                {/* ═══════════════ 2. CANLI PİYASA TERMİNAL KARTI ═══════════════ */}
-                <motion.div
-                    initial={{ opacity: 0, y: 24 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.2 }}
-                    className="w-full max-w-5xl mt-10 rounded-2xl border border-border/80 bg-[#0D1117]/90 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.6)] overflow-hidden text-left flex flex-col"
-                >
-                    {/* Üst Bar: Canlı Durum ve İndeks Başlığı */}
-                    <div className="flex items-center justify-between px-5 py-3.5 border-b border-border/60 bg-[#0B0F15]/80">
-                        <div className="flex items-center gap-2.5">
-                            <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
-                            <span className="text-xs font-semibold text-slate-300">Piyasa Canlı Akışı</span>
-                            <span className="text-[10px] font-mono text-slate-500 hidden sm:inline">• BIST & TEFAS & FX</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            {['1G', '1H', '1A', '3A', '1Y'].map((t) => (
-                                <span
-                                    key={t}
-                                    className={`text-[10px] px-2 py-0.5 rounded font-medium cursor-default transition ${
-                                        t === '1G' ? 'bg-primary/20 text-primary border border-primary/30' : 'text-slate-500 hover:text-slate-300'
-                                    }`}
-                                >
-                                    {t}
-                                </span>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Ana İçerik: Saf Flexbox Düzeni */}
-                    <div className="flex flex-col lg:flex-row items-stretch gap-6 p-5 sm:p-6 bg-[#0D1117]">
-                        {/* Sol Taraf: BIST 100 Canlı Grafik & Endeks */}
-                        <div className="flex-1 flex flex-col justify-between bg-[#131924]/70 border border-border/50 rounded-xl p-5">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="size-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-sm font-bold text-primary">
-                                        XU
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <span className="text-base font-bold text-white tracking-tight">Borsa İstanbul (BIST 100)</span>
-                                        <span className="text-xs text-slate-400">Canlı Endeks Değeri</span>
-                                    </div>
-                                </div>
-                                <div className="flex flex-col items-end">
-                                    <span className="text-xl sm:text-2xl font-black font-mono text-white">
-                                        ₺{bistAsset ? fmt(bistAsset.current_price) : '—'}
-                                    </span>
-                                    <span className={`text-xs font-mono font-semibold flex items-center gap-1 ${bistAsset?.positive ?? true ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                        {bistAsset?.positive ?? true ? <TrendingUp className="size-3.5" /> : <TrendingDown className="size-3.5" />}
-                                        {bistAsset ? (bistAsset.change.startsWith('+') || bistAsset.change.startsWith('-') ? bistAsset.change : '+' + bistAsset.change) : '+0.00'}%
-                                    </span>
-                                </div>
-                            </div>
-
-                            {/* Canlı Sparkline Grafiği */}
-                            <div className="w-full h-32 mt-6">
-                                <svg viewBox="0 0 400 100" className="w-full h-full overflow-visible" preserveAspectRatio="none">
-                                    <defs>
-                                        <linearGradient id="liveChartGrad" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor="#1A9FD3" stopOpacity="0.25" />
-                                            <stop offset="100%" stopColor="#1A9FD3" stopOpacity="0" />
-                                        </linearGradient>
-                                    </defs>
-                                    <path
-                                        d="M0,80 Q30,70 60,65 T120,55 T180,60 T240,40 T300,35 T360,20 T400,10 L400,100 L0,100 Z"
-                                        fill="url(#liveChartGrad)"
-                                    />
-                                    <path
-                                        d="M0,80 Q30,70 60,65 T120,55 T180,60 T240,40 T300,35 T360,20 T400,10"
-                                        fill="none"
-                                        stroke="#1A9FD3"
-                                        strokeWidth="2.5"
-                                    />
-                                </svg>
-                            </div>
-                        </div>
-
-                        {/* Sağ Taraf: Canlı Makro Varlıklar (Döviz, Altın) */}
-                        <div className="w-full lg:w-80 flex flex-col justify-between gap-3 bg-[#131924]/70 border border-border/50 rounded-xl p-5">
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                                Canlı Piyasa Göstergeleri
-                            </span>
-
-                            <div className="flex flex-col gap-2.5 my-auto">
-                                {[
-                                    { label: 'Dolar / TL', asset: usdAsset, flag: '🇺🇸' },
-                                    { label: 'Euro / TL', asset: eurAsset, flag: '🇪🇺' },
-                                    { label: 'Gram Altın', asset: goldAsset, icon: '🟡' },
-                                ].map((item) => (
-                                    <div
-                                        key={item.label}
-                                        className="flex items-center justify-between p-2.5 rounded-lg bg-surface/30 border border-border/30 hover:border-primary/40 transition"
-                                    >
-                                        <div className="flex items-center gap-2.5">
-                                            <span className="text-sm">{item.flag || item.icon}</span>
-                                            <span className="text-xs font-semibold text-slate-200">{item.label}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-right">
-                                            <span className="text-xs font-bold font-mono text-white">
-                                                ₺{item.asset ? fmt(item.asset.current_price) : '—'}
-                                            </span>
-                                            <span
-                                                className={`text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded ${
-                                                    item.asset?.positive ?? true
-                                                        ? 'bg-emerald-500/10 text-emerald-400'
-                                                        : 'bg-rose-500/10 text-rose-400'
-                                                }`}
-                                            >
-                                                {item.asset ? (item.asset.change.startsWith('+') || item.asset.change.startsWith('-') ? item.asset.change : '+' + item.asset.change) : '+0.00'}%
-                                            </span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <Link
-                                href="/register"
-                                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-primary hover:bg-primary-hover text-white font-bold text-xs transition shadow-lg shadow-primary/20 mt-2"
-                            >
-                                <span>Kendi Portföyünü Oluştur</span>
-                                <ArrowRight className="size-3.5" />
-                            </Link>
-                        </div>
-                    </div>
-                </motion.div>
+                {/* ═══════════════ 2. DİNAMİK PORTFÖY VİTRİNİ (PRODUCT SHOWCASE) ═══════════════ */}
+                <PortfolioShowcase />
             </section>
 
             {/* ═══════════════════════════════════════════════════════════════

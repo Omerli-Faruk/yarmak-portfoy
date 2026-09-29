@@ -23,6 +23,7 @@ import {
     Trash2,
     ArrowUpRight,
     Tag,
+    ChevronLeft,
     ChevronRight,
     ArrowLeft,
     RefreshCw,
@@ -38,11 +39,70 @@ import {
 import TransactionDatePicker from '@/components/TransactionDatePicker';
 import { formatCurrency } from '@/lib/formatters';
 import { fetchAssetSummariesBulk, invalidateAssetCache } from '@/lib/assetCache';
+import TransactionHistoryTab from '@/components/holdings/TransactionHistoryTab';
 
 interface AssetGroup {
     id: string;
     name: string;
     color: string;
+}
+
+type Period = '1D' | '1W' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '3Y' | 'ALL';
+
+/**
+ * Varlığın seçilen periyottan daha yeni olup olmadığını veya borsa geçmişinin yetip yetmediğini kontrol eder.
+ * Eğer hisse bu periyottan daha yeniyse (veya kullanıcı bu hisseyi periyot başladıktan sonra aldıysa),
+ * hissenin dönemsel kâr/zararı doğrudan kullanıcının pozisyon açılışından bugüne kadarki Net K/Z'sidir.
+ */
+function isHoldingNewerThanPeriod(
+    firstBuyDateStr: string | undefined,
+    period: Period,
+    rawPeriodRet: number | null,
+    retAll: number | null
+): boolean {
+    if (period === 'ALL') return true;
+
+    // 1) Hissenin borsa geçmişi seçilen periyoda yetmiyorsa (ALL ile aynı getiri dönmüşse):
+    if (period !== '1D' && period !== '1W') {
+        if (rawPeriodRet === null || isNaN(rawPeriodRet)) return true;
+        if (retAll !== null && !isNaN(retAll) && Math.abs(rawPeriodRet - retAll) < 0.0001) {
+            return true;
+        }
+    }
+
+    // 2) Kullanıcının bu hisseyi portföye ilk alış tarihi seçilen periyodun başlangıcından daha sonraysa:
+    if (firstBuyDateStr) {
+        const buyDate = new Date(firstBuyDateStr);
+        if (!isNaN(buyDate.getTime())) {
+            const now = new Date();
+            let periodStartDate: Date | null = null;
+            if (period === '1D') {
+                periodStartDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            } else if (period === '1W') {
+                periodStartDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            } else if (period === '1M') {
+                periodStartDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            } else if (period === '3M') {
+                periodStartDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+            } else if (period === '6M') {
+                periodStartDate = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+            } else if (period === 'YTD') {
+                periodStartDate = new Date(now.getFullYear(), 0, 1);
+            } else if (period === '1Y') {
+                periodStartDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+            } else if (period === '3Y') {
+                periodStartDate = new Date(now.getTime() - 3 * 365 * 24 * 60 * 60 * 1000);
+            } else if (period === '5Y') {
+                periodStartDate = new Date(now.getTime() - 5 * 365 * 24 * 60 * 60 * 1000);
+            }
+
+            if (periodStartDate && buyDate > periodStartDate) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 export default function HoldingsPage() {
@@ -57,8 +117,28 @@ export default function HoldingsPage() {
     // Para birimi seçimi: 'TRY' veya 'USD'
     const [currency, setCurrency] = useState<'TRY' | 'USD'>('TRY');
 
+    // Ana Görünüm Sekmesi: 'positions' (Portföy Pozisyonlarım) | 'transactions' (İşlem Geçmişi)
+    const [mainViewTab, setMainViewTab] = useState<'positions' | 'transactions'>('positions');
+
+    // URL parametresine göre sekme yönetimi (?tab=transactions)
+    useEffect(() => {
+        const checkTab = () => {
+            if (typeof window !== 'undefined') {
+                const params = new URLSearchParams(window.location.search);
+                const tab = params.get('tab');
+                if (tab === 'transactions' || tab === 'history') {
+                    setMainViewTab('transactions');
+                } else {
+                    setMainViewTab('positions');
+                }
+            }
+        };
+        checkTab();
+        window.addEventListener('popstate', checkTab);
+        return () => window.removeEventListener('popstate', checkTab);
+    }, []);
+
     // Periyot Seçimi: 1D (Günlük), 1W, 1M, 3M, 6M, YTD, 1Y, 3Y, ALL
-    type Period = '1D' | '1W' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '3Y' | 'ALL';
     const [selectedPeriod, setSelectedPeriod] = useState<Period>('1D');
 
     // Her varlığın periyot getiri verileri (symbol -> { 1D: number, 1W: number, ... })
@@ -70,6 +150,12 @@ export default function HoldingsPage() {
 
     // Aktif Seçili Sekme: 'all' | 'by_type' | groupId
     const [activeTab, setActiveTab] = useState<string>('all');
+
+    // Grup Sekmeleri Yatay Kaydırma & Çok Satırlı (Wrap) Durumları
+    const groupsContainerRef = React.useRef<HTMLDivElement>(null);
+    const [canScrollLeft, setCanScrollLeft] = useState(false);
+    const [canScrollRight, setCanScrollRight] = useState(false);
+    const [isGroupsWrapped, setIsGroupsWrapped] = useState(false);
 
     // Arama ve Sıralama (Özel manuel sıralama desteği eklendi)
     const [searchQuery, setSearchQuery] = useState('');
@@ -128,6 +214,10 @@ export default function HoldingsPage() {
             }
 
             const userId = user?.id || 'default';
+            const savedWrap = localStorage.getItem(`user_groups_wrap_${userId}`);
+            if (savedWrap === 'true') {
+                setIsGroupsWrapped(true);
+            }
             const savedGroups = localStorage.getItem(`user_groups_${userId}`);
             const savedAssetGroups = localStorage.getItem(`asset_groups_${userId}`);
             const savedOrder = localStorage.getItem(`custom_asset_order_${userId}`);
@@ -397,6 +487,60 @@ export default function HoldingsPage() {
         saveGroups(updated, assetGroups);
     };
 
+    // Grup sekmelerinde sağa/sola taşma olup olmadığını denetle
+    const checkGroupsScroll = () => {
+        const el = groupsContainerRef.current;
+        if (!el) return;
+        setCanScrollLeft(el.scrollLeft > 6);
+        setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 6);
+    };
+
+    // Butonlarla sekmeleri yumuşak kaydırma
+    const scrollGroups = (direction: 'left' | 'right') => {
+        const el = groupsContainerRef.current;
+        if (!el) return;
+        const amount = Math.max(200, el.clientWidth * 0.65);
+        el.scrollBy({
+            left: direction === 'left' ? -amount : amount,
+            behavior: 'smooth'
+        });
+    };
+
+    // Fare tekerleğiyle yatay kaydırma desteği (Shift tuşuna basmadan mouse wheel ile kaydırma)
+    const handleGroupsWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+        if (isGroupsWrapped) return;
+        const el = groupsContainerRef.current;
+        if (!el) return;
+        if (el.scrollWidth > el.clientWidth && e.deltaY !== 0) {
+            el.scrollLeft += e.deltaY;
+            checkGroupsScroll();
+        }
+    };
+
+    // Grup sayısı veya pencere boyutu değiştiğinde kaydırma oklarını güncelle
+    useEffect(() => {
+        checkGroupsScroll();
+        const handleResize = () => checkGroupsScroll();
+        window.addEventListener('resize', handleResize);
+        const timer = setTimeout(checkGroupsScroll, 150);
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            clearTimeout(timer);
+        };
+    }, [groups, isGroupsWrapped]);
+
+    // Aktif sekme değiştiğinde otomatik görünür alana kaydır
+    useEffect(() => {
+        if (!isGroupsWrapped && activeTab && groupsContainerRef.current) {
+            const activeEl = groupsContainerRef.current.querySelector<HTMLElement>(`[data-tab-id="${activeTab}"]`);
+            if (activeEl) {
+                activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            }
+        }
+        const timer = setTimeout(checkGroupsScroll, 150);
+        return () => clearTimeout(timer);
+    }, [activeTab, isGroupsWrapped]);
+
     // Seçili Gruptan Tek Tıkla Çıkar
     const handleRemoveFromCurrentGroup = (symbol: string) => {
         if (activeTab === 'all' || activeTab === 'by_type') return;
@@ -534,15 +678,11 @@ export default function HoldingsPage() {
                 const curVal = h.total_value;
                 const costVal = h.average_cost * h.total_amount;
 
-                // Eğer hisse seçilen periyottan daha yeniyse (yani backend o periyot için ALL/halka arz getirisini dönmüşse
-                // veya varlık bu periyot başlangıcından sonra portföye girmişse), borsa ilk fiyatı yerine kullanıcının gerçek alış maliyeti baz alınır.
-                const isNewerThanPeriod = selectedPeriod !== '1D' && selectedPeriod !== '1W' && (
-                    ret === undefined ||
-                    isNaN(ret) ||
-                    (retAll !== undefined && !isNaN(retAll) && Math.abs(ret - retAll) < 0.0001)
-                );
+                // Eğer hisse seçilen periyottan daha yeniyse (veya bu periyot başladıktan sonra portföye girmişse),
+                // borsa ilk fiyatı yerine kullanıcının gerçek alış maliyeti baz alınır.
+                const isNewer = isHoldingNewerThanPeriod(h.first_buy_date, selectedPeriod, ret ?? null, retAll ?? null);
 
-                if (isNewerThanPeriod) {
+                if (isNewer) {
                     hasAnyValidReturn = true;
                     totalBaseVal += costVal > 0 ? costVal : curVal;
                 } else if (ret !== undefined && !isNaN(ret) && ret !== 0) {
@@ -648,6 +788,62 @@ export default function HoldingsPage() {
                     </div>
                 </div>
 
+                {/* 1.1 ANA SEKMELER: [Portföy Pozisyonlarım] | [İşlem Geçmişi] */}
+                <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+                    <button
+                        onClick={() => {
+                            setMainViewTab('positions');
+                            if (typeof window !== 'undefined') {
+                                window.history.replaceState(null, '', '/holdings');
+                            }
+                        }}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
+                            mainViewTab === 'positions'
+                                ? 'bg-[#1A9FD3] text-white shadow-md shadow-[#1A9FD3]/20'
+                                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                        }`}
+                    >
+                        <Briefcase className="w-4 h-4" />
+                        <span>Portföy Pozisyonlarım</span>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+                            mainViewTab === 'positions' ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-400'
+                        }`}>
+                            {holdings.length}
+                        </span>
+                    </button>
+
+                    <button
+                        onClick={() => {
+                            setMainViewTab('transactions');
+                            if (typeof window !== 'undefined') {
+                                window.history.replaceState(null, '', '/holdings?tab=transactions');
+                            }
+                        }}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
+                            mainViewTab === 'transactions'
+                                ? 'bg-[#1A9FD3] text-white shadow-md shadow-[#1A9FD3]/20'
+                                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                        }`}
+                    >
+                        <Clock className="w-4 h-4" />
+                        <span>İşlem Geçmişi</span>
+                    </button>
+                </div>
+
+                {mainViewTab === 'transactions' ? (
+                    <TransactionHistoryTab
+                        currency={currency}
+                        usdRate={summary?.usd_rate || 48.65}
+                        onRefreshHoldings={() => loadData(true)}
+                        onOpenAddTxModal={() => {
+                            setTxSymbol('');
+                            setTxAmount('');
+                            setTxPrice('');
+                            setIsTxModalOpen(true);
+                        }}
+                    />
+                ) : (
+                    <>
                 {/* 2. PERİYOT BUTONLARI & PORTFÖY TOPLAM ÖZETİ */}
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
                     {/* PERİYOT SEÇİCİ: 1D, 1W, 1M, 3M, 6M, YTD, 1Y, 3Y, ALL */}
@@ -736,6 +932,39 @@ export default function HoldingsPage() {
                                 </button>
                             )}
 
+                            {/* Çok Satırlı / Tek Satır Görünüm Değiştirici */}
+                            {groups.length > 2 && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const next = !isGroupsWrapped;
+                                        setIsGroupsWrapped(next);
+                                        if (typeof window !== 'undefined') {
+                                            const userId = user?.id || 'default';
+                                            localStorage.setItem(`user_groups_wrap_${userId}`, next ? 'true' : 'false');
+                                        }
+                                    }}
+                                    className={`flex items-center gap-1.5 text-xs font-bold transition cursor-pointer px-3 py-1.5 rounded-xl border active:scale-95 ${
+                                        isGroupsWrapped
+                                            ? 'bg-[#1A9FD3]/20 border-[#1A9FD3]/50 text-[#1A9FD3]'
+                                            : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border-slate-700'
+                                    }`}
+                                    title={isGroupsWrapped ? "Tek satırda kaydırmalı görünüme geç" : "Tüm grupları aynı anda göster (Çok satırlı)"}
+                                >
+                                    {isGroupsWrapped ? (
+                                        <>
+                                            <ChevronUp className="w-3.5 h-3.5 text-[#1A9FD3]" />
+                                            <span>Kompakt Satır</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                                            <span>Tümünü Göster</span>
+                                        </>
+                                    )}
+                                </button>
+                            )}
+
                             <button
                                 onClick={() => setIsCreateGroupOpen(true)}
                                 className="flex items-center gap-1 text-xs font-bold text-white transition cursor-pointer bg-[#1A9FD3] hover:bg-[#0C6991] px-3 py-1.5 rounded-xl border border-[#1A9FD3]/30 shadow-sm shadow-[#1A9FD3]/20"
@@ -746,90 +975,133 @@ export default function HoldingsPage() {
                         </div>
                     </div>
 
-                    {/* Grup Butonları / Sekmeleri (SÜRÜKLE & BIRAK DESTEKLİ) */}
-                    <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar touch-pan-x">
-                        {/* 1. TÜMÜ */}
-                        <button
-                            onClick={() => setActiveTab('all')}
-                            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition shrink-0 cursor-pointer flex items-center gap-2 ${
-                                activeTab === 'all'
-                                    ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white shadow-sm shadow-[#1A9FD3]/20'
-                                    : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-[#1A9FD3]/50 hover:bg-[#1A9FD3]/20'
-                            }`}
-                        >
-                            <span>Tüm Varlıklar</span>
-                            <span className={`px-1.5 py-0.5 rounded-full text-xs font-mono ${activeTab === 'all' ? 'bg-white/20 text-white font-bold' : 'bg-black/20 text-slate-300'}`}>
-                                {holdings.length}
-                            </span>
-                        </button>
-
-                        {/* 2. TÜRE GÖRE OTOMATİK GRUPLAMA */}
-                        <button
-                            onClick={() => setActiveTab('by_type')}
-                            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition shrink-0 cursor-pointer flex items-center gap-2 ${
-                                activeTab === 'by_type'
-                                    ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white shadow-sm shadow-[#1A9FD3]/20'
-                                    : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-[#1A9FD3]/50 hover:bg-[#1A9FD3]/20'
-                            }`}
-                        >
-                            <span>Türe Göre Grupla</span>
-                        </button>
-
-                        {/* 3. KULLANICININ ÖZEL GRUPLARI (SÜRÜKLENEBİLİR) */}
-                        {groups.map(g => {
-                            const count = holdings.filter(h => (assetGroups[h.symbol] || []).includes(g.id)).length;
-                            const isActive = activeTab === g.id;
-                            const isDragging = draggedGroupId === g.id;
-                            const isOver = dragOverGroupId === g.id;
-
-                            return (
-                                <div
-                                    key={g.id}
-                                    draggable
-                                    onDragStart={(e) => {
-                                        e.dataTransfer.setData('text/plain', g.id);
-                                        e.dataTransfer.effectAllowed = 'move';
-                                        setDraggedGroupId(g.id);
-                                    }}
-                                    onDragOver={(e) => {
-                                        e.preventDefault();
-                                        e.dataTransfer.dropEffect = 'move';
-                                        if (dragOverGroupId !== g.id) setDragOverGroupId(g.id);
-                                    }}
-                                    onDragLeave={() => {
-                                        if (dragOverGroupId === g.id) setDragOverGroupId(null);
-                                    }}
-                                    onDrop={(e) => {
-                                        e.preventDefault();
-                                        handleDropGroup(g.id);
-                                    }}
-                                    onDragEnd={() => {
-                                        setDraggedGroupId(null);
-                                        setDragOverGroupId(null);
-                                    }}
-                                    className={`transition-all duration-150 shrink-0 cursor-grab active:cursor-grabbing rounded-xl ${
-                                        isDragging ? 'opacity-30 scale-95' : ''
-                                    } ${isOver ? 'ring-2 ring-[#1A9FD3] ring-offset-2 ring-offset-slate-900' : ''}`}
-                                    title="Sırasını değiştirmek için sürükleyip bırakabilirsiniz"
+                    {/* Grup Butonları / Sekmeleri (SÜRÜKLE & BIRAK & ÇOK SATIR / KAYDIRMA DESTEKLİ) */}
+                    <div className="relative group/tabs">
+                        {/* Sol Kaydırma Oku (Yalnızca tek satır modunda ve sola kaydırılabiliyorsa görünür) */}
+                        {!isGroupsWrapped && canScrollLeft && (
+                            <div className="absolute left-0 top-0 bottom-0 z-10 flex items-center pr-3 bg-gradient-to-r from-slate-950 via-slate-950/90 to-transparent pointer-events-none">
+                                <button
+                                    type="button"
+                                    onClick={() => scrollGroups('left')}
+                                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-800/95 hover:bg-[#1A9FD3] text-slate-300 hover:text-white border border-slate-700/80 hover:border-[#1A9FD3] flex items-center justify-center shadow-lg transition active:scale-90 pointer-events-auto cursor-pointer"
+                                    title="Sola Kaydır"
                                 >
-                                    <button
-                                        onClick={() => setActiveTab(g.id)}
-                                        className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 border select-none w-full ${
-                                            isActive
-                                                ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white border-[#1A9FD3] shadow-sm shadow-[#1A9FD3]/20'
-                                                : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:border-[#1A9FD3]/50 hover:bg-[#1A9FD3]/20'
-                                        }`}
+                                    <ChevronLeft className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Sekmeler Konteyneri */}
+                        <div
+                            ref={groupsContainerRef}
+                            onScroll={checkGroupsScroll}
+                            onWheel={handleGroupsWheel}
+                            className={`flex items-center gap-2 py-1 touch-pan-x transition-all duration-200 ${
+                                isGroupsWrapped
+                                    ? 'flex-wrap'
+                                    : 'overflow-x-auto custom-horizontal-scrollbar scroll-smooth'
+                            }`}
+                        >
+                            {/* 1. TÜMÜ */}
+                            <button
+                                data-tab-id="all"
+                                onClick={() => setActiveTab('all')}
+                                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition shrink-0 cursor-pointer flex items-center gap-2 ${
+                                    activeTab === 'all'
+                                        ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white shadow-sm shadow-[#1A9FD3]/20'
+                                        : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-[#1A9FD3]/50 hover:bg-[#1A9FD3]/20'
+                                }`}
+                            >
+                                <span>Tüm Varlıklar</span>
+                                <span className={`px-1.5 py-0.5 rounded-full text-xs font-mono ${activeTab === 'all' ? 'bg-white/20 text-white font-bold' : 'bg-black/20 text-slate-300'}`}>
+                                    {holdings.length}
+                                </span>
+                            </button>
+
+                            {/* 2. TÜRE GÖRE OTOMATİK GRUPLAMA */}
+                            <button
+                                data-tab-id="by_type"
+                                onClick={() => setActiveTab('by_type')}
+                                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition shrink-0 cursor-pointer flex items-center gap-2 ${
+                                    activeTab === 'by_type'
+                                        ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white shadow-sm shadow-[#1A9FD3]/20'
+                                        : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-[#1A9FD3]/50 hover:bg-[#1A9FD3]/20'
+                                }`}
+                            >
+                                <span>Türe Göre Grupla</span>
+                            </button>
+
+                            {/* 3. KULLANICININ ÖZEL GRUPLARI (SÜRÜKLENEBİLİR) */}
+                            {groups.map(g => {
+                                const count = holdings.filter(h => (assetGroups[h.symbol] || []).includes(g.id)).length;
+                                const isActive = activeTab === g.id;
+                                const isDragging = draggedGroupId === g.id;
+                                const isOver = dragOverGroupId === g.id;
+
+                                return (
+                                    <div
+                                        key={g.id}
+                                        data-tab-id={g.id}
+                                        draggable
+                                        onDragStart={(e) => {
+                                            e.dataTransfer.setData('text/plain', g.id);
+                                            e.dataTransfer.effectAllowed = 'move';
+                                            setDraggedGroupId(g.id);
+                                        }}
+                                        onDragOver={(e) => {
+                                            e.preventDefault();
+                                            e.dataTransfer.dropEffect = 'move';
+                                            if (dragOverGroupId !== g.id) setDragOverGroupId(g.id);
+                                        }}
+                                        onDragLeave={() => {
+                                            if (dragOverGroupId === g.id) setDragOverGroupId(null);
+                                        }}
+                                        onDrop={(e) => {
+                                            e.preventDefault();
+                                            handleDropGroup(g.id);
+                                        }}
+                                        onDragEnd={() => {
+                                            setDraggedGroupId(null);
+                                            setDragOverGroupId(null);
+                                        }}
+                                        className={`transition-all duration-150 shrink-0 cursor-grab active:cursor-grabbing rounded-xl ${
+                                            isDragging ? 'opacity-30 scale-95' : ''
+                                        } ${isOver ? 'ring-2 ring-[#1A9FD3] ring-offset-2 ring-offset-slate-900' : ''}`}
+                                        title="Sırasını değiştirmek için sürükleyip bırakabilirsiniz"
                                     >
-                                        <GripVertical className="w-3.5 h-3.5 text-slate-400 group-hover:text-white opacity-70 -ml-1 cursor-grab" />
-                                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: g.color }}></span>
-                                        <span>{g.name}</span>
-                                        <span className={`px-1.5 py-0.5 rounded-full text-xs font-mono ${isActive ? 'bg-white/20 text-white font-bold' : 'bg-black/20 text-slate-300'}`}>
-                                            {count}
-                                        </span>
-                                    </button>
-                                </div>
-                            );
-                        })}
+                                        <button
+                                            onClick={() => setActiveTab(g.id)}
+                                            className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 border select-none w-full ${
+                                                isActive
+                                                    ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white border-[#1A9FD3] shadow-sm shadow-[#1A9FD3]/20'
+                                                    : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:border-[#1A9FD3]/50 hover:bg-[#1A9FD3]/20'
+                                            }`}
+                                        >
+                                            <GripVertical className="w-3.5 h-3.5 text-slate-400 group-hover:text-white opacity-70 -ml-1 cursor-grab" />
+                                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: g.color }}></span>
+                                            <span>{g.name}</span>
+                                            <span className={`px-1.5 py-0.5 rounded-full text-xs font-mono ${isActive ? 'bg-white/20 text-white font-bold' : 'bg-black/20 text-slate-300'}`}>
+                                                {count}
+                                            </span>
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Sağ Kaydırma Oku (Yalnızca tek satır modunda ve sağda daha fazla grup varsa görünür) */}
+                        {!isGroupsWrapped && canScrollRight && (
+                            <div className="absolute right-0 top-0 bottom-0 z-10 flex items-center pl-3 bg-gradient-to-l from-slate-950 via-slate-950/90 to-transparent pointer-events-none">
+                                <button
+                                    type="button"
+                                    onClick={() => scrollGroups('right')}
+                                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-800/95 hover:bg-[#1A9FD3] text-slate-200 hover:text-white border border-[#1A9FD3]/40 hover:border-[#1A9FD3] flex items-center justify-center shadow-lg shadow-[#1A9FD3]/10 transition active:scale-90 pointer-events-auto cursor-pointer"
+                                    title="Daha Fazla Grubu Göster (Sağa Kaydır)"
+                                >
+                                    <ChevronRight className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -923,6 +1195,8 @@ export default function HoldingsPage() {
                             </div>
                         )}
                     </div>
+                )}
+                    </>
                 )}
             </div>
 
@@ -1371,29 +1645,29 @@ export default function HoldingsPage() {
     // Gerçek Finansal Tablo Render Fonksiyonu
     function renderHoldingsTable(items: UserHolding[]) {
         const periodHeaderLabel = selectedPeriod === 'ALL'
-            ? 'Tüm Zamanlar %'
+            ? 'Tüm Zamanlar K/Z'
             : selectedPeriod === '1D'
-            ? 'Günlük (1G) %'
+            ? 'Günlük (1G) K/Z'
             : selectedPeriod === '1W'
-            ? 'Haftalık (1H) %'
+            ? 'Haftalık (1H) K/Z'
             : selectedPeriod === '1M'
-            ? 'Aylık (1A) %'
+            ? 'Aylık (1A) K/Z'
             : selectedPeriod === '3M'
-            ? '3 Aylık (3A) %'
+            ? '3 Aylık (3A) K/Z'
             : selectedPeriod === '6M'
-            ? '6 Aylık (6A) %'
+            ? '6 Aylık (6A) K/Z'
             : selectedPeriod === 'YTD'
-            ? 'Yılbaşından Bugüne (YBB) %'
+            ? 'Yılbaşından Bugüne (YTD) K/Z'
             : selectedPeriod === '1Y'
-            ? 'Yıllık (1Y) %'
+            ? 'Yıllık (1Y) K/Z'
             : selectedPeriod === '3Y'
-            ? '3 Yıllık (3Y) %'
-            : `${selectedPeriod} %`;
+            ? '3 Yıllık (3Y) K/Z'
+            : `${selectedPeriod} K/Z`;
 
         return (
             <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
                 {/* MASAÜSTÜ TABLO GÖRÜNÜMÜ */}
-                <div className="hidden md:block overflow-x-auto">
+                <div className="hidden md:block overflow-x-auto custom-horizontal-scrollbar">
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="border-b border-slate-800 bg-slate-900/80 text-[11px] uppercase tracking-wider font-semibold text-slate-400">
@@ -1403,7 +1677,6 @@ export default function HoldingsPage() {
                                 <th scope="col" className="py-3.5 px-3 text-right">Adet & Maliyet</th>
                                 <th scope="col" className="py-3.5 px-3 text-right">Güncel Fiyat</th>
                                 <th scope="col" className="py-3.5 px-3 text-right">{periodHeaderLabel}</th>
-                                <th scope="col" className="py-3.5 px-3 text-right">Piyasa Değeri & Pay</th>
                                 <th scope="col" className="py-3.5 px-3 text-right">Net Kâr / Zarar</th>
                                 <th scope="col" className="py-3.5 pl-2 pr-5 text-right w-40">İşlemler</th>
                             </tr>
@@ -1416,11 +1689,31 @@ export default function HoldingsPage() {
                                 const isPos = pnl >= 0;
 
                                 const sum = assetSummaries[h.symbol];
-                                const periodRetVal: number | null = (sum && sum[selectedPeriod] !== undefined) ? sum[selectedPeriod] : null;
+                                const rawPeriodRet = (sum && sum[selectedPeriod] !== undefined) ? sum[selectedPeriod] : null;
+                                const retAll = (sum && sum['ALL'] !== undefined) ? sum['ALL'] : null;
+
+                                const isNewer = isHoldingNewerThanPeriod(h.first_buy_date, selectedPeriod, rawPeriodRet, retAll);
+
+                                let periodRetVal: number | null = null;
+                                let periodPnl: number | null = null;
+
+                                if (isNewer) {
+                                    // Varlık bu periyottan daha yeni (veya borsa geçmişi yetmiyor):
+                                    // Kullanıcının bu periyottaki kâr/zararı doğrudan pozisyonun ilk alışından bugüne kadarki gerçek Net K/Z'sidir!
+                                    periodRetVal = pnlPct;
+                                    periodPnl = pnl;
+                                } else if (rawPeriodRet !== null) {
+                                    periodRetVal = rawPeriodRet;
+                                    if (periodRetVal > -100) {
+                                        periodPnl = h.total_value - (h.total_value / (1 + (periodRetVal / 100)));
+                                    } else {
+                                        periodPnl = -h.total_value;
+                                    }
+                                }
+                                const isPeriodPos = periodPnl !== null ? periodPnl >= 0 : true;
 
                                 const assignedGroupIds = assetGroups[h.symbol] || [];
                                 const assignedGroupObjects = groups.filter(g => assignedGroupIds.includes(g.id));
-                                const sharePct = totalPortfolioVal > 0 ? (h.total_value / totalPortfolioVal) * 100 : 0;
 
                                 const isDragging = draggedSymbol === h.symbol;
                                 const isOver = dragOverSymbol === h.symbol;
@@ -1545,26 +1838,19 @@ export default function HoldingsPage() {
                                             </div>
                                         </td>
 
-                                        {/* DÖNEMSEL GETİRİ */}
+                                        {/* DÖNEMSEL KÂR / ZARAR */}
                                         <td className="py-3.5 px-3 text-right whitespace-nowrap">
-                                            {periodRetVal !== null ? (
-                                                <div className={`text-sm sm:text-base font-black font-mono tabular-nums ${periodRetVal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                    {periodRetVal >= 0 ? '+' : ''}{periodRetVal.toFixed(2)}%
-                                                </div>
+                                            {periodPnl !== null && periodRetVal !== null ? (
+                                                <>
+                                                    <div className={`text-sm sm:text-base font-black font-mono tabular-nums ${isPeriodPos ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                        {fmt(periodPnl, true)}
+                                                    </div>
+                                                    <div className={`text-xs font-bold font-mono tabular-nums ${isPeriodPos ? 'text-emerald-400/90' : 'text-rose-400/90'}`}>
+                                                        {periodRetVal >= 0 ? '+' : ''}{periodRetVal.toFixed(2)}%
+                                                    </div>
+                                                </>
                                             ) : (
                                                 <div className="text-sm font-mono text-slate-500">—</div>
-                                            )}
-                                        </td>
-
-                                        {/* PİYASA DEĞERİ & PAY */}
-                                        <td className="py-3.5 px-3 text-right whitespace-nowrap">
-                                            <div className="text-sm sm:text-base font-black text-white tabular-nums">
-                                                {fmt(h.total_value)}
-                                            </div>
-                                            {totalPortfolioVal > 0 && (
-                                                <div className="text-[11px] font-bold text-slate-400 font-mono mt-0.5">
-                                                    %{sharePct.toFixed(1)} Pay
-                                                </div>
                                             )}
                                         </td>
 
@@ -1639,16 +1925,31 @@ export default function HoldingsPage() {
                         const isPos = pnl >= 0;
 
                         const sum = assetSummaries[h.symbol];
+                        const rawPeriodRet = (sum && sum[selectedPeriod] !== undefined) ? sum[selectedPeriod] : null;
+                        const retAll = (sum && sum['ALL'] !== undefined) ? sum['ALL'] : null;
+
+                        const isNewer = isHoldingNewerThanPeriod(h.first_buy_date, selectedPeriod, rawPeriodRet, retAll);
+
                         let periodRetVal: number | null = null;
-                        if (selectedPeriod === 'ALL') {
+                        let periodPnl: number | null = null;
+
+                        if (isNewer) {
+                            // Varlık bu periyottan daha yeni (veya borsa geçmişi yetmiyor):
+                            // Kullanıcının bu periyottaki kâr/zararı doğrudan pozisyonun ilk alışından bugüne kadarki gerçek Net K/Z'sidir!
                             periodRetVal = pnlPct;
-                        } else if (sum && sum[selectedPeriod] !== undefined) {
-                            periodRetVal = sum[selectedPeriod];
+                            periodPnl = pnl;
+                        } else if (rawPeriodRet !== null) {
+                            periodRetVal = rawPeriodRet;
+                            if (periodRetVal > -100) {
+                                periodPnl = h.total_value - (h.total_value / (1 + (periodRetVal / 100)));
+                            } else {
+                                periodPnl = -h.total_value;
+                            }
                         }
+                        const isPeriodPos = periodPnl !== null ? periodPnl >= 0 : true;
 
                         const assignedGroupIds = assetGroups[h.symbol] || [];
                         const assignedGroupObjects = groups.filter(g => assignedGroupIds.includes(g.id));
-                        const sharePct = totalPortfolioVal > 0 ? (h.total_value / totalPortfolioVal) * 100 : 0;
 
                         const isDragging = draggedSymbol === h.symbol;
                         const isOver = dragOverSymbol === h.symbol;
@@ -1682,7 +1983,7 @@ export default function HoldingsPage() {
                                     isDragging ? 'opacity-30 bg-slate-800/90' : ''
                                 } ${isOver ? 'border-t-2 border-[#1A9FD3] bg-[#1A9FD3]/15' : ''}`}
                             >
-                                {/* ÜST BAŞLIK: Sürükle Tutamacı, Sıra, Sembol, Tür, Değer, % Pay */}
+                                {/* ÜST BAŞLIK: Sürükle Tutamacı, Sıra, Sembol, Tür, Net K/Z (Toplam) */}
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="flex items-center gap-2">
                                         {/* Sürükle Tutamacı */}
@@ -1715,19 +2016,16 @@ export default function HoldingsPage() {
                                         </div>
                                     </div>
 
+                                    {/* NET KÂR / ZARAR (DAİMA TOPLAM) */}
                                     <div className="text-right shrink-0">
-                                        <div className="text-base font-black text-white tabular-nums">
-                                            {fmt(h.total_value)}
+                                        <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">
+                                            Net K/Z (Toplam)
+                                        </span>
+                                        <div className={`text-sm sm:text-base font-black font-mono tabular-nums ${isPos ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {fmt(pnl, true)}
                                         </div>
-                                        <div className="flex items-center justify-end gap-1.5 mt-0.5">
-                                            {totalPortfolioVal > 0 && (
-                                                <span className="text-[10px] font-bold text-slate-400 font-mono bg-slate-800/80 px-1 py-0.5 rounded border border-slate-700/60">
-                                                    %{sharePct.toFixed(1)} Pay
-                                                </span>
-                                            )}
-                                            <span className={`text-xs font-bold font-mono tabular-nums ${isPos ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                {fmt(pnl, true)} ({isPos ? '+' : ''}{pnlPct.toFixed(2)}%)
-                                            </span>
+                                        <div className={`text-xs font-bold font-mono tabular-nums ${isPos ? 'text-emerald-400/90' : 'text-rose-400/90'}`}>
+                                            {isPos ? '+' : ''}{pnlPct.toFixed(2)}%
                                         </div>
                                     </div>
                                 </div>
@@ -1748,13 +2046,22 @@ export default function HoldingsPage() {
                                     </div>
                                     <div>
                                         <span className="text-slate-400 block mb-0.5">
-                                            {selectedPeriod === 'ALL' ? 'Tüm Zamanlar Getirisi' : `${selectedPeriod} Getirisi`}
+                                            {periodHeaderLabel}
                                         </span>
-                                        <span className={`font-bold font-mono tabular-nums ${periodRetVal !== null && periodRetVal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                            {periodRetVal !== null ? `${periodRetVal >= 0 ? '+' : ''}${periodRetVal.toFixed(2)}%` : '—'}
-                                        </span>
+                                        {periodPnl !== null && periodRetVal !== null ? (
+                                            <div>
+                                                <span className={`font-black font-mono tabular-nums text-xs sm:text-sm block ${isPeriodPos ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                    {fmt(periodPnl, true)}
+                                                </span>
+                                                <span className={`font-bold font-mono tabular-nums text-[11px] ${isPeriodPos ? 'text-emerald-400/90' : 'text-rose-400/90'}`}>
+                                                    {periodRetVal >= 0 ? '+' : ''}{periodRetVal.toFixed(2)}%
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <span className="font-mono text-slate-500">—</span>
+                                        )}
                                     </div>
-                                    <div className="text-right flex items-center justify-end">
+                                    <div className="text-right flex items-end justify-end">
                                         <Link
                                             href={`/assets/${h.symbol}`}
                                             className="inline-flex items-center gap-1 text-xs font-bold text-[#1A9FD3] hover:underline"

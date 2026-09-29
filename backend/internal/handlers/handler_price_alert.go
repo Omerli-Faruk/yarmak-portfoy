@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"yarmak/internal/database"
 
 	"github.com/go-chi/chi/v5"
 )
 
+// HandlerCreatePriceAlert — Belirli bir varlık hedef fiyata ulaştığında tetiklenecek fiyat alarmı oluşturur.
 // @Summary Fiyat Alarmı Kur
 // @Description Belirli bir hisse veya fon hedef fiyata ulaştığında tetiklenecek alarm kurar
 // @Tags Alerts
@@ -33,6 +35,16 @@ func (cfg *ApiConfig) HandlerCreatePriceAlert(w http.ResponseWriter, r *http.Req
 		respondWithError(w, http.StatusBadRequest, "Hedef fiyat geçerli bir sayı olmalıdır.", err)
 		return
 	}
+
+	// AssetID verilmemişse ama Sembol verilmişse sembolden varlığı bul veya oluştur
+	if params.AssetID <= 0 && strings.TrimSpace(params.Symbol) != "" {
+		cleanSym := strings.ToUpper(strings.TrimSpace(params.Symbol))
+		asset, err := cfg.GetOrCreateAssetBySymbol(r.Context(), cleanSym, "HISSE")
+		if err == nil {
+			params.AssetID = asset.ID
+		}
+	}
+
 	if targetPrice <= 0 || params.AssetID <= 0 || (params.Direction != "ABOVE" && params.Direction != "BELOW") {
 		respondWithError(w, http.StatusBadRequest, "Geçersiz parametreler: Hedef fiyat 0'dan büyük, varlık ID geçerli ve yön 'ABOVE' veya 'BELOW' olmalıdır", err)
 		return
@@ -55,6 +67,7 @@ func (cfg *ApiConfig) HandlerCreatePriceAlert(w http.ResponseWriter, r *http.Req
 	respondWithJSON(w, http.StatusCreated, priceAlert)
 }
 
+// HandlerGetUserPriceAlerts — Kullanıcının oluşturduğu tüm aktif ve tetiklenmiş fiyat alarmlarını varlık bilgileriyle birlikte listeler.
 // @Summary Kullanıcının Alarmlarını Listele
 // @Description Kullanıcının aktif ve tetiklenmiş tüm fiyat alarmlarını listeler
 // @Tags Alerts
@@ -77,6 +90,7 @@ func (cfg *ApiConfig) HandlerGetUserPriceAlerts(w http.ResponseWriter, r *http.R
 	respondWithJSON(w, http.StatusOK, priceAlert)
 }
 
+// HandlerDeletePriceAlert — Kullanıcının belirli bir fiyat alarmını güvenli biçimde siler/iptal eder.
 // @Summary Fiyat Alarmını Sil
 // @Description Kullanıcının kurduğu bir fiyat alarmını iptal eder/siler
 // @Tags Alerts

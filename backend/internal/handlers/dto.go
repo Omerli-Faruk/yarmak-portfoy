@@ -47,15 +47,16 @@ type createTransactionRequest struct {
 }
 
 type userHoldingResponse struct {
-	AssetID      int64   `json:"asset_id"`
-	Symbol       string  `json:"symbol"`
-	AssetName    string  `json:"asset_name"`
-	AssetType    string  `json:"asset_type"`
-	CurrentPrice float64 `json:"current_price"`
-	TotalAmount  float64 `json:"total_amount"`
-	AverageCost  float64 `json:"average_cost"`
-	TotalValue   float64 `json:"total_value"`
-	ProfitLoss   float64 `json:"profit_loss"`
+	AssetID      int64      `json:"asset_id"`
+	Symbol       string     `json:"symbol"`
+	AssetName    string     `json:"asset_name"`
+	AssetType    string     `json:"asset_type"`
+	CurrentPrice float64    `json:"current_price"`
+	TotalAmount  float64    `json:"total_amount"`
+	AverageCost  float64    `json:"average_cost"`
+	TotalValue   float64    `json:"total_value"`
+	ProfitLoss   float64    `json:"profit_loss"`
+	FirstBuyDate *time.Time `json:"first_buy_date,omitempty"`
 }
 
 type portfolioSummaryResponse struct {
@@ -103,6 +104,7 @@ type createSplitRequest struct {
 // Fiyat alarmı
 type createPriceAlertRequest struct {
 	AssetID     int64  `json:"asset_id" example:"1"`
+	Symbol      string `json:"symbol,omitempty" example:"THYAO"`
 	TargetPrice string `json:"target_price" example:"350.00"`
 	Direction   string `json:"direction" example:"ABOVE" enums:"ABOVE,BELOW"`
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -221,6 +222,16 @@ func (cfg *ApiConfig) HandlerGetUserHoldings(w http.ResponseWriter, r *http.Requ
 		userTxs := txsByAsset[h.AssetID]
 		_, averageCost := scraper.CalculateAssetHoldingAndCost(userTxs)
 
+		var firstBuyDate *time.Time
+		for _, tx := range userTxs {
+			if tx.Type == "BUY" {
+				if firstBuyDate == nil || tx.TransactionDate.Before(*firstBuyDate) {
+					t := tx.TransactionDate
+					firstBuyDate = &t
+				}
+			}
+		}
+
 		totalValue := currentPrice * totalAmount
 		costValue := averageCost * totalAmount
 		res = append(res, userHoldingResponse{
@@ -233,6 +244,7 @@ func (cfg *ApiConfig) HandlerGetUserHoldings(w http.ResponseWriter, r *http.Requ
 			AverageCost:  averageCost,
 			TotalValue:   totalValue,
 			ProfitLoss:   totalValue - costValue,
+			FirstBuyDate: firstBuyDate,
 		})
 	}
 	respondWithJSON(w, http.StatusOK, res)
@@ -353,6 +365,159 @@ func (cfg *ApiConfig) HandlerDeleteTransaction(w http.ResponseWriter, r *http.Re
 	}
 	_ = cfg.recalculateAssetRealizedPnL(r.Context(), userID, tx.AssetID)
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "İşlem başarıyla silindi"})
+}
+
+// updateTransactionRequest — İşlem güncelleme gövdesi
+type updateTransactionRequest struct {
+	Type            string    `json:"type" example:"BUY" enums:"BUY,SELL"`
+	Amount          float64   `json:"amount" example:"100"`
+	Price           float64   `json:"price" example:"25.50"`
+	TransactionDate time.Time `json:"transaction_date"`
+	Commission      float64   `json:"commission" example:"10.0"`
+}
+
+// HandlerUpdateTransaction — Kullanıcının mevcut alım/satım işlemini günceller ve WAC / K-Z hesaplarını otomatik yeniler.
+// @Summary Alım/Satım İşlemini Güncelle
+// @Description Kullanıcının gerçekleştirdiği bir alım veya satım işleminin adet, fiyat, komisyon veya tarihini günceller
+// @Tags Transactions
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path int true "İşlem ID"
+// @Param body body updateTransactionRequest true "Güncellenecek işlem bilgileri"
+// @Success 200 {object} database.Transaction
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /transactions/{id} [put]
+func (cfg *ApiConfig) HandlerUpdateTransaction(w http.ResponseWriter, r *http.Request) {
+	urlID := chi.URLParam(r, "id")
+	transactionID, err := strconv.ParseInt(urlID, 10, 64)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Geçersiz işlem ID", err)
+		return
+	}
+
+	userID, ok := r.Context().Value(UserIDKey).(int64)
+	if !ok {
+		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
+		return
+	}
+
+	var params updateTransactionRequest
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Geçersiz istek gövdesi", err)
+		return
+	}
+
+	if params.Type != "BUY" && params.Type != "SELL" {
+		respondWithError(w, http.StatusBadRequest, "İşlem türü sadece 'BUY' veya 'SELL' olabilir", nil)
+		return
+	}
+	if params.Amount <= 0 {
+		respondWithError(w, http.StatusBadRequest, "İşlem miktarı sıfırdan büyük olmalıdır", nil)
+		return
+	}
+	if params.Price <= 0 {
+		respondWithError(w, http.StatusBadRequest, "İşlem fiyatı sıfırdan büyük olmalıdır", nil)
+		return
+	}
+	if params.Commission < 0 {
+		params.Commission = 0
+	}
+
+	unlock := lockUser(userID)
+	defer unlock()
+
+	// 1. Mevcut işlemi doğrula ve varlık ID'sini öğren
+	tx, err := cfg.DB.GetTransactionByIDAndUser(r.Context(), database.GetTransactionByIDAndUserParams{
+		ID:     transactionID,
+		UserID: userID,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "İşlem bulunamadı veya yetkiniz yok", err)
+		return
+	}
+
+	// 2. Bakiye Simülasyonu: Bu güncelleme geçmiş veya gelecekteki bakiyeyi eksiye düşürüyor mu?
+	userTxs, err := cfg.DB.GetUserTransactionsForAsset(r.Context(), database.GetUserTransactionsForAssetParams{
+		UserID:  userID,
+		AssetID: tx.AssetID,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "İşlem geçmişi kontrol edilemedi", err)
+		return
+	}
+
+	type simTx struct {
+		ID   int64
+		Date time.Time
+		Type string
+		Lot  float64
+	}
+	var simList []simTx
+	for _, t := range userTxs {
+		tAmt, _ := strconv.ParseFloat(t.Amount, 64)
+		if t.ID == transactionID {
+			simList = append(simList, simTx{
+				ID:   transactionID,
+				Date: params.TransactionDate,
+				Type: params.Type,
+				Lot:  params.Amount,
+			})
+		} else {
+			simList = append(simList, simTx{
+				ID:   t.ID,
+				Date: t.TransactionDate,
+				Type: t.Type,
+				Lot:  tAmt,
+			})
+		}
+	}
+
+	sort.SliceStable(simList, func(i, j int) bool {
+		if simList[i].Date.Equal(simList[j].Date) {
+			return simList[i].ID < simList[j].ID
+		}
+		return simList[i].Date.Before(simList[j].Date)
+	})
+
+	var currentLot float64
+	for _, item := range simList {
+		if item.Type == "BUY" {
+			currentLot += item.Lot
+		} else if item.Type == "SELL" {
+			currentLot -= item.Lot
+			if currentLot < -0.000001 {
+				respondWithError(w, http.StatusBadRequest, "Bu güncelleme, ilgili tarihteki veya sonraki satış işlemleri için bakiyeyi eksiye düşürmektedir.", nil)
+				return
+			}
+		}
+	}
+
+	cleanAmount := fmt.Sprintf("%.6f", params.Amount)
+	cleanPrice := fmt.Sprintf("%.6f", params.Price)
+	cleanCommission := fmt.Sprintf("%.6f", params.Commission)
+
+	updatedTx, err := cfg.DB.UpdateTransaction(r.Context(), database.UpdateTransactionParams{
+		Type:            params.Type,
+		Amount:          cleanAmount,
+		Price:           cleanPrice,
+		TransactionDate: params.TransactionDate,
+		Commission:      cleanCommission,
+		ID:              transactionID,
+		UserID:          userID,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "İşlem güncellenemedi", err)
+		return
+	}
+
+	// 3. WAC ve Realized PnL değerlerini anında baştan hesapla
+	_ = cfg.recalculateAssetRealizedPnL(r.Context(), userID, tx.AssetID)
+
+	respondWithJSON(w, http.StatusOK, updatedTx)
 }
 
 // HandlerDeleteUserAssetHoldings — Kullanıcının belirli bir varlıktaki (sembol) TÜM alım-satım işlemlerini siler (portföyden varlığı tamamen kaldırır).

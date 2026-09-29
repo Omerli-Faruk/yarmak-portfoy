@@ -25,6 +25,10 @@
 }
 
 
+html {
+  scrollbar-gutter: stable;
+}
+
 html,
 body {
   background: var(--background);
@@ -62,4 +66,49 @@ button, a, input, select {
 /* Recharts Brush Tutamaç Metinlerinin İçe Girmesini ve Taşmasını Önleme */
 .recharts-brush-texts {
   display: none !important;
+}
+
+/* Şık ve zarif özel kaydırma çubuğu */
+.custom-horizontal-scrollbar,
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(51, 65, 85, 0.7) transparent;
+}
+.custom-horizontal-scrollbar::-webkit-scrollbar,
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.custom-horizontal-scrollbar::-webkit-scrollbar-track,
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-horizontal-scrollbar::-webkit-scrollbar-thumb,
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.7);
+  border-radius: 9999px;
+}
+.custom-horizontal-scrollbar::-webkit-scrollbar-thumb:hover,
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(26, 159, 211, 0.85);
+}
+
+/* Tüm uygulamada klasik kaba gri Windows kaydırma çubuğunu önleyen modern genel stil */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.6);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(26, 159, 211, 0.85);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(51, 65, 85, 0.6) transparent;
 }

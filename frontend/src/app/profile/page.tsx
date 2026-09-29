@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -11,13 +11,14 @@ export default function ProfilePage() {
     const { user, loading, logOut } = useAuth();
     const router = useRouter();
 
-    if (loading) {
-        return <LoadingSpinner withLogo message="Profil yükleniyor..." />;
-    }
+    useEffect(() => {
+        if (!loading && !user) {
+            router.push('/login');
+        }
+    }, [user, loading, router]);
 
-    if (!user) {
-        router.push('/login');
-        return null;
+    if (loading || !user) {
+        return <LoadingSpinner withLogo message="Profil yükleniyor..." />;
     }
 
     const memberDate = user.created_at
