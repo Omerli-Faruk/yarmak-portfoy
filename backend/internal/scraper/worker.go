@@ -93,7 +93,7 @@ func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
 				UserID:  userID,
 				AssetID: h.AssetID,
 			})
-			_, avgCost := CalculateAssetHoldingAndCost(userTxs)
+			_, avgCost := calculateAssetHoldingAndCost(userTxs)
 			totalValue += currentPrice * totalAmount
 			totalCost += avgCost * totalAmount
 		}
@@ -110,8 +110,7 @@ func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
 	lastSnapshotDay.Store(int32(now.YearDay()))
 }
 
-// CalculateAssetHoldingAndCost — Varlığın tüm işlem listesini alarak WAC metoduna göre ortalama maliyetini ve eldeki mevcut lot sayısını hesaplar.
-func CalculateAssetHoldingAndCost(transactions []database.Transaction) (currentLot float64, avgCost float64) {
+func calculateAssetHoldingAndCost(transactions []database.Transaction) (currentLot float64, avgCost float64) {
 	runningLot := 0.0
 	runningCost := 0.0
 	for _, tx := range transactions {
@@ -120,7 +119,6 @@ func CalculateAssetHoldingAndCost(transactions []database.Transaction) (currentL
 		commission, _ := strconv.ParseFloat(tx.Commission, 64)
 		if tx.Type == "BUY" {
 			total := (amount * price) + commission
-			// Sıfıra bölme koruması: bozuk veri gelirse NaN yayılmasını engelle
 			if (runningLot + amount) > 0 {
 				runningCost = (runningLot*runningCost + total) / (runningLot + amount)
 			}

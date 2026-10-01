@@ -9,6 +9,7 @@ import (
 	"time"
 	"yarmak/internal/database"
 	"yarmak/internal/handlers"
+	"yarmak/internal/services"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -34,7 +35,8 @@ func main() {
 	defer conn.Close()
 
 	queries := database.New(conn)
-	cfg := &handlers.ApiConfig{DB: queries, DBConn: conn}
+	servicesPkg := services.NewServices(queries, conn)
+	cfg := &handlers.ApiConfig{DB: queries, DBConn: conn, Services: servicesPkg}
 	ctx := context.Background()
 
 	// 📊 BIST 100 (TAM 100 HİSSE) + TEFAS TOP 30 (TAM 30 FON)
@@ -180,7 +182,7 @@ func main() {
 	successCount := 0
 	for i, item := range assets {
 		// Varlık veritabanında yoksa oluşturur, varsa fiyatını günceller
-		asset, err := cfg.GetOrCreateAssetBySymbol(ctx, item.Symbol, item.AssetType)
+		asset, err := cfg.Services.Asset.GetOrCreateAssetBySymbol(ctx, item.Symbol, item.AssetType)
 		if err != nil {
 			fmt.Printf("[%d/%d] ❌ %-8s Hata: %v\n", i+1, len(assets), item.Symbol, err)
 			continue

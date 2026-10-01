@@ -36,10 +36,9 @@ func (cfg *ApiConfig) HandlerCreatePriceAlert(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// AssetID verilmemişse ama Sembol verilmişse sembolden varlığı bul veya oluştur
 	if params.AssetID <= 0 && strings.TrimSpace(params.Symbol) != "" {
 		cleanSym := strings.ToUpper(strings.TrimSpace(params.Symbol))
-		asset, err := cfg.GetOrCreateAssetBySymbol(r.Context(), cleanSym, "HISSE")
+		asset, err := cfg.Services.Asset.GetOrCreateAssetBySymbol(r.Context(), cleanSym, "HISSE")
 		if err == nil {
 			params.AssetID = asset.ID
 		}

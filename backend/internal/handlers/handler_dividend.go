@@ -100,8 +100,13 @@ func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Reque
 	var grossAmount, netAmount, taxAmount float64
 	if params.IsNet {
 		netAmount = amount
-		grossAmount = netAmount / (1.0 - taxRate)
-		taxAmount = grossAmount - netAmount
+		if taxRate > 0 && taxRate < 1 {
+			grossAmount = netAmount / (1.0 - taxRate)
+			taxAmount = grossAmount - netAmount
+		} else {
+			grossAmount = netAmount
+			taxAmount = 0
+		}
 	} else {
 		grossAmount = amount
 		taxAmount = grossAmount * taxRate
@@ -147,7 +152,131 @@ func (cfg *ApiConfig) HandlerGetUserDividends(w http.ResponseWriter, r *http.Req
 		respondWithError(w, http.StatusNotFound, "Temettü bulunamadı", err)
 		return
 	}
+	if dividends == nil {
+		dividends = []database.GetUserDividendsRow{}
+	}
 	respondWithJSON(w, http.StatusOK, dividends)
+}
+
+// HandlerUpdateDividend — Mevcut bir temettü kaydını günceller.
+// @Summary Temettü Kaydını Güncelle
+// @Description Kullanıcının kaydettiği bir temettü gelirini günceller
+// @Tags Dividends
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path int true "Temettü ID"
+// @Param dividend body CreateDividendRequest true "Güncellenecek Temettü Bilgileri"
+// @Success 200 {object} database.Dividend
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /dividends/{id} [put]
+func (cfg *ApiConfig) HandlerUpdateDividend(w http.ResponseWriter, r *http.Request) {
+	urlID := chi.URLParam(r, "id")
+	userID, ok := r.Context().Value(UserIDKey).(int64)
+	if !ok {
+		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
+		return
+	}
+	dividendID, err := strconv.ParseInt(urlID, 10, 64)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Geçersiz temettü ID", err)
+		return
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	params := createDividendRequest{}
+	err = decoder.Decode(&params)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "İstek gövdesi çözümlenemedi", err)
+		return
+	}
+	if params.PaymentDate.IsZero() {
+		params.PaymentDate = time.Now().UTC()
+	}
+
+	if params.AmountPerShare != "" {
+		userTxs, err := cfg.DB.GetUserTransactionsForAsset(r.Context(), database.GetUserTransactionsForAssetParams{
+			UserID:  userID,
+			AssetID: params.AssetID,
+		})
+		if err == nil {
+			var historicalLot float64
+			for _, tx := range userTxs {
+				if !tx.TransactionDate.After(params.PaymentDate) {
+					amt, _ := strconv.ParseFloat(tx.Amount, 64)
+					if tx.Type == "BUY" {
+						historicalLot += amt
+					} else if tx.Type == "SELL" {
+						historicalLot -= amt
+					}
+				}
+			}
+			if historicalLot > 0 {
+				perShare, _ := strconv.ParseFloat(params.AmountPerShare, 64)
+				if perShare > 0 {
+					params.Amount = fmt.Sprintf("%.6f", historicalLot*perShare)
+				}
+			}
+		}
+	}
+
+	amount, _ := strconv.ParseFloat(params.Amount, 64)
+	if amount <= 0 || params.AssetID <= 0 {
+		respondWithError(w, http.StatusBadRequest, "Miktar veya Asset ID geçersiz", nil)
+		return
+	}
+
+	taxRate := 0.0
+	if params.TaxRate != "" {
+		tr, err := strconv.ParseFloat(params.TaxRate, 64)
+		if err == nil {
+			if tr > 1 {
+				tr = tr / 100
+			}
+			if tr >= 0 && tr < 1 {
+				taxRate = tr
+			}
+		}
+	}
+
+	var grossAmount, netAmount, taxAmount float64
+	if params.IsNet {
+		netAmount = amount
+		if taxRate > 0 && taxRate < 1 {
+			grossAmount = netAmount / (1.0 - taxRate)
+			taxAmount = grossAmount - netAmount
+		} else {
+			grossAmount = netAmount
+			taxAmount = 0
+		}
+	} else {
+		grossAmount = amount
+		taxAmount = grossAmount * taxRate
+		netAmount = grossAmount - taxAmount
+	}
+
+	cleanGross := fmt.Sprintf("%.6f", grossAmount)
+	cleanTax := fmt.Sprintf("%.6f", taxAmount)
+	cleanNet := fmt.Sprintf("%.6f", netAmount)
+
+	updated, err := cfg.DB.UpdateDividend(r.Context(), database.UpdateDividendParams{
+		ID:          dividendID,
+		UserID:      userID,
+		AssetID:     params.AssetID,
+		Amount:      cleanGross,
+		PaymentDate: params.PaymentDate,
+		GrossAmount: cleanGross,
+		TaxAmount:   cleanTax,
+		NetAmount:   cleanNet,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Temettü kaydı güncellenemedi", err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, updated)
 }
 
 // HandlerDeleteDividend — Bir temettü kaydını soft-delete ile siler.

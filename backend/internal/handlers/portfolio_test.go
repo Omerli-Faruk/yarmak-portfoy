@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 	"yarmak/internal/database"
-	"yarmak/internal/scraper"
+	"yarmak/internal/services"
 )
 
 func TestWeightedAverageCostCalculation(t *testing.T) {
@@ -52,7 +52,7 @@ func TestGoldMultiplierCalculation(t *testing.T) {
 
 func TestRoundFloat(t *testing.T) {
 	val := 1250.336789
-	rounded := round2(val)
+	rounded := services.Round2(val)
 	if rounded != 1250.34 {
 		t.Errorf("Yuvarlama hatalı! Beklenen: 1250.34, Gelen: %v", rounded)
 	}
@@ -66,7 +66,7 @@ func TestCalculateAssetHoldingAndCost(t *testing.T) {
 		{Type: "BUY", Amount: "50.000000", Price: "40.000000", Commission: "0.000000"},
 	}
 
-	lot, cost := scraper.CalculateAssetHoldingAndCost(txs)
+	lot, cost := services.CalculateAssetHoldingAndCost(txs)
 
 	if lot != 100.0 {
 		t.Errorf("Beklenen lot 100.0, gelen: %v", lot)

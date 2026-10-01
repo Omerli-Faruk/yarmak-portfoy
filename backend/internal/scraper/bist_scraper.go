@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -231,17 +232,22 @@ func FetchGoldHistory(rangeStr string) (float64, []StockHistoricalRecord, error)
 		return 0, nil, fmt.Errorf("dolar/TL verisi alınamadı: %w", err)
 	}
 
-	// Anlık gram altın fiyatı (Ons * USDTRY / 31.1034768)
+	// Anlık gram altın fiyatı (Öncelikli olarak Kapalıçarşı spot, fallback Ons * USDTRY / 31.1034768)
 	currentGram := (goldPrice * usdPrice) / 31.1034768
+	if spot, sErr := getSpotGramGoldPrice(); sErr == nil && spot > 0 {
+		currentGram = spot
+	}
 
 	if len(goldHist) == 0 {
 		return currentGram, nil, nil
 	}
 
-	// USD/TRY verilerini tarih bazlı hızlı erişim için saatlik anahtarla saklıyoruz
+	// USD/TRY verilerini hem saatlik hem günlük anahtarla saklıyoruz (tatil ve saat farkı koruması)
 	usdMap := make(map[int64]float64)
+	usdDayMap := make(map[int64]float64)
 	for _, u := range usdHist {
 		usdMap[u.Date.Unix()/3600] = u.Price
+		usdDayMap[u.Date.Unix()/86400] = u.Price
 	}
 
 	lastKnownUSD := usdPrice
@@ -252,9 +258,17 @@ func FetchGoldHistory(rangeStr string) (float64, []StockHistoricalRecord, error)
 	var combined []StockHistoricalRecord
 	for _, g := range goldHist {
 		hourKey := g.Date.Unix() / 3600
+		dayKey := g.Date.Unix() / 86400
 		uPrice, found := usdMap[hourKey]
 		if !found {
-			// En yakın önceki veya sonraki saati dene (-24h ... +24h)
+			// Günlük anahtarı kontrol et
+			if p, ok := usdDayMap[dayKey]; ok {
+				uPrice = p
+				found = true
+			}
+		}
+		if !found {
+			// En yakın önceki veya sonraki saati dene (-48h ... +48h)
 			for offset := int64(1); offset <= 48; offset++ {
 				if p, ok := usdMap[hourKey-offset]; ok {
 					uPrice = p
@@ -280,6 +294,11 @@ func FetchGoldHistory(rangeStr string) (float64, []StockHistoricalRecord, error)
 			})
 		}
 	}
+
+	// Kronolojik sıralama garantisi (eskiden yeniye)
+	sort.SliceStable(combined, func(i, j int) bool {
+		return combined[i].Date.Before(combined[j].Date)
+	})
 
 	return currentGram, combined, nil
 }
