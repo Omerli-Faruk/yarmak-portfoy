@@ -8,10 +8,8 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import {
     Clock,
     TrendingUp,
-    TrendingDown,
     Search,
     Trash2,
-    Filter,
     Plus,
     RefreshCw,
     AlertTriangle,
@@ -82,7 +80,8 @@ export default function TransactionHistoryTab({
     }, []);
 
     useEffect(() => {
-        loadTransactions();
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        void loadTransactions();
     }, [loadTransactions, refreshTrigger]);
 
     // İşlem Silme İşlemi
@@ -99,8 +98,9 @@ export default function TransactionHistoryTab({
             setDeletingTx(null);
             // Varlıkları ve maliyetleri yeniden hesaplamak için üst bileşeni tetikle
             onRefreshHoldings();
-        } catch (err: any) {
-            const msg = err.response?.data?.error || err.response?.data?.message || 'İşlem silinemedi. Lütfen tekrar deneyin.';
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { error?: string; message?: string } } };
+            const msg = error.response?.data?.error || error.response?.data?.message || 'İşlem silinemedi. Lütfen tekrar deneyin.';
             setDeleteError(msg);
         } finally {
             setDeleteSubmitting(false);
@@ -190,8 +190,9 @@ export default function TransactionHistoryTab({
             setEditingTx(null);
             // Portföy varlıklarını ve maliyetlerini yeniden hesaplamak için üst bileşeni tetikle
             onRefreshHoldings();
-        } catch (err: any) {
-            const msg = err.response?.data?.error || err.response?.data?.message || 'İşlem güncellenemedi. Lütfen değerleri kontrol edin.';
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { error?: string; message?: string } } };
+            const msg = error.response?.data?.error || error.response?.data?.message || 'İşlem güncellenemedi. Lütfen değerleri kontrol edin.';
             setEditError(msg);
         } finally {
             setEditSubmitting(false);
@@ -235,6 +236,7 @@ export default function TransactionHistoryTab({
 
     // Arama veya filtreler değiştiğinde ilk sayfaya dön
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setCurrentPage(1);
     }, [searchQuery, typeFilter, assetTypeFilter]);
 
@@ -302,7 +304,7 @@ export default function TransactionHistoryTab({
                 <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 sm:p-5 backdrop-blur-sm shadow-sm flex flex-col justify-between">
                     <div className="flex items-center justify-between text-xs text-slate-400">
                         <span className="font-semibold flex items-center gap-1.5">
-                            <Receipt className="size-4 text-primary" /> Toplam İşlem
+                            <Receipt className="size-4 text-slate-400" /> Toplam İşlem
                         </span>
                         <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-surface border border-border/50 text-slate-400">
                             Kayıtlar
@@ -324,9 +326,9 @@ export default function TransactionHistoryTab({
                 <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 sm:p-5 backdrop-blur-sm shadow-sm flex flex-col justify-between">
                     <div className="flex items-center justify-between text-xs text-slate-400">
                         <span className="font-semibold flex items-center gap-1.5">
-                            <ArrowDownRight className="size-4 text-emerald-400" /> Alış Hacmi
+                            <ArrowDownRight className="size-4 text-slate-400" /> Alış Hacmi
                         </span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/60 font-semibold">
                             Giriş
                         </span>
                     </div>
@@ -344,7 +346,7 @@ export default function TransactionHistoryTab({
                 <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 sm:p-5 backdrop-blur-sm shadow-sm flex flex-col justify-between">
                     <div className="flex items-center justify-between text-xs text-slate-400">
                         <span className="font-semibold flex items-center gap-1.5">
-                            <TrendingUp className="size-4 text-primary" /> Gerçekleşen K/Z
+                            <TrendingUp className="size-4 text-slate-400" /> Gerçekleşen K/Z
                         </span>
                         <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-semibold ${
                             metrics.totalRealizedPnL >= 0
@@ -370,9 +372,9 @@ export default function TransactionHistoryTab({
                 <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 sm:p-5 backdrop-blur-sm shadow-sm flex flex-col justify-between">
                     <div className="flex items-center justify-between text-xs text-slate-400">
                         <span className="font-semibold flex items-center gap-1.5">
-                            <Receipt className="size-4 text-amber-400" /> Komisyon Gideri
+                            <Receipt className="size-4 text-slate-400" /> Komisyon Gideri
                         </span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold">
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/60 font-semibold">
                             Gider
                         </span>
                     </div>
@@ -465,7 +467,7 @@ export default function TransactionHistoryTab({
                         className="p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-primary transition cursor-pointer disabled:opacity-50"
                         title="İşlemleri Yenile"
                     >
-                        <RefreshCw className={`size-4 ${refreshing ? 'animate-spin text-primary' : ''}`} />
+                        <RefreshCw className={`size-4 ${refreshing ? 'animate-spin text-slate-400' : ''}`} />
                     </button>
                     <button
                         onClick={onOpenAddTxModal}

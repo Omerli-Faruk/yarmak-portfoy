@@ -90,12 +90,13 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
         onErrorChange?.(isFuture);
     }, [isFuture, onErrorChange]);
 
-    // Sync state if value prop changes externally
-    useEffect(() => {
+    const [prevValue, setPrevValue] = useState(value);
+    if (value !== prevValue) {
+        setPrevValue(value);
         const parsed = parseValue(value);
         setCurrentDate(parsed.date);
         setCurrentTime(parsed.time);
-    }, [value]);
+    }
 
     // Emit combined ISO
     const emitChange = (newDate: string, newTime: string) => {

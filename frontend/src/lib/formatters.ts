@@ -44,3 +44,20 @@ export function formatDate(dateStr?: string | Date | null): string {
         return '—';
     }
 }
+
+// Sadece tarih formatlama (gün ay yıl)
+export function formatDateOnly(dateStr?: string | Date | null): string {
+    if (!dateStr) return '—';
+    try {
+        const d = dateStr instanceof Date ? dateStr : new Date(dateStr);
+        if (isNaN(d.getTime())) return '—';
+        return new Intl.DateTimeFormat('tr-TR', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+        }).format(d);
+    } catch {
+        return '—';
+    }
+}
+

@@ -9,6 +9,7 @@ import { PortfolioSummary, PortfolioSnapshot, UserHolding } from '@/types';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { InteractiveAreaChart, ChartPeriod } from '@/components/InteractiveAreaChart';
 import { formatCurrency } from '@/lib/formatters';
+import { useCurrency } from '@/hooks/useCurrency';
 import { fetchAssetSummariesBulk, invalidateAssetCache } from '@/lib/assetCache';
 import {
     TrendingUp,
@@ -47,28 +48,10 @@ export default function DashboardPage() {
     const [refreshing, setRefreshing] = useState(false);
 
     // Para birimi seçimi: 'TRY' veya 'USD'
-    const [currency, setCurrency] = useState<'TRY' | 'USD'>('TRY');
+    const { currency, toggleCurrency } = useCurrency();
 
     // Portföy grafik periyodu: 1D (Günlük), 1W, 1M, 3M, 6M, YTD, 1Y, 3Y, ALL
     const [chartPeriod, setChartPeriod] = useState<string>('1M');
-
-    // Sayfa ilk açıldığında localStorage'dan para birimi tercihini al
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('preferred_currency');
-            if (saved === 'USD' || saved === 'TRY') {
-                setCurrency(saved);
-            }
-        }
-    }, []);
-
-    const toggleCurrency = () => {
-        const next = currency === 'TRY' ? 'USD' : 'TRY';
-        setCurrency(next);
-        if (typeof window !== 'undefined') {
-            localStorage.setItem('preferred_currency', next);
-        }
-    };
 
     const loadDashboardData = async (isManualRefresh = false) => {
         try {
@@ -80,7 +63,7 @@ export default function DashboardPage() {
                 api.get<PortfolioSummary>('/portfolio/summary').catch(() => null),
                 api.get<PortfolioSnapshot[]>('/portfolio/history').catch(() => null),
                 api.get<UserHolding[]>('/portfolio/holdings').catch(() => null),
-                api.get<any[]>('/dividends').catch(() => null),
+                api.get<{ tax_amount?: string; TaxAmount?: string }[]>('/dividends').catch(() => null),
             ]);
 
             if (sumRes?.data) setSummary(sumRes.data);
@@ -109,13 +92,15 @@ export default function DashboardPage() {
 
     useEffect(() => {
         if (!authLoading && !user) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setLoading(false);
             router.push('/login');
             return;
         }
         if (user) {
-            loadDashboardData();
+            void loadDashboardData();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user, authLoading]);
 
     // Dolar Kuru (summary'den gelen canlı kur veya varsayılan)
@@ -156,105 +141,29 @@ export default function DashboardPage() {
         };
     }, [dividends, summary]);
 
-    // Dönemsel Getiri Oranları Listesi (Buton altındaki rozetler için)
+    // Periyot Listesi (TradingView & Google Finance standardı temiz butonlar)
     const dashboardPeriods: ChartPeriod[] = useMemo(() => {
-        if (!summary) return [];
-        const currentVal = summary.total_value;
-        const now = Date.now();
-
-        // Tarih sıralı ve geçerli snapshot listesi
-        const sortedHistory = [...(history || [])]
-            .filter(h => {
-                const v = parseFloat(h.total_value);
-                return !isNaN(v) && v > 0;
-            })
-            .sort((a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime());
-
-        const earliestSnapshot = sortedHistory.length > 0 ? sortedHistory[0] : null;
-        const earliestVal = earliestSnapshot ? parseFloat(earliestSnapshot.total_value) : currentVal;
-        const earliestTime = earliestSnapshot ? new Date(earliestSnapshot.recorded_at).getTime() : now;
-
-        // Belirli bir zaman damgasına en yakın portföy değerini bulma
-        const getValAtTime = (targetTime: number): number => {
-            if (sortedHistory.length === 0) {
-                return currentVal;
-            }
-            if (targetTime <= earliestTime) {
-                return earliestVal;
-            }
-            let closestVal = earliestVal;
-            let minDiff = Infinity;
-            for (const h of sortedHistory) {
-                const t = new Date(h.recorded_at).getTime();
-                const diff = Math.abs(t - targetTime);
-                if (diff < minDiff) {
-                    minDiff = diff;
-                    const parsed = parseFloat(h.total_value);
-                    if (!isNaN(parsed) && parsed > 0) closestVal = parsed;
-                }
-            }
-            return closestVal;
-        };
-
-        const calcReturn = (pastVal: number | null): number | null => {
-            if (pastVal === null || pastVal <= 0 || currentVal <= 0) return null;
-            return ((currentVal - pastVal) / pastVal) * 100;
-        };
-
-        // 1D: Varlıkların assetSummaries üzerinden ağırlıklı hesaplama desteği
-        let total1dBase = 0;
-        let has1dData = false;
-        for (const h of holdings) {
-            const sum = assetSummaries[h.symbol];
-            const r1 = sum?.['1D'];
-            if (r1 !== undefined && !isNaN(r1)) {
-                has1dData = true;
-                total1dBase += r1 <= -100 ? 0 : h.total_value / (1 + r1 / 100);
-            } else {
-                total1dBase += h.total_value;
-            }
-        }
-        const calc1dReturn = has1dData && total1dBase > 0 ? ((currentVal - total1dBase) / total1dBase) * 100 : 0;
-
-        let val1D = getValAtTime(now - 86400000);
-        if (val1D === currentVal && sortedHistory.length > 1) {
-            val1D = parseFloat(sortedHistory[sortedHistory.length - 2].total_value);
-        }
-
-        const startOfYear = new Date(new Date().getFullYear(), 0, 1).getTime();
-        const pr = summary.period_returns;
-
-        const ret1D = (pr?.['1D'] !== undefined && pr['1D'] !== 0)
-            ? pr['1D']
-            : (has1dData ? calc1dReturn : calcReturn(val1D));
-
-        const ret1W = pr?.['1W'] !== undefined && pr['1W'] !== 0 ? pr['1W'] : calcReturn(getValAtTime(now - 7 * 86400000));
-        const ret1M = pr?.['1M'] !== undefined && pr['1M'] !== 0 ? pr['1M'] : calcReturn(getValAtTime(now - 30 * 86400000));
-        const ret3M = pr?.['3M'] !== undefined && pr['3M'] !== 0 ? pr['3M'] : calcReturn(getValAtTime(now - 90 * 86400000));
-        const ret6M = pr?.['6M'] !== undefined && pr['6M'] !== 0 ? pr['6M'] : calcReturn(getValAtTime(now - 180 * 86400000));
-        const retYTD = pr?.['YTD'] !== undefined && pr['YTD'] !== 0 ? pr['YTD'] : calcReturn(getValAtTime(startOfYear));
-        const ret1Y = pr?.['1Y'] !== undefined && pr['1Y'] !== 0 ? pr['1Y'] : calcReturn(getValAtTime(now - 365 * 86400000));
-        const ret3Y = pr?.['3Y'] !== undefined && pr['3Y'] !== 0 ? pr['3Y'] : calcReturn(getValAtTime(now - 3 * 365 * 86400000));
-        const ret5Y = pr?.['5Y'] !== undefined ? pr['5Y'] : (pr?.['ALL'] !== undefined ? pr['ALL'] : summary.capital_profit_loss_percentage);
-
         return [
-            { id: '1D', label: '1G', changePercent: ret1D },
-            { id: '1W', label: '1H', changePercent: ret1W },
-            { id: '1M', label: '1A', changePercent: ret1M },
-            { id: '3M', label: '3A', changePercent: ret3M },
-            { id: '6M', label: '6A', changePercent: ret6M },
-            { id: 'YTD', label: 'YBB', changePercent: retYTD },
-            { id: '1Y', label: '1Y', changePercent: ret1Y },
-            { id: '3Y', label: '3Y', changePercent: ret3Y },
-            { id: 'ALL', label: 'Tümü', changePercent: ret5Y },
+            { id: '1D', label: '1G' },
+            { id: '1W', label: '1H' },
+            { id: '1M', label: '1A' },
+            { id: '3M', label: '3A' },
+            { id: '6M', label: '6A' },
+            { id: 'YTD', label: 'YBB' },
+            { id: '1Y', label: '1Y' },
+            { id: '3Y', label: '3Y' },
+            { id: '5Y', label: '5Y' },
+            { id: 'ALL', label: 'Tümü' },
         ];
-    }, [summary, history, holdings, assetSummaries]);
+    }, []);
 
     // Zaman İçinde Portföy Gelişim Grafiği Verisi
     const chartData = useMemo(() => {
         if (!summary) return [];
 
-        const currentVal = summary.total_value;
+        const currentVal = holdings.length > 0
+            ? holdings.reduce((sum, h) => sum + (h.total_value || 0), 0) + (summary?.total_dividends || 0)
+            : (summary.total_value || 0);
         const now = new Date();
         const nowMs = now.getTime();
 
@@ -265,6 +174,36 @@ export default function DashboardPage() {
                 return !isNaN(v) && v > 0;
             })
             .sort((a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime());
+
+        // Portföyün gerçek başlangıç zamanı (ilk işlem tarihi, ilk snapshot veya üyelik)
+        let inceptionTime = nowMs;
+        let hasInception = false;
+
+        if (holdings && holdings.length > 0) {
+            for (const h of holdings) {
+                if (h.first_buy_date) {
+                    const t = new Date(h.first_buy_date).getTime();
+                    if (!isNaN(t) && t < inceptionTime) {
+                        inceptionTime = t;
+                        hasInception = true;
+                    }
+                }
+            }
+        }
+        if (sortedHistory && sortedHistory.length > 0) {
+            const firstSnapT = new Date(sortedHistory[0].recorded_at).getTime();
+            if (!isNaN(firstSnapT) && firstSnapT < inceptionTime) {
+                inceptionTime = firstSnapT;
+                hasInception = true;
+            }
+        }
+        if (user?.created_at && !hasInception) {
+            const userCreateTime = new Date(user.created_at).getTime();
+            if (!isNaN(userCreateTime)) {
+                inceptionTime = userCreateTime;
+                hasInception = true;
+            }
+        }
 
         // 1D (Günlük) Görünümü: 5 dakikada bir (10:00 - 18:05 BIST Seans Saatleri)
         if (chartPeriod === '1D') {
@@ -386,106 +325,210 @@ export default function DashboardPage() {
             return lastVal + (currentVal - lastVal) * p;
         };
 
-        // Zaman hedeflerini kullanıcının istediği frekanslara göre üret:
+        // Zaman hedeflerini diğer finansal grafikler gibi kesintisiz ve günlük frekansla üret:
         const timeTargets: { label: string; timeMs: number }[] = [];
         let spanStartTime = nowMs;
 
+        const formatDayLabel = (d: Date, includeYear = false): string => {
+            if (includeYear) {
+                return d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: '2-digit' });
+            }
+            return d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+        };
+
         if (chartPeriod === '1W') {
             spanStartTime = nowMs - 7 * 86400000;
+            // 1H: 30 dakikada bir (10:00 - 18:00 arası her 30 dk)
             for (let d = 7; d >= 0; d--) {
                 const dayDate = new Date(nowMs - d * 86400000);
                 const dayOfWeek = dayDate.getDay();
                 if (dayOfWeek === 0 || dayOfWeek === 6) continue;
-                const dayLabel = dayDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
-                for (let h = 10; h <= 18; h += 2) {
+                const dayLabel = formatDayLabel(dayDate);
+                for (let h = 10; h <= 18; h++) {
+                    for (let m = 0; m < 60; m += 30) {
+                        if (h === 18 && m > 0) break;
+                        const pt = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), h, m);
+                        if (pt.getTime() > nowMs) continue;
+                        timeTargets.push({
+                            label: `${dayLabel} ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
+                            timeMs: pt.getTime()
+                        });
+                    }
+                }
+            }
+        } else if (chartPeriod === '1M') {
+            spanStartTime = nowMs - 30 * 86400000;
+            // 1A: 1 saatte bir (İş günlerinde 10:00 - 18:00 her saat başı)
+            for (let d = 30; d >= 0; d--) {
+                const dayDate = new Date(nowMs - d * 86400000);
+                const dayOfWeek = dayDate.getDay();
+                if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+                const dayLabel = formatDayLabel(dayDate);
+                for (let h = 10; h <= 18; h++) {
                     const pt = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), h, 0);
+                    if (pt.getTime() > nowMs) continue;
                     timeTargets.push({
                         label: `${dayLabel} ${String(h).padStart(2, '0')}:00`,
                         timeMs: pt.getTime()
                     });
                 }
             }
-        } else if (chartPeriod === '1M' || chartPeriod === '3M') {
-            const totalDays = chartPeriod === '1M' ? 30 : 90;
-            spanStartTime = nowMs - totalDays * 86400000;
-            for (let d = totalDays; d >= 0; d -= (chartPeriod === '1M' ? 1 : 2)) {
+        } else if (chartPeriod === '3M') {
+            spanStartTime = nowMs - 90 * 86400000;
+            // 3A: 1 saatte bir (İş günlerinde 10:00 - 18:00 her saat başı)
+            for (let d = 90; d >= 0; d--) {
                 const dayDate = new Date(nowMs - d * 86400000);
                 const dayOfWeek = dayDate.getDay();
                 if (dayOfWeek === 0 || dayOfWeek === 6) continue;
-                const pt = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 18, 0);
-                timeTargets.push({
-                    label: d === 0 ? 'Bugün' : dayDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }),
-                    timeMs: pt.getTime()
-                });
+                const isDiffYear = dayDate.getFullYear() !== now.getFullYear();
+                const dayLabel = formatDayLabel(dayDate, isDiffYear);
+                for (let h = 10; h <= 18; h++) {
+                    const pt = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), h, 0);
+                    if (pt.getTime() > nowMs) continue;
+                    timeTargets.push({
+                        label: `${dayLabel} ${String(h).padStart(2, '0')}:00`,
+                        timeMs: pt.getTime()
+                    });
+                }
             }
         } else if (chartPeriod === '6M') {
             spanStartTime = nowMs - 180 * 86400000;
-            for (let d = 180; d >= 0; d -= 5) {
+            // 6A: Günde 2 kere (Açılış 10:00 ve Kapanış 18:00)
+            for (let d = 180; d >= 0; d--) {
                 const dayDate = new Date(nowMs - d * 86400000);
-                const pt = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 18, 0);
-                timeTargets.push({
-                    label: d === 0 ? 'Bugün' : dayDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }),
-                    timeMs: pt.getTime()
-                });
+                const dayOfWeek = dayDate.getDay();
+                if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+                const isDiffYear = dayDate.getFullYear() !== now.getFullYear();
+                const dayLabel = formatDayLabel(dayDate, isDiffYear);
+
+                const ptOpen = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 10, 0);
+                if (ptOpen.getTime() <= nowMs) {
+                    timeTargets.push({
+                        label: `${dayLabel} 10:00`,
+                        timeMs: ptOpen.getTime()
+                    });
+                }
+
+                const ptClose = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 18, 0);
+                if (ptClose.getTime() <= nowMs) {
+                    timeTargets.push({
+                        label: `${dayLabel} 18:00`,
+                        timeMs: ptClose.getTime()
+                    });
+                }
             }
         } else if (chartPeriod === 'YTD') {
             const startOfYear = new Date(now.getFullYear(), 0, 1).getTime();
             spanStartTime = startOfYear;
             const daysSinceYearStart = Math.max(1, Math.floor((nowMs - startOfYear) / 86400000));
-            const step = Math.max(1, Math.floor(daysSinceYearStart / 30));
-            for (let d = daysSinceYearStart; d >= 0; d -= step) {
+            // YBB: Günde 1 kere (İş günlerinde 18:00 kapanış)
+            for (let d = daysSinceYearStart; d >= 0; d--) {
                 const dayDate = new Date(nowMs - d * 86400000);
                 const dayOfWeek = dayDate.getDay();
                 if (dayOfWeek === 0 || dayOfWeek === 6) continue;
                 const pt = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 18, 0);
-                timeTargets.push({
-                    label: d === 0 ? 'Bugün' : dayDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }),
-                    timeMs: pt.getTime()
-                });
+                if (pt.getTime() > nowMs && d === 0) {
+                    timeTargets.push({
+                        label: 'Bugün',
+                        timeMs: nowMs
+                    });
+                } else if (pt.getTime() <= nowMs) {
+                    timeTargets.push({
+                        label: d === 0 ? 'Bugün' : formatDayLabel(dayDate),
+                        timeMs: pt.getTime()
+                    });
+                }
             }
         } else if (chartPeriod === '1Y') {
             spanStartTime = nowMs - 365 * 86400000;
-            for (let d = 365; d >= 0; d -= 7) {
+            // 1Y: Günde 1 kere (İş günlerinde 18:00 kapanış)
+            for (let d = 365; d >= 0; d--) {
                 const dayDate = new Date(nowMs - d * 86400000);
+                const dayOfWeek = dayDate.getDay();
+                if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+                const isDiffYear = dayDate.getFullYear() !== now.getFullYear();
                 const pt = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 18, 0);
-                timeTargets.push({
-                    label: d === 0 ? 'Bugün' : dayDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }),
-                    timeMs: pt.getTime()
-                });
+                if (pt.getTime() > nowMs && d === 0) {
+                    timeTargets.push({
+                        label: 'Bugün',
+                        timeMs: nowMs
+                    });
+                } else if (pt.getTime() <= nowMs) {
+                    timeTargets.push({
+                        label: d === 0 ? 'Bugün' : formatDayLabel(dayDate, isDiffYear),
+                        timeMs: pt.getTime()
+                    });
+                }
             }
         } else if (chartPeriod === '3Y') {
             spanStartTime = nowMs - 3 * 365 * 86400000;
-            for (let w = 156; w >= 0; w -= 4) {
+            // 3Y: Haftada bir (Cuma günleri seans kapanışı 18:00)
+            for (let w = 156; w >= 0; w--) {
                 const weekDate = new Date(nowMs - w * 7 * 86400000);
+                const day = weekDate.getDay();
+                const diff = (5 - day);
+                weekDate.setDate(weekDate.getDate() + diff);
                 const pt = new Date(weekDate.getFullYear(), weekDate.getMonth(), weekDate.getDate(), 18, 0);
-                timeTargets.push({
-                    label: w === 0 ? 'Bugün' : weekDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: '2-digit' }),
-                    timeMs: pt.getTime()
-                });
+                if (pt.getTime() <= nowMs) {
+                    timeTargets.push({
+                        label: w === 0 ? 'Bugün' : formatDayLabel(weekDate, true),
+                        timeMs: pt.getTime()
+                    });
+                }
             }
-        } else { // 'ALL'
+        } else { // '5Y' veya 'ALL'
             spanStartTime = nowMs - 5 * 365 * 86400000;
-            for (let m = 60; m >= 0; m -= 3) {
+            // 5Y: Ayda bir (Her ayın 15'i saat 18:00)
+            for (let m = 60; m >= 0; m--) {
                 const mDate = new Date(now.getFullYear(), now.getMonth() - m, 15, 18, 0);
-                timeTargets.push({
-                    label: m === 0 ? 'Bugün' : mDate.toLocaleDateString('tr-TR', { month: 'short', year: '2-digit' }),
-                    timeMs: mDate.getTime()
-                });
+                if (mDate.getTime() <= nowMs) {
+                    timeTargets.push({
+                        label: m === 0 ? 'Bugün' : mDate.toLocaleDateString('tr-TR', { month: 'short', year: '2-digit' }),
+                        timeMs: mDate.getTime()
+                    });
+                }
             }
         }
 
-        const usedLabels = new Set<string>();
-        return timeTargets.map((item, idx) => {
-            let label = item.label;
-            if (usedLabels.has(label)) {
-                label = `${label} (${idx})`;
-            }
-            usedLabels.add(label);
+        // Doğal Aralık (Inception Date) Kısıtlaması:
+        // Eğer seçilen periyot (örn 1Y, 5Y) kullanıcının gerçek portföy başlangıcından daha eskiyse,
+        // grafiği kullanıcının başlangıç tarihine kilitleriz (öncesine sahte çizgi çizilmez).
+        const effectiveStartTime = hasInception ? Math.max(spanStartTime, inceptionTime) : spanStartTime;
 
-            let val = interpolateVal(item.timeMs, spanStartTime);
+        let filteredTargets = timeTargets.filter(t => t.timeMs >= effectiveStartTime - (4 * 3600 * 1000));
+
+        // Eğer aralık kısıtlandığı için hiç nokta kalmadıysa veya 1 nokta kaldıysa en az 2 nokta sağla:
+        if (filteredTargets.length === 0) {
+            filteredTargets = [
+                { label: 'Başlangıç', timeMs: effectiveStartTime },
+                { label: 'Bugün', timeMs: nowMs }
+            ];
+        } else if (filteredTargets.length === 1) {
+            filteredTargets.unshift({
+                label: 'Başlangıç',
+                timeMs: effectiveStartTime
+            });
+        } else if (filteredTargets[0].timeMs > effectiveStartTime + 12 * 3600 * 1000) {
+            // İlk hedef nokta ile portföy başlangıcı arasında boşluk varsa başlangıç noktasını en başa oturt
+            filteredTargets.unshift({
+                label: formatDayLabel(new Date(effectiveStartTime)),
+                timeMs: effectiveStartTime
+            });
+        }
+
+        const usedLabels = new Map<string, number>();
+        return filteredTargets.map((item, idx) => {
+            let label = item.label;
+            const count = usedLabels.get(label) || 0;
+            if (count > 0) {
+                label = `${label} (${count + 1})`;
+            }
+            usedLabels.set(item.label, count + 1);
+
+            let val = interpolateVal(item.timeMs, effectiveStartTime);
             if (idx === 0 && effectiveBaseVal > 0) {
                 val = effectiveBaseVal;
-            } else if (idx === timeTargets.length - 1) {
+            } else if (idx === filteredTargets.length - 1) {
                 val = currentVal;
             }
 
@@ -495,7 +538,7 @@ export default function DashboardPage() {
                 raw: val,
             };
         });
-    }, [summary, history, chartPeriod, currency, usdRate, holdings, assetSummaries]);
+    }, [summary, history, chartPeriod, currency, usdRate, holdings, assetSummaries, user]);
 
     // Kategori Dağılım Grafiği Verisi (Donut) — Varlık Sınıfına Özgü Belirgin Finansal Renkler
     const categoryData = useMemo(() => {
@@ -541,11 +584,26 @@ export default function DashboardPage() {
         return <LoadingSpinner withLogo message="Portföy verileri yükleniyor..." />;
     }
 
-    const totalVal = summary?.total_value || 0;
+    const totalDividends = summary?.total_dividends || 0;
+    const equityVal = holdings.length > 0
+        ? holdings.reduce((sum, h) => sum + (h.total_value || 0), 0)
+        : (summary?.total_equity_value ?? summary?.total_value ?? 0);
+    // Toplam Portföy Değeri = Açık Hisse/Fon Varlıkları + Nakit Temettü Gelirleri
+    const totalVal = equityVal + totalDividends;
     const totalCost = summary?.total_cost || 0;
-    const totalPnl = summary?.capital_profit_loss || 0;
-    const totalPnlPct = summary?.capital_profit_loss_percentage || 0;
-    const isProfit = totalPnl >= 0;
+    const realizedPnL = summary?.realized_profit_loss || 0;
+    const capitalPnl = summary?.capital_profit_loss || 0;
+
+    // Toplam Portföy Getirisi (Sermaye Kazancı + Nakit Temettü + Gerçekleşen Kâr/Zarar)
+    const totalCombinedProfit = summary?.total_combined_profit !== undefined
+        ? summary.total_combined_profit
+        : (capitalPnl + totalDividends + realizedPnL);
+
+    const totalReturnPct = summary?.total_return_percentage !== undefined
+        ? summary.total_return_percentage
+        : (totalCost > 0 ? (totalCombinedProfit / totalCost) * 100 : 0);
+
+    const isProfit = totalCombinedProfit >= 0;
 
     return (
         <div className="min-h-screen text-slate-100 py-6 sm:py-8 px-3 sm:px-6 lg:px-8">
@@ -557,8 +615,8 @@ export default function DashboardPage() {
                             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
                                 Portföy Genel Bakış
                             </h1>
-                            <span className="px-3 py-1 text-xs font-semibold rounded-full bg-[#1A9FD3]/10 text-[#1A9FD3] border border-[#1A9FD3]/20">
-                                Canlı
+                            <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                                15 Dk. Gecikmeli
                             </span>
                         </div>
                         <p className="text-sm text-slate-400 mt-1">
@@ -567,15 +625,17 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3">
-                        {/* 🔘 TEK TIKLA PARA BİRİMİ DÖNÜŞTÜRÜCÜ (TRY ⇄ USD) */}
+                        {/* Para Birimi Dönüştürücü (TRY / USD) */}
                         <button
                             onClick={toggleCurrency}
                             title="Tüm değerleri Dolar veya TL cinsinden görüntüle"
                             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-sm border bg-slate-800 border-slate-700 hover:border-[#1A9FD3] hover:text-[#1A9FD3] active:scale-95 cursor-pointer text-slate-100"
                         >
-                            <span className="text-base">{currency === 'TRY' ? '🇹🇷' : '🇺🇸'}</span>
+                            <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-slate-700/80 text-slate-200">
+                                {currency}
+                            </span>
                             <span>Para Birimi:</span>
-                            <span className={`px-2 py-0.5 rounded-md font-extrabold ${currency === 'TRY' ? 'bg-[#1A9FD3]/15 text-[#1A9FD3]' : 'bg-[#1A9FD3]/15 text-[#1A9FD3]'}`}>
+                            <span className="px-2 py-0.5 rounded-md font-extrabold bg-[#1A9FD3]/15 text-[#1A9FD3]">
                                 {currency === 'TRY' ? '₺ TRY' : '$ USD'}
                             </span>
                         </button>
@@ -587,7 +647,7 @@ export default function DashboardPage() {
                             className="p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-[#1A9FD3] hover:border-[#1A9FD3] transition disabled:opacity-50 cursor-pointer"
                             title="Portföyü Yenile (Önbelleği Temizle)"
                         >
-                            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-[#1A9FD3]' : ''}`} />
+                            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-slate-400' : ''}`} />
                         </button>
 
                         {/* Varlıklarım Sayfasına Geçiş Butonu */}
@@ -620,6 +680,16 @@ export default function DashboardPage() {
                                     : `${totalVal.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺ (TL Karşılığı)`
                                 }
                             </p>
+                            {totalDividends > 0 && (
+                                <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs">
+                                    <span className="text-slate-400">
+                                        Varlıklar: <strong className="text-slate-300 font-mono font-medium">{fmt(equityVal)}</strong>
+                                    </span>
+                                    <span className="text-slate-400">
+                                        Nakit Temettü: <strong className="font-semibold text-emerald-400 font-mono tabular-nums">+{fmt(totalDividends)}</strong>
+                                    </span>
+                                </div>
+                            )}
                         </div>
                         <div className="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs">
                             <span className="text-slate-400 font-medium">Canlı Kur:</span>
@@ -629,30 +699,46 @@ export default function DashboardPage() {
 
                     {/* DİĞER 3 İKİNCİL KART */}
                     <div className="lg:col-span-12 xl:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        {/* KART 2: Net Kâr / Zarar */}
+                        {/* KART 2: Toplam Net Getiri (Sermaye + Temettü + Satış Kârı) */}
                         <div className="bg-slate-900 border border-slate-800/90 rounded-2xl p-5 relative overflow-hidden shadow-sm flex flex-col justify-between">
                             <div className="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
-                                <span>Net Kâr / Zarar</span>
+                                <span>Toplam Getiri (Net K/Z)</span>
                                 {isProfit ? (
-                                    <TrendingUp className="w-4 h-4 text-slate-400" />
+                                    <TrendingUp className="w-4 h-4 text-emerald-400" />
                                 ) : (
-                                    <TrendingDown className="w-4 h-4 text-slate-400" />
+                                    <TrendingDown className="w-4 h-4 text-rose-400" />
                                 )}
                             </div>
                             <div>
                                 <p className={`text-xl sm:text-2xl font-black tracking-tight tabular-nums ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                    {fmt(totalPnl, true)}
+                                    {fmt(totalCombinedProfit, true)}
                                 </p>
                                 <div className="flex items-center gap-1.5 mt-2">
                                     <span className={`inline-flex items-center text-xs font-bold px-2 py-0.5 rounded font-mono tabular-nums ${isProfit ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-                                        {totalPnl >= 0 ? '+' : ''}{totalPnlPct.toFixed(2)}%
+                                        {totalCombinedProfit >= 0 ? '+' : ''}{totalReturnPct.toFixed(2)}%
                                     </span>
-                                    <span className="text-xs text-slate-400">Getiri</span>
+                                    <span className="text-xs text-slate-400">Toplam Getiri</span>
                                 </div>
                             </div>
-                            <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                                <span className="text-slate-400">Maliyet:</span>
-                                <span className="font-semibold text-slate-300 font-mono tabular-nums">{fmt(totalCost)}</span>
+                            <div className="mt-4 pt-3 border-t border-slate-800/80 space-y-1 text-xs">
+                                <div className="flex justify-between items-center text-slate-400">
+                                    <span>Maliyet:</span>
+                                    <span className="font-semibold text-slate-300 font-mono tabular-nums">{fmt(totalCost)}</span>
+                                </div>
+                                {totalDividends > 0 && (
+                                    <div className="flex justify-between items-center text-slate-400">
+                                        <span className="text-emerald-400/90">Temettü:</span>
+                                        <span className="font-semibold text-emerald-400 font-mono tabular-nums">+{fmt(totalDividends)}</span>
+                                    </div>
+                                )}
+                                {realizedPnL !== 0 && (
+                                    <div className="flex justify-between items-center text-slate-400">
+                                        <span>Satış K/Z:</span>
+                                        <span className={`font-semibold font-mono tabular-nums ${realizedPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {fmt(realizedPnL, true)}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -742,7 +828,7 @@ export default function DashboardPage() {
                     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
                         <div className="flex items-center justify-between pb-4 border-b border-slate-800/80 mb-4">
                             <div className="flex items-center gap-2">
-                                <PieIcon className="w-5 h-5 text-[#1A9FD3]" />
+                                <PieIcon className="w-5 h-5 text-slate-400" />
                                 <h3 className="text-base font-bold text-white">Varlık Sınıfı Dağılımı</h3>
                             </div>
                             <span className="text-xs text-slate-400">Yüzdesel Pay</span>
@@ -771,7 +857,7 @@ export default function DashboardPage() {
                                                 contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '0.5rem', color: '#fff' }}
                                                 itemStyle={{ color: '#f8fafc' }}
                                                 labelStyle={{ color: '#ffffff', fontWeight: 600 }}
-                                                formatter={(val: any) => [fmt(Number(val)), 'Değer']}
+                                                formatter={(val) => [fmt(Number(val)), 'Değer']}
                                             />
                                         </PieChart>
                                     </ResponsiveContainer>
@@ -803,7 +889,7 @@ export default function DashboardPage() {
                     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
                         <div className="flex items-center justify-between pb-4 border-b border-slate-800/80 mb-4">
                             <div className="flex items-center gap-2">
-                                <BarChart3 className="w-5 h-5 text-emerald-400" />
+                                <BarChart3 className="w-5 h-5 text-slate-400" />
                                 <h3 className="text-base font-bold text-white">Kategori Kâr / Zarar Getirisi</h3>
                             </div>
                             <span className="text-xs text-slate-400">{currency === 'TRY' ? 'TL Bazında' : 'Dolar Bazında'}</span>
@@ -836,7 +922,7 @@ export default function DashboardPage() {
                                             }}
                                             itemStyle={{ color: '#f8fafc', fontWeight: 500 }}
                                             labelStyle={{ color: '#ffffff', fontWeight: 700, marginBottom: '4px' }}
-                                            formatter={(val: any) => [
+                                            formatter={(val) => [
                                                 currency === 'USD' ? `$ ${Number(val).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : `₺ ${Number(val).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`,
                                                 'Kâr / Zarar',
                                             ]}
@@ -877,6 +963,16 @@ export default function DashboardPage() {
                         className="px-6 py-3 rounded-xl bg-[#1A9FD3] hover:bg-[#0C6991] text-white font-bold text-xs transition shadow-sm shadow-[#1A9FD3]/20 shrink-0"
                     >
                         Varlıklarımı Yönet & Grupla →
+                    </Link>
+                </div>
+
+                {/* 6. VERİ KAYNAĞI VE YASAL UYARI DİPNOTU */}
+                <div className="pt-2 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[11px] text-slate-500 border-t border-slate-800/60 font-mono">
+                    <p>
+                        * Portföy değerleri 15 dk gecikmeli BIST ve resmi TEFAS takas verilerine dayanır. Bilgilendirme amaçlıdır, yatırım tavsiyesi değildir.
+                    </p>
+                    <Link href="/disclaimer" className="text-slate-400 hover:text-slate-200 underline transition shrink-0">
+                        Yasal Uyarı &amp; Çekince
                     </Link>
                 </div>
             </div>

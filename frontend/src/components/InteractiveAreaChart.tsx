@@ -68,6 +68,7 @@ const DEFAULT_PERIODS: ChartPeriod[] = [
     { id: 'YTD', label: 'YBB' },
     { id: '1Y', label: '1Y' },
     { id: '3Y', label: '3Y' },
+    { id: '5Y', label: '5Y' },
     { id: 'ALL', label: 'Tümü' },
 ];
 
@@ -125,9 +126,9 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
     }, [data, brushRange]);
 
     // Zirve (Max), Dip (Min), İlk ve Son Değer
-    const { minVal, maxVal, firstVal, lastVal, periodReturn } = useMemo(() => {
+    const { minVal, maxVal, periodReturn } = useMemo(() => {
         if (!visibleData || visibleData.length === 0) {
-            return { minVal: 0, maxVal: 0, firstVal: 0, lastVal: 0, periodReturn: 0 };
+            return { minVal: 0, maxVal: 0, periodReturn: 0 };
         }
         let min = getVal(visibleData[0]);
         let max = min;
@@ -154,14 +155,21 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
         return periods.find(p => p.id === activePeriod);
     }, [periods, activePeriod]);
 
-    // Eğer kullanıcı fırçayı (brush) daraltmadıysa ve seçili periyodun resmi getiri değeri varsa onu kullan;
-    // aksi halde (fırça ile özel bir aralık seçildiğinde) o aralığın ilk ve son veri noktası arasındaki getiriyi kullan.
+    // Grafik Getirisi: 1D hariç tüm periyotlarda ekranda görünen gerçek veri noktalarının
+    // ilk ve son değeri arasındaki değişimi (periodReturn) esas alır.
+    // Böylece grafikte düşen bir eğri yukarıda pozitif (yeşil) görünmez!
     const effectiveReturn = useMemo(() => {
+        if (!isCustomRangeSelected && activePeriod === '1D' && activePeriodObj && activePeriodObj.changePercent !== undefined && activePeriodObj.changePercent !== null) {
+            return activePeriodObj.changePercent;
+        }
+        if (periodReturn !== undefined && periodReturn !== null && !isNaN(periodReturn)) {
+            return periodReturn;
+        }
         if (!isCustomRangeSelected && activePeriodObj && activePeriodObj.changePercent !== undefined && activePeriodObj.changePercent !== null) {
             return activePeriodObj.changePercent;
         }
         return periodReturn;
-    }, [isCustomRangeSelected, activePeriodObj, periodReturn]);
+    }, [activePeriod, isCustomRangeSelected, activePeriodObj, periodReturn]);
 
     // Dinamik renk belirleme
     const { strokeColor, fillColor } = useMemo(() => {
@@ -210,7 +218,7 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
         };
     }, []);
 
-    const handleInternalBrushChange = useCallback((e: any) => {
+    const handleInternalBrushChange = useCallback((e: { startIndex?: number; endIndex?: number } | null) => {
         if (!e || e.startIndex === undefined || e.endIndex === undefined) return;
         if (e.startIndex === lastRangeRef.current.start && e.endIndex === lastRangeRef.current.end) return;
         lastRangeRef.current = { start: e.startIndex, end: e.endIndex };
@@ -255,36 +263,18 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
                     <div className="flex bg-slate-800/90 rounded-xl p-1 border border-slate-700/60 overflow-x-auto no-scrollbar touch-pan-x max-w-full gap-1">
                         {periods.map(p => {
                             const isActive = activePeriod === p.id;
-                            const hasChange = p.changePercent !== undefined && p.changePercent !== null;
-                            const changeVal = p.changePercent || 0;
-
                             return (
                                 <button
                                     key={p.id}
                                     type="button"
                                     onClick={() => onPeriodChange(p.id)}
-                                    className={`group/pill flex flex-col items-center justify-center px-2.5 sm:px-3 py-1.5 min-w-[42px] sm:min-w-[48px] text-xs font-bold rounded-lg transition-all shrink-0 cursor-pointer ${
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all shrink-0 cursor-pointer ${
                                         isActive
-                                            ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white font-bold shadow-sm shadow-[#1A9FD3]/20'
-                                            : 'text-slate-300 hover:text-[#1A9FD3] hover:bg-[#1A9FD3]/15'
+                                            ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white shadow-sm shadow-[#1A9FD3]/20 font-bold'
+                                            : 'text-slate-400 hover:text-white hover:bg-slate-700/50 font-medium'
                                     }`}
                                 >
-                                    <span className={`leading-tight ${isActive ? 'text-white font-bold' : 'group-hover/pill:text-[#1A9FD3]'}`}>
-                                        {p.label}
-                                    </span>
-                                    <span
-                                        className={`text-[11px] font-bold mt-0.5 leading-tight font-mono tabular-nums transition-colors ${
-                                            hasChange
-                                                ? changeVal > 0
-                                                    ? isActive ? 'text-emerald-300 font-bold' : 'text-emerald-400'
-                                                    : changeVal < 0
-                                                    ? isActive ? 'text-rose-300 font-bold' : 'text-rose-400'
-                                                    : isActive ? 'text-white font-bold' : 'text-slate-400'
-                                                : 'opacity-0 select-none'
-                                        }`}
-                                    >
-                                        {hasChange ? `${changeVal > 0 ? '+' : ''}${changeVal.toFixed(2)}%` : '-'}
-                                    </span>
+                                    {p.label}
                                 </button>
                             );
                         })}
@@ -407,7 +397,7 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
                                     fontSize: '0.8rem',
                                     boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)',
                                 }}
-                                formatter={(val: any) => [defaultFormat(Number(val)), title || 'Değer']}
+                                formatter={(val) => [defaultFormat(Number(val)), title || 'Değer']}
                                 labelStyle={{ color: '#94a3b8', marginBottom: '4px', fontWeight: 600 }}
                             />
 

@@ -33,6 +33,7 @@ export interface CategorySummary {
 
 export interface PortfolioSummary {
     total_value: number;
+    total_equity_value?: number;
     total_cost: number;
     capital_profit_loss: number;
     capital_profit_loss_percentage: number;
@@ -86,3 +87,36 @@ export interface PortfolioSnapshot {
     profit_loss: string;
     recorded_at: string;
 }
+
+export interface AssetGroup {
+    id: string;
+    name: string;
+    color: string;
+}
+
+export interface Dividend {
+    id?: number;
+    ID?: number;
+    user_id?: number;
+    UserID?: number;
+    asset_id?: number;
+    AssetID?: number;
+    symbol?: string;
+    Symbol?: string;
+    asset_name?: string;
+    AssetName?: string;
+    amount?: string;
+    Amount?: string;
+    gross_amount?: string;
+    GrossAmount?: string;
+    tax_amount?: string;
+    TaxAmount?: string;
+    net_amount?: string;
+    NetAmount?: string;
+    payment_date?: string;
+    PaymentDate?: string;
+    created_at?: string;
+    CreatedAt?: string;
+}
+
+export type Period = '1D' | '1W' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '3Y' | 'ALL';
