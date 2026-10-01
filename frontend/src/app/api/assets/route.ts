@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { normalizeSearchText, scoreAssetMatch } from '@/lib/searchUtils';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,17 +27,33 @@ interface ChartQuote {
     name: string;
 }
 
-// Türkçe harf duyarsız normalizasyon
+interface RawTefasItem {
+    fonKodu?: string;
+    fonUnvan?: string;
+    fiyat?: number;
+}
+
+interface BackendAsset {
+    ID?: number;
+    id?: number;
+    Symbol?: string;
+    symbol?: string;
+    Name?: string;
+    name?: string;
+    AssetType?: string;
+    asset_type?: string;
+    CurrentPrice?: string;
+    current_price?: string;
+}
+
+interface YahooSearchQuote {
+    symbol: string;
+    exchange?: string;
+}
+
+// Türkçe harf duyarsız ve aksan normalizasyonu (Ortak searchUtils motoru)
 function cleanText(text: string): string {
-    return (text || '')
-        .toLowerCase()
-        .replace(/ı/g, 'i')
-        .replace(/ğ/g, 'g')
-        .replace(/ü/g, 'u')
-        .replace(/ş/g, 's')
-        .replace(/ö/g, 'o')
-        .replace(/ç/g, 'c')
-        .trim();
+    return normalizeSearchText(text);
 }
 
 function formatPrice(price: number): string {
@@ -108,7 +125,7 @@ async function getTefasCatalog(): Promise<TefasFundItem[]> {
         if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data?.resultList) && data.resultList.length > 0) {
-                tefasCatalogCache = data.resultList.map((item: any) => ({
+                tefasCatalogCache = data.resultList.map((item: RawTefasItem) => ({
                     symbol: String(item.fonKodu || '').toUpperCase(),
                     name: String(item.fonUnvan || ''),
                     price: Number(item.fiyat || 0),
@@ -254,11 +271,11 @@ export async function GET(request: Request) {
             getAllDailyChanges(backendBase),
         ]);
 
-        const rawData: any[] = (backendRes?.ok && await backendRes.json().catch(() => [])) || [];
+        const rawData: BackendAsset[] = (backendRes?.ok && await backendRes.json().catch(() => [])) || [];
 
         // Varlıkları normalize et & borsada işlem görmeyen (geçmiş fiyatı ve günlük değişimi olmayan) kapalı fonları filtrele
         const normalized: NormalizedAsset[] = (Array.isArray(rawData) ? rawData : [])
-            .filter((item: any) => {
+            .filter((item: BackendAsset) => {
                 const assetType = String(item.AssetType ?? item.asset_type ?? 'HISSE').trim().toUpperCase();
                 const idStr = String(item.ID ?? item.id ?? 0);
                 // Borsada işlem görmeyen Girişim Sermayesi (GSYF), Gayrimenkul (GMYF) veya değişimi %0.00 olan durağan fonları güvenle gizle
@@ -272,7 +289,7 @@ export async function GET(request: Request) {
                 }
                 return true;
             })
-            .map((item: any) => {
+            .map((item: BackendAsset) => {
                 const id = Number(item.ID ?? item.id ?? 0);
                 const symbol = String(item.Symbol ?? item.symbol ?? '').trim().toUpperCase();
                 const name = String(item.Name ?? item.name ?? symbol).trim();
@@ -338,30 +355,9 @@ export async function GET(request: Request) {
         const queryWords = cleanQ.split(/\s+/).filter(Boolean);
         const resultMap = new Map<string, NormalizedAsset>();
 
-        // Finansal varlık alaka düzeyi puanlama fonksiyonu (Relevance Scoring Engine)
+        // Finansal varlık alaka düzeyi puanlama fonksiyonu (searchUtils Relevance Scoring Engine)
         const scoreAsset = (sym: string, nm: string, change?: string): number => {
-            let score = 0;
-            // 1. Tam sembol eşleşmesi (örn: "SA" -> "SA")
-            if (sym === cleanQ) score = 10000;
-            // 2. Sembol arama ile başlıyorsa (örn: "SA" -> "SAS", "SASA", "SAFKR", "SAHOL")
-            // Kısa semboller daha öncelikli: SAS (3 harf) > SASA (4 harf) > SAFKR (5 harf)
-            else if (sym.startsWith(cleanQ)) score = 8000 - sym.length * 10;
-            else {
-                // 3. İsimdeki bir kelime tam olarak eşleşiyorsa (örn: "ALTIN" -> "Gram Altın")
-                const words = nm.split(/\s+/);
-                if (words.some(w => w === cleanQ)) score = 6000;
-                // 4. İsim arama terimi ile başlıyorsa (örn: "SA" -> "Sabancı Holding")
-                else if (nm.startsWith(cleanQ)) score = 5000;
-                // 5. İsimdeki herhangi bir kelime arama ile başlıyorsa (örn: "SA" -> "... Sabancı")
-                else if (words.some(w => w.startsWith(cleanQ))) score = 4000;
-                // 6. Sembol aramayı içeriyorsa (örn: "TH" -> "GRTHO", "BTH")
-                else if (sym.includes(cleanQ)) score = 3000;
-                // 7. Çoklu kelime araması (örn: "iş bankası")
-                else if (queryWords.length > 1 && queryWords.every(w => sym.includes(w) || nm.includes(w))) score = 2000;
-                // 8. İsim içinde alt dize (yalnızca >= 3 karakterde kabul edilir; 1-2 karakterde hece gürültüsü engellenir)
-                else if (cleanQ.length >= 3 && nm.includes(cleanQ)) score = 1000;
-            }
-
+            let score = scoreAssetMatch(sym, nm, cleanQ);
             if (score > 0) {
                 // Canlı, dünden bugüne işlem gören (değişimi %0.00 olmayan) hareketli varlıklara +2000 öncelik bonusu
                 const hasActiveMovement = change && change !== '0.00' && change !== '+0.00' && change !== '-0.00';
@@ -369,7 +365,6 @@ export async function GET(request: Request) {
                     score += 2000;
                 }
             }
-
             return score;
         };
 
@@ -532,11 +527,11 @@ export async function GET(request: Request) {
             if (yahooRes.ok) {
                 const yData = await yahooRes.json();
                 const istQuotes = (yData?.quotes || [])
-                    .filter((q: any) => q.symbol?.endsWith('.IS') || q.exchange === 'IST')
+                    .filter((q: YahooSearchQuote) => q.symbol?.endsWith('.IS') || q.exchange === 'IST')
                     .slice(0, 4);
 
                 await Promise.all(
-                    istQuotes.map(async (qItem: any, idx: number) => {
+                    istQuotes.map(async (qItem: YahooSearchQuote, idx: number) => {
                         const sym = qItem.symbol.replace('.IS', '').toUpperCase();
                         if (resultMap.has(sym)) return;
                         const quote = await fetchYahooChart(qItem.symbol);
@@ -560,8 +555,9 @@ export async function GET(request: Request) {
 
         const finalItems = await enrichResultsWithChanges(sortedResults());
         return NextResponse.json(finalItems);
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error('Next.js API assets proxy error:', err);
-        return NextResponse.json({ error: 'Backend connection failed', message: err?.message }, { status: 500 });
+        const errMsg = err instanceof Error ? err.message : 'Unknown error';
+        return NextResponse.json({ error: 'Backend connection failed', message: errMsg }, { status: 500 });
     }
 }

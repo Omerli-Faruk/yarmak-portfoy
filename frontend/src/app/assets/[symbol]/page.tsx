@@ -2,11 +2,9 @@
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, History, Activity, TrendingUp, TrendingDown, Clock, X, Bell } from 'lucide-react';
+import { ArrowLeft, Plus, History, Activity, TrendingUp, TrendingDown, Clock, X, Bell, ShieldAlert } from 'lucide-react';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
-
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid, Brush } from 'recharts';
 import Link from "next/link";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import TransactionDatePicker from "@/components/TransactionDatePicker";
@@ -143,7 +141,7 @@ export default function AssetDetailPage() {
             const assetRes = await fetch(`/api/assets?q=${rawSymbol}`);
             if (assetRes.ok) {
                 const results = await assetRes.json();
-                const matched = results.find((r: any) => r.symbol === rawSymbol);
+                const matched = results.find((r: AssetDetailInfo) => r.symbol === rawSymbol);
                 if (matched) setAssetData(matched);
             }
 
@@ -153,10 +151,10 @@ export default function AssetDetailPage() {
                 try {
                     const txRes = await api.get('/transactions?limit=1000');
                     if (txRes.data) {
-                        const filtered = txRes.data.filter((t: any) => (t.Symbol || t.symbol) === rawSymbol);
+                        const filtered = txRes.data.filter((t: AssetTransaction) => (t.Symbol || t.symbol) === rawSymbol);
                         setTransactions(filtered);
                     }
-                } catch (txErr) {
+                } catch {
                     console.log('Misafir veya token geçersiz');
                 }
             }
@@ -169,7 +167,7 @@ export default function AssetDetailPage() {
 
     const [pollCount, setPollCount] = useState(0);
 
-    const chartCacheRef = useRef<Record<string, { chart: any[]; timestamp: number }>>({});
+    const chartCacheRef = useRef<Record<string, { chart: AssetChartItem[]; timestamp: number }>>({});
 
     const loadChartAndFundamentals = async () => {
         // Önceden çekilmişse ve 45 saniyeden eskiyse anında bellekten göster (0 ms gecikme, sıfır API yükü)
@@ -251,23 +249,16 @@ export default function AssetDetailPage() {
         }
     };
 
-    const handleBrushChange = (e: { startIndex?: number; endIndex?: number }) => {
-        if (!chartData || chartData.length === 0) return;
-        if (e.startIndex !== undefined && e.endIndex !== undefined) {
-            const firstPrice = Number(chartData[e.startIndex]?.price || 0);
-            const lastPrice = Number(chartData[e.endIndex]?.price || 0);
-            if (!isNaN(firstPrice) && !isNaN(lastPrice) && firstPrice > 0) {
-                setPeriodReturn(((lastPrice - firstPrice) / firstPrice) * 100);
-            }
-        }
-    };
 
     useEffect(() => {
-        loadAssetAndTransactions();
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        void loadAssetAndTransactions();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [rawSymbol]);
 
     useEffect(() => {
-        loadChartAndFundamentals();
+        void loadChartAndFundamentals();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [rawSymbol, timeRange, pollCount]);
 
     const handleAddTransaction = async (e: React.FormEvent) => {
@@ -294,8 +285,9 @@ export default function AssetDetailPage() {
             setTxPrice('');
             setTxCommission('0');
             await loadAssetAndTransactions();
-        } catch (error: any) {
-            alert(error.response?.data?.error || 'İşlem eklenirken hata oluştu');
+        } catch (error: unknown) {
+            const e = error as { response?: { data?: { error?: string } } };
+            alert(e.response?.data?.error || 'İşlem eklenirken hata oluştu');
         } finally {
             setSubmitting(false);
         }
@@ -306,8 +298,9 @@ export default function AssetDetailPage() {
         try {
             await api.delete(`/transactions/${id}`);
             await loadAssetAndTransactions();
-        } catch (error: any) {
-            alert(error.response?.data?.error || 'Silinirken hata oluştu');
+        } catch (error: unknown) {
+            const e = error as { response?: { data?: { error?: string } } };
+            alert(e.response?.data?.error || 'Silinirken hata oluştu');
         }
     };
 
@@ -319,57 +312,22 @@ export default function AssetDetailPage() {
     const isProfit = profitLoss >= 0;
 
     const assetPeriods: ChartPeriod[] = useMemo(() => {
-        const list: { id: string; label: string; rKey: string }[] = [];
+        const list: ChartPeriod[] = [];
         if (assetData && assetData.asset_type !== 'FON') {
-            list.push({ id: '1D', label: '1G', rKey: '1D' });
+            list.push({ id: '1D', label: '1G' });
         }
         list.push(
-            { id: '1W', label: '1H', rKey: '1W' },
-            { id: '1M', label: '1A', rKey: '1M' },
-            { id: '3M', label: '3A', rKey: '3M' },
-            { id: '6M', label: '6A', rKey: '6M' },
-            { id: 'YTD', label: 'YBB', rKey: 'YTD' },
-            { id: '1Y', label: '1Y', rKey: '1Y' },
-            { id: '3Y', label: '3Y', rKey: '3Y' },
-            { id: '5Y', label: '5Y', rKey: '5Y' },
+            { id: '1W', label: '1H' },
+            { id: '1M', label: '1A' },
+            { id: '3M', label: '3A' },
+            { id: '6M', label: '6A' },
+            { id: 'YTD', label: 'YBB' },
+            { id: '1Y', label: '1Y' },
+            { id: '3Y', label: '3Y' },
+            { id: '5Y', label: '5Y' },
         );
-
-        return list.map(item => {
-            let sumVal: number | null = null;
-            if (item.id === '1D') {
-                if (summaryData && typeof summaryData['1D'] === 'number' && !isNaN(summaryData['1D'])) {
-                    sumVal = summaryData['1D'];
-                } else if (assetData?.change !== undefined && assetData.change !== '' && assetData.change !== '0.00' && assetData.change !== '0') {
-                    const parsed = parseFloat(String(assetData.change).replace('+', ''));
-                    if (!isNaN(parsed)) sumVal = parsed;
-                } else if (periodReturn !== null && !isNaN(periodReturn)) {
-                    sumVal = periodReturn;
-                }
-            } else if (item.id === 'CUSTOM') {
-                if (timeRange === 'CUSTOM' && periodReturn !== null) {
-                    sumVal = periodReturn;
-                }
-            } else if (summaryData) {
-                if (summaryData[item.rKey] !== undefined) {
-                    sumVal = summaryData[item.rKey];
-                } else if (summaryData[item.id] !== undefined) {
-                    sumVal = summaryData[item.id];
-                } else if (item.id === '5Y' && summaryData['ALL'] !== undefined) {
-                    sumVal = summaryData['ALL'];
-                }
-            }
-
-            if (sumVal === null && timeRange === item.id && periodReturn !== null) {
-                sumVal = periodReturn;
-            }
-
-            return {
-                id: item.id,
-                label: item.label,
-                changePercent: sumVal,
-            };
-        });
-    }, [assetData, summaryData, periodReturn, timeRange]);
+        return list;
+    }, [assetData]);
 
     const formattedChartData = useMemo(() => {
         if (!chartData || chartData.length === 0) return [];
@@ -445,13 +403,13 @@ export default function AssetDetailPage() {
                                 </h1>
                                 <p className="text-slate-400 mt-1 md:text-lg">{assetData?.name || 'Yükleniyor...'}</p>
                                 
-                                {/* Son Güncelleme: Doğrudan hisse adı ve sembolün altında */}
-                                {fundamentals?.staleMessage && (
-                                    <div className="mt-2.5 flex items-center">
+                                {/* Son Güncelleme & Gecikme Rozeti */}
+                                <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                                    {fundamentals?.staleMessage && (
                                         <button 
                                             onClick={() => {
                                                 chartCacheRef.current = {};
-                                                loadChartAndFundamentals();
+                                                void loadChartAndFundamentals();
                                             }}
                                             title="Verileri yenilemek için tıklayın"
                                             className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg font-medium border transition hover:opacity-80 active:scale-95 cursor-pointer ${
@@ -463,8 +421,16 @@ export default function AssetDetailPage() {
                                             <Clock className="w-3.5 h-3.5" />
                                             <span>{fundamentals.staleMessage}</span>
                                         </button>
-                                    </div>
-                                )}
+                                    )}
+
+                                    <Link
+                                        href="/disclaimer"
+                                        title="BIST verileri en az 15 dakika gecikmelidir. Yatırım tavsiyesi değildir."
+                                        className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg font-medium bg-slate-800 text-slate-400 hover:text-slate-300 border border-slate-700/60 transition"
+                                    >
+                                        <span>15 Dk. Gecikmeli</span>
+                                    </Link>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -737,6 +703,17 @@ export default function AssetDetailPage() {
                         </div>
                     </div>
                 )}
+
+                {/* Yasal Uyarı & Gecikme Notu */}
+                <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-400">
+                    <div className="flex items-center gap-2.5">
+                        <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>Fiyatlar genel bilgilendirme amaçlıdır ve yatırım tavsiyesi değildir. BIST verileri en az 15 dakika gecikmelidir.</span>
+                    </div>
+                    <Link href="/disclaimer" className="text-primary hover:underline shrink-0 text-[11px] font-semibold">
+                        Yasal Uyarı &rarr;
+                    </Link>
+                </div>
             </div>
 
             {/* TRANSACTION MODAL */}
@@ -802,7 +779,7 @@ export default function AssetDetailPage() {
                                 </div>
                             </div>
 
-                            {/* 🗓️ GELİŞMİŞ ERGONOMİK TARİH VE SAAT SEÇİCİ */}
+                            {/* Tarih ve Saat Seçici */}
                             <TransactionDatePicker value={txDate} onChange={setTxDate} onErrorChange={setIsTxDateError} />
 
                             <div>

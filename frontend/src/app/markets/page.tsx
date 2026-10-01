@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -13,17 +13,11 @@ import {
     Plus,
     Activity,
     Layers,
-    ArrowUpRight,
-    ArrowDownRight,
-    Sparkles,
-    Coins,
-    DollarSign,
     RefreshCw,
     X,
-    Calendar,
-    ChevronRight,
-    SlidersHorizontal,
-    CheckCircle2
+    CheckCircle2,
+    Clock,
+    ShieldAlert
 } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
@@ -62,6 +56,16 @@ export default function MarketsPage() {
     const [selectedCategory, setSelectedCategory] = useState<'ALL' | 'HISSE' | 'FON' | 'EMTIA'>('ALL');
     const [selectedSort, setSelectedSort] = useState<'gainers' | 'losers' | 'popular' | 'alpha'>('gainers');
     const [searchQuery, setSearchQuery] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [totalFound, setTotalFound] = useState<number | null>(null);
+
+    // Arama kutusuna hızlı yazarken sunucuyu boğmamak ve yarış durumunu (race condition) önlemek için 200ms debounce
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchQuery);
+        }, 200);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     // Hızlı İşlem Ekleme Modalı State'i
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -77,7 +81,7 @@ export default function MarketsPage() {
     const fetchMarketData = useCallback(async (isRefresh = false) => {
         if (isRefresh) setRefreshing(true);
         try {
-            const url = `/api/markets?category=${selectedCategory}&sort=${selectedSort}&search=${encodeURIComponent(searchQuery)}`;
+            const url = `/api/markets?category=${selectedCategory}&sort=${selectedSort}&search=${encodeURIComponent(debouncedSearch)}`;
             const res = await fetch(url);
             if (res.ok) {
                 const data = await res.json();
@@ -86,6 +90,7 @@ export default function MarketsPage() {
                 setTopLosers(data.topLosers || []);
                 setMostActive(data.mostActive || []);
                 setScreenerItems(data.screener || []);
+                setTotalFound(typeof data.totalCount === 'number' ? data.totalCount : (data.screener?.length || 0));
             }
         } catch (err) {
             console.error('Piyasa verisi çekme hatası:', err);
@@ -93,10 +98,11 @@ export default function MarketsPage() {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [selectedCategory, selectedSort, searchQuery]);
+    }, [selectedCategory, selectedSort, debouncedSearch]);
 
     useEffect(() => {
-        fetchMarketData();
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        void fetchMarketData();
     }, [fetchMarketData]);
 
     const handleOpenQuickModal = (asset: MarketAssetItem) => {
@@ -141,8 +147,9 @@ export default function MarketsPage() {
                 setIsModalOpen(false);
                 setTxSuccessMessage(null);
             }, 1500);
-        } catch (error: any) {
-            alert(error.response?.data?.error || 'İşlem eklenirken hata oluştu');
+        } catch (error: unknown) {
+            const e = error as { response?: { data?: { error?: string } } };
+            alert(e.response?.data?.error || 'İşlem eklenirken hata oluştu');
         } finally {
             setIsSubmittingTx(false);
         }
@@ -171,7 +178,15 @@ export default function MarketsPage() {
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Link
+                            href="/disclaimer"
+                            title="Borsa İstanbul pay piyasası verileri en az 15 dakika gecikmelidir. Yatırım tavsiyesi değildir."
+                            className="bg-slate-900/90 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-300 px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-1.5 transition"
+                        >
+                            <Clock className="size-3.5 text-amber-400" />
+                            <span>BIST 15 Dk. Gecikmeli</span>
+                        </Link>
                         <button
                             onClick={() => fetchMarketData(true)}
                             disabled={refreshing}
@@ -233,7 +248,7 @@ export default function MarketsPage() {
                     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col">
                         <div className="flex items-center justify-between pb-3.5 border-b border-slate-800 mb-3">
                             <div className="flex items-center gap-2">
-                                <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                <div className="p-1.5 rounded-lg bg-slate-800 text-slate-300 border border-slate-700/60">
                                     <TrendingUp className="size-4" />
                                 </div>
                                 <h3 className="font-bold text-white text-sm">Günün Yükselenleri</h3>
@@ -294,7 +309,7 @@ export default function MarketsPage() {
                     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col">
                         <div className="flex items-center justify-between pb-3.5 border-b border-slate-800 mb-3">
                             <div className="flex items-center gap-2">
-                                <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                <div className="p-1.5 rounded-lg bg-slate-800 text-slate-300 border border-slate-700/60">
                                     <TrendingDown className="size-4" />
                                 </div>
                                 <h3 className="font-bold text-white text-sm">Günün Düşenleri</h3>
@@ -355,7 +370,7 @@ export default function MarketsPage() {
                     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col">
                         <div className="flex items-center justify-between pb-3.5 border-b border-slate-800 mb-3">
                             <div className="flex items-center gap-2">
-                                <div className="p-1.5 rounded-lg bg-[#1A9FD3]/10 text-[#1A9FD3] border border-[#1A9FD3]/20">
+                                <div className="p-1.5 rounded-lg bg-slate-800 text-slate-300 border border-slate-700/60">
                                     <Flame className="size-4" />
                                 </div>
                                 <h3 className="font-bold text-white text-sm">Popüler & Lokomotifler</h3>
@@ -420,7 +435,7 @@ export default function MarketsPage() {
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-800/80">
                         <div>
                             <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                                <Layers className="size-5 text-[#1A9FD3]" />
+                                <Layers className="size-5 text-slate-400" />
                                 Varlık Keşif Listesi
                             </h2>
                             <p className="text-xs text-slate-400 mt-0.5">
@@ -453,15 +468,15 @@ export default function MarketsPage() {
                     <div className="flex flex-wrap items-center justify-between gap-3 py-4">
                         {/* Kategori Sekmeleri */}
                         <div className="flex items-center gap-1.5 bg-slate-800/70 p-1 rounded-xl border border-slate-700/60 overflow-x-auto no-scrollbar">
-                            {[
-                                { id: 'ALL', label: 'Tümü' },
-                                { id: 'HISSE', label: 'BIST Hisseleri' },
-                                { id: 'FON', label: 'TEFAS Fonları' },
-                                { id: 'EMTIA', label: 'Altın & Döviz' },
-                            ].map(cat => (
+                            {([
+                                { id: 'ALL' as const, label: 'Tümü' },
+                                { id: 'HISSE' as const, label: 'BIST Hisseleri' },
+                                { id: 'FON' as const, label: 'TEFAS Fonları' },
+                                { id: 'EMTIA' as const, label: 'Altın & Döviz' },
+                            ]).map(cat => (
                                 <button
                                     key={cat.id}
-                                    onClick={() => setSelectedCategory(cat.id as any)}
+                                    onClick={() => setSelectedCategory(cat.id)}
                                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
                                         selectedCategory === cat.id
                                             ? 'bg-[#1A9FD3] text-white shadow-xs'
@@ -473,31 +488,46 @@ export default function MarketsPage() {
                             ))}
                         </div>
 
-                        {/* Sıralama Seçenekleri */}
-                        <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-slate-500 font-medium hidden sm:inline">Sırala:</span>
-                            <div className="flex items-center gap-1 bg-slate-800/70 p-1 rounded-xl border border-slate-700/60 text-xs font-semibold">
-                                {[
-                                    { id: 'gainers', label: 'En Çok Artanlar' },
-                                    { id: 'losers', label: 'En Çok Düşenler' },
-                                    { id: 'popular', label: 'Popülerler' },
-                                    { id: 'alpha', label: 'A-Z' },
-                                ].map(s => (
-                                    <button
-                                        key={s.id}
-                                        onClick={() => setSelectedSort(s.id as any)}
-                                        className={`px-2.5 py-1 rounded-lg transition cursor-pointer text-xs ${
-                                            selectedSort === s.id
-                                                ? 'bg-slate-700 text-white font-bold'
-                                                : 'text-slate-400 hover:text-slate-200'
-                                        }`}
-                                    >
-                                        {s.label}
-                                    </button>
-                                ))}
+                            {/* Sıralama Seçenekleri */}
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-xs text-slate-500 font-medium hidden sm:inline">Sırala:</span>
+                                <div className="flex items-center gap-1 bg-slate-800/70 p-1 rounded-xl border border-slate-700/60 text-xs font-semibold">
+                                    {([
+                                        { id: 'gainers' as const, label: 'En Çok Artanlar' },
+                                        { id: 'losers' as const, label: 'En Çok Düşenler' },
+                                        { id: 'popular' as const, label: 'Popülerler' },
+                                        { id: 'alpha' as const, label: 'A-Z' },
+                                    ]).map(s => (
+                                        <button
+                                            key={s.id}
+                                            onClick={() => setSelectedSort(s.id)}
+                                            className={`px-2.5 py-1 rounded-lg transition cursor-pointer text-xs ${
+                                                selectedSort === s.id
+                                                    ? 'bg-slate-700 text-white font-bold'
+                                                    : 'text-slate-400 hover:text-slate-200'
+                                            }`}
+                                        >
+                                            {s.label}
+                                        </button>
+                                    ))}
                             </div>
                         </div>
                     </div>
+
+                    {/* Arama Geribildirim Çubuğu */}
+                    {debouncedSearch && totalFound !== null && (
+                        <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300 bg-slate-800/80 px-3.5 py-2 rounded-xl border border-slate-700/60">
+                            <div className="flex items-center gap-2">
+                                <Search className="size-3.5 text-[#1A9FD3]" />
+                                <span>
+                                    <strong>&quot;{debouncedSearch}&quot;</strong> için <strong>{totalFound}</strong> varlık bulundu
+                                </span>
+                            </div>
+                            <span className="text-[11px] text-slate-400">
+                                En alakalılar üstte, benzer varlıklar aşağıda listelenir
+                            </span>
+                        </div>
+                    )}
 
                     {/* Varlık Tablosu */}
                     {loading ? (
@@ -507,7 +537,9 @@ export default function MarketsPage() {
                     ) : screenerItems.length === 0 ? (
                         <div className="py-16 text-center text-slate-500">
                             <Activity className="size-10 mx-auto mb-2 opacity-20" />
-                            <p className="text-sm font-medium">Aramanıza uygun varlık bulunamadı.</p>
+                            <p className="text-sm font-medium">
+                                {debouncedSearch ? `"${debouncedSearch}" aramasına uygun veya benzer varlık bulunamadı.` : 'Aramanıza uygun varlık bulunamadı.'}
+                            </p>
                             <p className="text-xs text-slate-600 mt-1">Farklı bir sembol veya arama terimi deneyebilirsiniz.</p>
                         </div>
                     ) : (
@@ -542,15 +574,7 @@ export default function MarketsPage() {
                                             </td>
 
                                             <td className="py-3 px-3">
-                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border ${
-                                                    item.asset_type === 'HISSE'
-                                                        ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                                                        : item.asset_type === 'FON'
-                                                        ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
-                                                        : item.asset_type === 'ALTIN'
-                                                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                                }`}>
+                                                <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700/80">
                                                     {item.asset_type}
                                                 </span>
                                             </td>
@@ -593,6 +617,30 @@ export default function MarketsPage() {
                             </table>
                         </div>
                     )}
+                </div>
+
+                {/* 5. YASAL ÇEKİNCE & SPK BİLGİLENDİRME BANNERI */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-slate-400">
+                    <div className="flex items-start sm:items-center gap-3">
+                        <div className="p-2 rounded-xl bg-slate-800 border border-slate-700/60 text-amber-400 shrink-0 mt-0.5 sm:mt-0">
+                            <ShieldAlert className="size-4" />
+                        </div>
+                        <div className="space-y-0.5">
+                            <p className="font-semibold text-slate-200">
+                                BIST Verileri 15 Dakika Gecikmelidir &bull; Yatırım Tavsiyesi Değildir
+                            </p>
+                            <p className="text-[11px] text-slate-400 leading-relaxed">
+                                Piyasa verileri ve fiyatlar genel bilgilendirme amaçlıdır; anlık aracı kurum emir fiyatlarınızdan veya gerçekleşen işlemlerinizden farklılık gösterebilir.
+                            </p>
+                        </div>
+                    </div>
+                    <Link
+                        href="/disclaimer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold shrink-0 transition"
+                    >
+                        <span>Detaylı Yasal Uyarı</span>
+                        <span>&rarr;</span>
+                    </Link>
                 </div>
             </div>
 

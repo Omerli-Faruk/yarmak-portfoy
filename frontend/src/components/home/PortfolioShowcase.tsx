@@ -2,18 +2,18 @@
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { useAuth } from '@/context/AuthContext';
 import {
     TrendingUp,
     TrendingDown,
     ArrowRight,
     PieChart as PieIcon,
-    Sparkles,
-    Shield,
     Layers,
-    Activity,
-    CheckCircle2
+    CheckCircle2,
+    Target,
+    Zap,
+    ShieldCheck,
 } from 'lucide-react';
 
 /* ═══════════════════════════════════════════════════════════════
@@ -42,7 +42,7 @@ interface Preset {
     id: string;
     title: string;
     shortTitle: string;
-    icon: string;
+    icon: React.ElementType;
     badge: string;
     totalValue: string;
     totalProfit: string;
@@ -60,7 +60,7 @@ const PRESETS: Preset[] = [
         id: 'balanced',
         title: 'Dengeli Karma Portföy',
         shortTitle: 'Dengeli Karma',
-        icon: '🎯',
+        icon: Target,
         badge: 'BIST + TEFAS + Altın',
         totalValue: '548.250,00',
         totalProfit: '+142.300,00',
@@ -93,7 +93,7 @@ const PRESETS: Preset[] = [
         id: 'growth',
         title: 'BIST Büyüme & Teknoloji',
         shortTitle: 'BIST Büyüme',
-        icon: '🚀',
+        icon: Zap,
         badge: 'Yüksek Getiri Odaklı',
         totalValue: '426.800,00',
         totalProfit: '+152.600,00',
@@ -125,7 +125,7 @@ const PRESETS: Preset[] = [
         id: 'defensive',
         title: 'Defansif & Emtia Portföyü',
         shortTitle: 'Defansif & Altın',
-        icon: '🛡️',
+        icon: ShieldCheck,
         badge: 'Enflasyon Koruması',
         totalValue: '684.500,00',
         totalProfit: '+164.200,00',
@@ -229,7 +229,7 @@ export default function PortfolioShowcase() {
                                         : 'text-slate-400 hover:text-slate-200 hover:bg-surface/50 border border-transparent'
                                 }`}
                             >
-                                <span>{p.icon}</span>
+                                <p.icon className="w-3.5 h-3.5 shrink-0" />
                                 <span>{p.shortTitle}</span>
                             </button>
                         );

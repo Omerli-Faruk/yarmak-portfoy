@@ -1,8 +1,7 @@
 'use client'
 
-import React, {useState, useEffect} from "react";
+import React, {useState} from "react";
 import {useAuth} from "@/context/AuthContext";
-import {useRouter} from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import axios from "axios";
@@ -10,8 +9,7 @@ import {User, Lock, Eye, EyeOff} from "lucide-react";
 import {motion} from "motion/react";
 
 export default function LoginPage() {
-    const {user, loading: authLoading, login} = useAuth();
-    const router = useRouter();
+    const {user, login} = useAuth();
     const [showPassword, setShowPassword] = useState(false);
     const [identifier, setIdentifier] = useState('')
     const [password, setPassword] = useState('')
@@ -104,6 +102,24 @@ export default function LoginPage() {
                     </div>
                     <button type="submit" disabled={loading}
                             className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-3 rounded-xl transition shadow-lg shadow-primary/20 cursor-pointer disabled:opacity-50 mt-6">{loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}</button>
+                    
+                    {/* Hukuki & Çerez Kabul Bildirimi */}
+                    <p className="text-center text-[11px] text-slate-400 mt-4 leading-relaxed">
+                        Giriş yaparak{' '}
+                        <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-slate-300 hover:text-white underline">
+                            Kullanım Şartları
+                        </Link>
+                        &apos;nı,{' '}
+                        <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-slate-300 hover:text-white underline">
+                            Gizlilik &amp; KVKK Metni
+                        </Link>
+                        &apos;ni ve zorunlu oturum{' '}
+                        <Link href="/privacy#cerezler" target="_blank" rel="noopener noreferrer" className="text-slate-300 hover:text-white underline">
+                            Çerezleri
+                        </Link>
+                        &apos;ni kabul etmiş sayılırsınız.
+                    </p>
+
                     <p className="text-center text-xs text-slate-400 mt-6">Hesabınız yok mu?
                         <Link href="/register" className="text-xs font-bold text-white hover:text-primary transition cursor-pointer ml-2">Hemen Kayıt Ol</Link>
                     </p>

@@ -2,10 +2,74 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
+interface BackendAsset {
+    id?: number;
+    ID?: number;
+    name?: string;
+    Name?: string;
+    symbol?: string;
+    Symbol?: string;
+    asset_type?: string;
+    AssetType?: string;
+    current_price?: string;
+    CurrentPrice?: string;
+}
+
+interface PriceRecord {
+    RecordedAt?: string;
+    recorded_at?: string;
+    Price?: string | number;
+    price?: string | number;
+}
+
+interface AssetSummary {
+    [key: string]: number;
+}
+
+interface Fundamentals {
+    marketCap: string;
+    peRatio: string;
+    dividendYield: string;
+    dividendRate: string;
+    exDividendDate: string;
+    beta: string;
+    fiftyTwoWeekHigh: string;
+    fiftyTwoWeekLow: string;
+    volume: string;
+    isStale?: boolean;
+    staleMessage?: string;
+    lastUpdateDate?: string;
+}
+
+type YahooMetric = { raw?: number; fmt?: string } | undefined;
+
+interface YahooQuoteSummaryDetail {
+    [key: string]: YahooMetric | YahooQuoteSummaryDetail | undefined;
+    marketCap?: YahooMetric;
+    trailingPE?: YahooMetric;
+    dividendYield?: YahooMetric;
+    dividendRate?: YahooMetric;
+    exDividendDate?: YahooMetric;
+    beta?: YahooMetric;
+    fiftyTwoWeekHigh?: YahooMetric;
+    fiftyTwoWeekLow?: YahooMetric;
+    volume?: YahooMetric;
+    regularMarketVolume?: YahooMetric;
+}
+
+interface YahooQuoteSummaryData {
+    quoteSummary?: {
+        result?: Array<{
+            summaryDetail?: YahooQuoteSummaryDetail;
+            defaultKeyStatistics?: YahooQuoteSummaryDetail;
+        }>;
+    };
+}
+
 const BACKEND_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080/v1';
 
 // Bellek içi sembol önbelleği (her buton tıklamasında gereksiz lookup isteği atılmasını engeller)
-const assetCache = new Map<string, { id: number; isTefas: boolean; asset?: any }>();
+const assetCache = new Map<string, { id: number; isTefas: boolean; asset?: BackendAsset }>();
 
 function getYahooTicker(symbol: string): string {
     const s = symbol.toUpperCase().trim();
@@ -92,7 +156,7 @@ async function fetchFundamentals(ticker: string, isTefas: boolean): Promise<Reco
 
     try {
         const auth = await getYahooCrumb();
-        let qsData: any = null;
+        let qsData: YahooQuoteSummaryData | null = null;
         if (auth) {
             const qsRes = await fetch(
                 `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?crumb=${auth.crumb}&modules=summaryDetail,defaultKeyStatistics`,
@@ -109,9 +173,9 @@ async function fetchFundamentals(ticker: string, isTefas: boolean): Promise<Reco
         const sd = qsData?.quoteSummary?.result?.[0]?.summaryDetail;
         const ks = qsData?.quoteSummary?.result?.[0]?.defaultKeyStatistics;
 
-        const formatCap = (val: any) => {
+        const formatCap = (val: { raw?: number; fmt?: string } | number | string | null | undefined) => {
             if (!val) return '-';
-            const num = typeof val === 'number' ? val : (val.raw || parseFloat(val));
+            const num = typeof val === 'number' ? val : (typeof val === 'string' ? parseFloat(val) : (val.raw || 0));
             if (isNaN(num) || num <= 0) return '-';
             if (num >= 1e12) return `${(num / 1e12).toFixed(2)}T ₺`;
             if (num >= 1e9) return `${(num / 1e9).toFixed(2)} Mr ₺`;
@@ -122,7 +186,7 @@ async function fetchFundamentals(ticker: string, isTefas: boolean): Promise<Reco
         const exDateTimestamp = typeof sd?.exDividendDate === 'number' ? sd.exDividendDate : (sd?.exDividendDate?.raw || 0);
         const isExDateFuture = Boolean(exDateTimestamp && (exDateTimestamp * 1000 > Date.now()));
 
-        const formatExDate = (val: any) => {
+        const formatExDate = (val: { raw?: number; fmt?: string } | number | null | undefined) => {
             if (!val) return '-';
             const timestamp = typeof val === 'number' ? val : (val.raw || 0);
             if (!timestamp) return '-';
@@ -131,13 +195,13 @@ async function fetchFundamentals(ticker: string, isTefas: boolean): Promise<Reco
 
         const result: Record<string, string> = {
             marketCap: formatCap(sd?.marketCap || ks?.marketCap),
-            peRatio: sd?.trailingPE?.fmt || ks?.trailingPE?.fmt || (typeof sd?.trailingPE === 'number' ? sd.trailingPE.toFixed(2) : '-'),
+            peRatio: sd?.trailingPE?.fmt || ks?.trailingPE?.fmt || (typeof sd?.trailingPE?.raw === 'number' ? sd.trailingPE.raw.toFixed(2) : '-'),
             dividendYield: sd?.dividendYield?.fmt || (sd?.dividendYield?.raw ? `%${(sd.dividendYield.raw * 100).toFixed(2)}` : '-'),
             dividendRate: sd?.dividendRate?.fmt ? `${sd.dividendRate.fmt} ₺` : (sd?.dividendRate?.raw ? `${sd.dividendRate.raw.toFixed(2)} ₺` : '-'),
             exDividendDate: formatExDate(sd?.exDividendDate),
             isExDateFuture: isExDateFuture ? 'true' : 'false',
             exDividendLabel: isExDateFuture ? 'Açıklanan Temettü' : 'Son Temettü Tarihi',
-            beta: sd?.beta?.fmt || ks?.beta?.fmt || (typeof sd?.beta === 'number' ? sd.beta.toFixed(2) : '-'),
+            beta: sd?.beta?.fmt || ks?.beta?.fmt || (typeof sd?.beta?.raw === 'number' ? sd.beta.raw.toFixed(2) : '-'),
             fiftyTwoWeekHigh: sd?.fiftyTwoWeekHigh?.fmt ? `${sd.fiftyTwoWeekHigh.fmt} ₺` : (sd?.fiftyTwoWeekHigh?.raw ? `${sd.fiftyTwoWeekHigh.raw.toFixed(2)} ₺` : '-'),
             fiftyTwoWeekLow: sd?.fiftyTwoWeekLow?.fmt ? `${sd.fiftyTwoWeekLow.fmt} ₺` : (sd?.fiftyTwoWeekLow?.raw ? `${sd.fiftyTwoWeekLow.raw.toFixed(2)} ₺` : '-'),
             volume: sd?.volume?.fmt || sd?.regularMarketVolume?.fmt || (sd?.volume?.raw ? `${(sd.volume.raw / 1e6).toFixed(2)}M` : '-'),
@@ -159,7 +223,7 @@ interface AccurateSummaryResult {
 // Getiri Özeti Önbelleği (5 dakika)
 const summaryHistoryCache = new Map<string, { data: AccurateSummaryResult; timestamp: number }>();
 
-async function getAccurateSummary(ticker: string, isTefas: boolean, backendSummary: any): Promise<AccurateSummaryResult | null> {
+async function getAccurateSummary(ticker: string, isTefas: boolean, backendSummary: AssetSummary | null): Promise<AccurateSummaryResult | null> {
     if (isTefas) {
         return backendSummary ? { summary: backendSummary } : null;
     }
@@ -252,10 +316,81 @@ async function getAccurateSummary(ticker: string, isTefas: boolean, backendSumma
     }
 }
 
+// Gram Altın (ALTIN) için gerçek geçmiş mumlardan getiri hesaplama
+async function getAccurateGoldSummary(assetId: number): Promise<AccurateSummaryResult | null> {
+    const cacheKey = `ALTIN_${assetId}`;
+    const cached = summaryHistoryCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+        return cached.data;
+    }
+
+    try {
+        const histRes = await fetch(`${BACKEND_URL}/assets/${assetId}/price-history?range=1Y`, { cache: 'no-store' });
+        if (!histRes.ok) return null;
+        const hist = await histRes.json();
+        if (!hist || !Array.isArray(hist) || hist.length === 0) return null;
+
+        const points: { time: number; price: number }[] = [];
+        for (const h of hist) {
+            const p = parseFloat(String(h.Price || h.price || '0'));
+            const t = new Date(h.RecordedAt || h.recorded_at || '').getTime();
+            if (p > 0 && !isNaN(t)) {
+                points.push({ time: t, price: p });
+            }
+        }
+        if (points.length < 2) return null;
+
+        points.sort((a, b) => a.time - b.time);
+        const current = points[points.length - 1].price;
+        const now = points[points.length - 1].time;
+
+        const calcRet = (targetTime: number) => {
+            const pt = points.find(p => p.time >= targetTime);
+            if (!pt || pt.price === 0) return 0;
+            return ((current - pt.price) / pt.price) * 100;
+        };
+
+        const ret1D = points.length >= 2 ? ((current - points[points.length - 2].price) / points[points.length - 2].price) * 100 : 0;
+        const prevClose = points.length >= 2 ? points[points.length - 2].price : current;
+
+        const ret1W = calcRet(now - 7 * 86400000);
+        const ret1M = calcRet(now - 30 * 86400000);
+        const ret3M = calcRet(now - 90 * 86400000);
+        const ret6M = calcRet(now - 180 * 86400000);
+        const startOfYear = new Date(new Date(now).getFullYear(), 0, 1).getTime();
+        const retYTD = calcRet(startOfYear);
+        const ret1Y = ((current - points[0].price) / points[0].price) * 100;
+
+        const summaryResult: Record<string, number> = {
+            '1D': ret1D,
+            '1W': ret1W,
+            '1M': ret1M,
+            '3M': ret3M,
+            '6M': ret6M,
+            'YTD': retYTD,
+            '1Y': ret1Y,
+            '3Y': 0,
+            '5Y': 0,
+            'ALL': ret1Y,
+        };
+
+        const result: AccurateSummaryResult = {
+            summary: summaryResult,
+            previousClose: prevClose,
+            currentPrice: current,
+        };
+
+        summaryHistoryCache.set(cacheKey, { data: result, timestamp: Date.now() });
+        return result;
+    } catch {
+        return null;
+    }
+}
+
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const rawSymbol = searchParams.get('symbol');
-    let range = searchParams.get('range') || '1Y';
+    const range = searchParams.get('range') || '1Y';
     const startDateParam = searchParams.get('startDate');
     const endDateParam = searchParams.get('endDate');
 
@@ -263,19 +398,21 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Symbol is required' }, { status: 400 });
     }
 
-    let backendRange = range;
+    const backendRange = range;
 
     try {
         // Step 1: Find the Asset ID (Önbellekten veya backend'den)
-        let assetId: number;
-        let isTefas: boolean;
-        let assetObj: any = null;
+        let assetId: number = 0;
+        let isTefas: boolean = false;
+        let assetObj: BackendAsset | null = null;
 
         if (assetCache.has(rawSymbol)) {
-            const cached = assetCache.get(rawSymbol) as any;
-            assetId = cached.id;
-            isTefas = cached.isTefas;
-            assetObj = cached.asset;
+            const cached = assetCache.get(rawSymbol);
+            if (cached) {
+                assetId = cached.id;
+                isTefas = cached.isTefas;
+                assetObj = cached.asset || null;
+            }
         } else {
             let assetsRes = await fetch(BACKEND_URL + '/assets/lookup?symbol=' + rawSymbol, { cache: 'no-store' });
             if (!assetsRes.ok && rawSymbol.length === 3) {
@@ -289,7 +426,7 @@ export async function GET(request: Request) {
                 return NextResponse.json({ chart: [], fundamentals: null, summary: null });
             }
             
-            assetId = assetObj.ID || assetObj.id;
+            assetId = assetObj.ID || assetObj.id || 0;
             isTefas = (assetObj.AssetType || assetObj.asset_type) === 'FON';
             assetCache.set(rawSymbol, { id: assetId, isTefas, asset: assetObj });
         }
@@ -302,7 +439,9 @@ export async function GET(request: Request) {
             fetch(`${BACKEND_URL}/assets/${assetId}/price-history?range=${backendRange}`, { cache: 'no-store' }),
             fetch(`${BACKEND_URL}/assets/${assetId}/summary`, { cache: 'no-store' }),
             fetchFundamentals(yahooTicker, isTefas),
-            !isTefas && rawSymbol !== 'ALTIN' ? getAccurateSummary(yahooTicker, isTefas, null) : Promise.resolve(null),
+            rawSymbol === 'ALTIN'
+                ? getAccurateGoldSummary(assetId)
+                : (!isTefas ? getAccurateSummary(yahooTicker, isTefas, null) : Promise.resolve(null)),
             rawSymbol === 'ALTIN' ? fetchSpotGoldDetail() : Promise.resolve(null),
         ]);
 
@@ -312,9 +451,9 @@ export async function GET(request: Request) {
             let history = await historyRes.json();
             if (history && history.length > 0) {
                 // Ensure array is strictly oldest-first (ASC)
-                history.sort((a: any, b: any) => {
-                    const dA = new Date(a.RecordedAt || a.recorded_at).getTime();
-                    const dB = new Date(b.RecordedAt || b.recorded_at).getTime();
+                history.sort((a: PriceRecord, b: PriceRecord) => {
+                    const dA = new Date(a.RecordedAt || a.recorded_at || '').getTime();
+                    const dB = new Date(b.RecordedAt || b.recorded_at || '').getTime();
                     return dA - dB;
                 });
 
@@ -327,8 +466,8 @@ export async function GET(request: Request) {
                         const lastRec = history[history.length - 1];
                         const lastDate = new Date(lastRec.RecordedAt || lastRec.recorded_at);
                         const lastDayStr = lastDate.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
-                        history = history.filter((record: any) => {
-                            const recDate = new Date(record.RecordedAt || record.recorded_at);
+                        history = history.filter((record: PriceRecord) => {
+                            const recDate = new Date(record.RecordedAt || record.recorded_at || '');
                             return recDate.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' }) === lastDayStr;
                         });
                     }
@@ -336,8 +475,8 @@ export async function GET(request: Request) {
                     const sDate = new Date(startDateParam);
                     const eDate = endDateParam ? new Date(endDateParam) : new Date();
                     eDate.setHours(23, 59, 59, 999);
-                    history = history.filter((record: any) => {
-                        const recDate = new Date(record.RecordedAt || record.recorded_at);
+                    history = history.filter((record: PriceRecord) => {
+                        const recDate = new Date(record.RecordedAt || record.recorded_at || '');
                         return recDate.getTime() >= sDate.getTime() && recDate.getTime() <= eDate.getTime();
                     });
                 } else {
@@ -366,18 +505,18 @@ export async function GET(request: Request) {
                         cutoffDate.setFullYear(now.getFullYear() - 5);
                     }
 
-                    history = history.filter((record: any) => {
-                        const recDate = new Date(record.RecordedAt || record.recorded_at);
+                    history = history.filter((record: PriceRecord) => {
+                        const recDate = new Date(record.RecordedAt || record.recorded_at || '');
                         return recDate.getTime() >= cutoffDate.getTime();
                     });
                 }
 
                 // 6M: 12 saatte bir (Her işlem günü sabah ve akşam olmak üzere günde 2 nokta)
                 if (range === '6M' && history.length > 250) {
-                    const sampled: any[] = [];
-                    const byDay = new Map<string, any[]>();
+                    const sampled: PriceRecord[] = [];
+                    const byDay = new Map<string, PriceRecord[]>();
                     for (const rec of history) {
-                        const recDate = new Date(rec.RecordedAt || rec.recorded_at);
+                        const recDate = new Date(rec.RecordedAt || rec.recorded_at || '');
                         const dayKey = recDate.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
                         if (!byDay.has(dayKey)) byDay.set(dayKey, []);
                         byDay.get(dayKey)!.push(rec);
@@ -393,8 +532,8 @@ export async function GET(request: Request) {
                     history = sampled;
                 }
 
-                chartData = history.map((record: any) => {
-                    const d = new Date(record.RecordedAt || record.recorded_at);
+                chartData = history.map((record: PriceRecord) => {
+                    const d = new Date(record.RecordedAt || record.recorded_at || '');
                     const tzOptions: Intl.DateTimeFormatOptions = { timeZone: 'Europe/Istanbul' };
                     let dateStr = '';
                     
@@ -403,7 +542,7 @@ export async function GET(request: Request) {
                     } else if (range === '1W' || range === '1M' || range === '3M') {
                         dateStr = d.toLocaleDateString('tr-TR', { ...tzOptions, day: 'numeric', month: 'short' });
                         if (!isTefas) {
-                            let adjustedD = new Date(d);
+                            const adjustedD = new Date(d);
                             if (range === '1M' || range === '3M') {
                                 if (adjustedD.getMinutes() === 30) {
                                     adjustedD.setMinutes(0);
@@ -438,7 +577,7 @@ export async function GET(request: Request) {
                     
                     return {
                         date: dateStr,
-                        price: parseFloat(record.Price || record.price),
+                        price: parseFloat(String(record.Price || record.price || 0)),
                         rawDate: d,
                     };
                 });
@@ -541,16 +680,26 @@ export async function GET(request: Request) {
 
         if (rawSymbol === 'ALTIN') {
             const spot = spotGoldResult || (await fetchSpotGoldDetail());
-            if (spot && spot.price > 0 && chartData.length > 0) {
-                const lastPt = chartData[chartData.length - 1];
-                if (lastPt && lastPt.price > 0) {
-                    const ratio = spot.price / lastPt.price;
-                    chartData.forEach(pt => {
-                        pt.price = Math.round(pt.price * ratio * 100) / 100;
-                    });
+            if (spot && spot.price > 0) {
+                // Canlı spot altın fiyatını güncel noktaya senkronize et (tüm geçmiş eğriyi yapay oranla bozma)
+                if (chartData.length > 0) {
+                    const lastPt = chartData[chartData.length - 1];
+                    const todayStr = new Date().toDateString();
+                    const lastPtDate = new Date(lastPt.rawDate || lastPt.date).toDateString();
+                    if (todayStr === lastPtDate || lastPt.date.includes(':')) {
+                        lastPt.price = spot.price;
+                    } else {
+                        chartData.push({
+                            date: new Date().toISOString(),
+                            price: spot.price,
+                            rawDate: new Date(),
+                        });
+                    }
                 }
                 if (!summaryData) summaryData = {};
-                summaryData['1D'] = parseFloat(spot.change);
+                if (spot.change) {
+                    summaryData['1D'] = parseFloat(spot.change);
+                }
             }
 
             extraFundamentals.marketCap = '-';
@@ -569,7 +718,7 @@ export async function GET(request: Request) {
             }
         }
 
-        const fundamentals: any = {
+        const fundamentals: Fundamentals = {
             marketCap: extraFundamentals.marketCap || '-',
             peRatio: extraFundamentals.peRatio || '-',
             dividendYield: extraFundamentals.dividendYield || '-',

@@ -1,8 +1,7 @@
 'use client'
 
 import {useAuth} from "@/context/AuthContext";
-import React, {useState, useEffect} from "react";
-import {useRouter} from "next/navigation";
+import React, {useState} from "react";
 import axios from "axios";
 import Link from "next/link";
 import Image from "next/image";
@@ -11,8 +10,7 @@ import {User, Mail, Lock, Eye, EyeOff} from "lucide-react";
 
 
 export default function RegisterPage() {
-    const {user, loading: authLoading, register} = useAuth();
-    const router = useRouter();
+    const {register} = useAuth();
     const [email, setEmail] = useState('')
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
@@ -21,6 +19,8 @@ export default function RegisterPage() {
     const [loading, setLoading] = useState(false)
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [acceptedTerms, setAcceptedTerms] = useState(false);
+    const [acceptedKVKK, setAcceptedKVKK] = useState(false);
 
 
     async function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
@@ -36,6 +36,14 @@ export default function RegisterPage() {
         }
         if (password.trim() !== passwordConfirm.trim()) {
             setError("Şifreler birbiriyle eşleşmiyor!");
+            return;
+        }
+        if (!acceptedTerms) {
+            setError("Devam etmek için Kullanım Şartları ve Yasal Uyarı'yı onaylamanız gerekmektedir.");
+            return;
+        }
+        if (!acceptedKVKK) {
+            setError("Devam etmek için KVKK Aydınlatma Metni'ni onaylamanız gerekmektedir.");
             return;
         }
         setLoading(true);
@@ -140,8 +148,63 @@ export default function RegisterPage() {
                             {showConfirmPassword ? <EyeOff className="size-4"/> : <Eye className="size-4"/>}
                         </button>
                     </div>
+
+                    {/* Hukuki Onaylar: Kullanım Şartları ve KVKK ayrı ayrı */}
+                    <div className="pt-2 space-y-3">
+                        <label className="flex items-start gap-2.5 cursor-pointer group text-xs text-slate-400 select-none">
+                            <input
+                                type="checkbox"
+                                checked={acceptedTerms}
+                                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                                className="mt-0.5 w-4 h-4 rounded border-slate-700 bg-black/40 text-primary focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#1A9FD3]"
+                                required
+                            />
+                            <span className="leading-relaxed">
+                                <Link
+                                    href="/terms"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-slate-200 hover:text-primary underline font-medium transition"
+                                >
+                                    Kullanım Şartları
+                                </Link>
+                                &apos;nı ve{' '}
+                                <Link
+                                    href="/disclaimer"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-slate-200 hover:text-primary underline font-medium transition"
+                                >
+                                    Yasal Uyarı
+                                </Link>
+                                &apos;yı okudum, kabul ediyorum.
+                            </span>
+                        </label>
+
+                        <label className="flex items-start gap-2.5 cursor-pointer group text-xs text-slate-400 select-none">
+                            <input
+                                type="checkbox"
+                                checked={acceptedKVKK}
+                                onChange={(e) => setAcceptedKVKK(e.target.checked)}
+                                className="mt-0.5 w-4 h-4 rounded border-slate-700 bg-black/40 text-primary focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#1A9FD3]"
+                                required
+                            />
+                            <span className="leading-relaxed">
+                                <Link
+                                    href="/privacy"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-slate-200 hover:text-primary underline font-medium transition"
+                                >
+                                    Gizlilik Politikası ve KVKK Aydınlatma Metni
+                                </Link>
+                                &apos;ni okudum, anladım.
+                            </span>
+                        </label>
+                    </div>
+
                     <button type="submit" disabled={loading}
-                            className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-3 rounded-xl transition shadow-lg shadow-primary/20 cursor-pointer disabled:opacity-50 mt-6">{loading ? 'Hesap Oluşturuluyor...' : 'Ücretsiz Kayıt Ol'}
+                            className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-3 rounded-xl transition shadow-lg shadow-primary/20 cursor-pointer disabled:opacity-50 mt-4">{loading ? 'Hesap Oluşturuluyor...' : 'Ücretsiz Kayıt Ol'}
                     </button>
                     <p className="text-center text-xs text-slate-400 mt-6">Zaten bir hesabınız var mı?{" "}
                         <Link href="/login" className="text-xs font-bold text-white hover:text-primary transition cursor-pointer ml-2">

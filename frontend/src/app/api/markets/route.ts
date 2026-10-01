@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { scoreAssetMatch } from '@/lib/searchUtils';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,9 +32,31 @@ interface ChartQuote {
     name: string;
 }
 
+interface BackendAsset {
+    ID?: number;
+    id?: number;
+    Symbol?: string;
+    symbol?: string;
+    Name?: string;
+    name?: string;
+    AssetType?: string;
+    asset_type?: string;
+    CurrentPrice?: string;
+    current_price?: string;
+    Change?: string | number;
+}
+
+interface MarketData {
+    indices: MarketIndexItem[];
+    topGainers: MarketAssetItem[];
+    topLosers: MarketAssetItem[];
+    mostActive: MarketAssetItem[];
+    allItems: MarketAssetItem[];
+}
+
 // 30 saniyelik bellek önbelleği
 let marketCache: {
-    data: any;
+    data: MarketData;
     timestamp: number;
 } | null = null;
 
@@ -204,8 +227,8 @@ export async function GET(request: Request) {
         const now = Date.now();
         const backendBase = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080/v1';
 
-        // 1. Önbellek geçerli ise doğrudan kullan (Arama yokken 30 saniye)
-        if (marketCache && (now - marketCache.timestamp < 30 * 1000) && !search) {
+        // 1. Önbellek geçerli ise doğrudan kullan (30 saniye boyunca sıfır gecikme ile filtrele)
+        if (marketCache && (now - marketCache.timestamp < 30 * 1000)) {
             return formatResponse(marketCache.data, category, sort, period, search);
         }
 
@@ -228,7 +251,7 @@ export async function GET(request: Request) {
             fetch(`${backendBase}/assets/daily-changes`, { cache: 'no-store' }).catch(() => null),
         ]);
 
-        const rawAssets: any[] = (backendAssetsRes?.ok && await backendAssetsRes.json().catch(() => [])) || [];
+        const rawAssets: BackendAsset[] = (backendAssetsRes?.ok && await backendAssetsRes.json().catch(() => [])) || [];
         const dailyChangesMap: Record<string, number> = (dailyChangesRes?.ok && await dailyChangesRes.json().catch(() => ({}))) || {};
 
         // BIST hisse sembollerini topla ve Yahoo Finance'den toplu canlı fiyatları çek
@@ -448,14 +471,14 @@ export async function GET(request: Request) {
         };
 
         return formatResponse(fullData, category, sort, period, search);
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error('Markets API error:', err);
         return NextResponse.json({ error: 'Piyasa verileri alınamadı' }, { status: 500 });
     }
 }
 
 function formatResponse(
-    fullData: any,
+    fullData: MarketData,
     category: string,
     sort: string,
     period: string,
@@ -472,29 +495,47 @@ function formatResponse(
         filtered = filtered.filter(x => x.asset_type === 'ALTIN' || x.asset_type === 'DOVIZ');
     }
 
-    // 2. Arama Filtresi
+    // 2. Arama & Benzerlik Filtresi (Relevance & Fuzzy Matching)
     if (search) {
-        filtered = filtered.filter(
-            x => x.symbol.toLowerCase().includes(search) || x.name.toLowerCase().includes(search)
-        );
-    }
+        const scoredItems: { item: MarketAssetItem; score: number }[] = [];
+        for (const item of filtered) {
+            const score = scoreAssetMatch(item.symbol, item.name, search);
+            if (score > 0) {
+                scoredItems.push({ item, score });
+            }
+        }
 
-    // 3. Sıralama
-    if (sort === 'gainers') {
-        filtered.sort((a, b) => b.change_value - a.change_value);
-    } else if (sort === 'losers') {
-        filtered.sort((a, b) => a.change_value - b.change_value);
-    } else if (sort === 'alpha') {
-        filtered.sort((a, b) => a.symbol.localeCompare(b.symbol));
-    } else if (sort === 'popular') {
-        const popSet = new Set(POPULAR_BIST_SYMBOLS);
-        filtered.sort((a, b) => {
-            const aPop = popSet.has(a.symbol);
-            const bPop = popSet.has(b.symbol);
-            if (aPop && !bPop) return -1;
-            if (!aPop && bPop) return 1;
-            return b.change_value - a.change_value;
+        // Arama yapıldığında birincil öncelik alaka ve benzerlik puanıdır:
+        // Tam ve başlayan eşleşmeler en üstte, benzer olanlar aşağıda sıralanır.
+        scoredItems.sort((a, b) => {
+            if (a.score !== b.score) {
+                return b.score - a.score;
+            }
+            if (sort === 'gainers') return b.item.change_value - a.item.change_value;
+            if (sort === 'losers') return a.item.change_value - b.item.change_value;
+            if (sort === 'alpha') return a.item.symbol.localeCompare(b.item.symbol);
+            return 0;
         });
+
+        filtered = scoredItems.map(x => x.item);
+    } else {
+        // 3. Sıralama (Arama yokken kullanıcının seçtiği sıralama ölçütü)
+        if (sort === 'gainers') {
+            filtered.sort((a, b) => b.change_value - a.change_value);
+        } else if (sort === 'losers') {
+            filtered.sort((a, b) => a.change_value - b.change_value);
+        } else if (sort === 'alpha') {
+            filtered.sort((a, b) => a.symbol.localeCompare(b.symbol));
+        } else if (sort === 'popular') {
+            const popSet = new Set(POPULAR_BIST_SYMBOLS);
+            filtered.sort((a, b) => {
+                const aPop = popSet.has(a.symbol);
+                const bPop = popSet.has(b.symbol);
+                if (aPop && !bPop) return -1;
+                if (!aPop && bPop) return 1;
+                return b.change_value - a.change_value;
+            });
+        }
     }
 
     return NextResponse.json({

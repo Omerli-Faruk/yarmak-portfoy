@@ -1,25 +1,15 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '@/context/AuthContext';
-import api from '@/lib/api';
 import {
     Search,
     TrendingUp,
     TrendingDown,
     ArrowRight,
-    Sparkles,
-    ChevronDown,
-    Activity,
-    Bell,
     X,
-    Shield,
-    Globe,
-    LineChart,
-    Clock,
 } from 'lucide-react';
 
 /* ═══════════════════════════════════════════════════════════════
@@ -69,12 +59,9 @@ export default function Home() {
     }, [user, authLoading, router]);
 
     const [searchQuery, setSearchQuery] = useState('');
-    const [openFaq, setOpenFaq] = useState<number | null>(null);
     const [assets, setAssets] = useState<Asset[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
     const [dynamicMatches, setDynamicMatches] = useState<Asset[]>([]);
     const [isSearchFocused, setIsSearchFocused] = useState(false);
-    const [isLiveConnected, setIsLiveConnected] = useState(false);
 
     const searchRef = useRef<HTMLDivElement>(null);
 
@@ -93,7 +80,6 @@ export default function Home() {
                 }
             } catch (err) {
                 console.error('Veritabanından varlıklar alınamadı:', err);
-                if (isMounted) setIsLoading(false);
             }
         };
 
@@ -110,6 +96,7 @@ export default function Home() {
     useEffect(() => {
         const q = searchQuery.trim();
         if (!q) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setDynamicMatches([]);
             return;
         }
@@ -471,27 +458,31 @@ export default function Home() {
                             {/* Çift döngü ile kesintisiz, akıcı sonsuz kayma */}
                             {[...sliderItems, ...sliderItems].map((item, idx) => (
                                 <div key={`${item.id}-${idx}`} className="flex items-center gap-2 shrink-0 group cursor-default">
-                                    {/* İkonlar */}
+                                    {/* İkonlar / Varlık Türü Rozeti (Tutarlı ve Sade Tipografi) */}
                                     {item.type === 'flag_us' && (
-                                        <span className="text-sm sm:text-base leading-none">🇺🇸</span>
+                                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/80">
+                                            USD
+                                        </span>
                                     )}
                                     {item.type === 'flag_eu' && (
-                                        <span className="text-sm sm:text-base leading-none">🇪🇺</span>
+                                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/80">
+                                            EUR
+                                        </span>
                                     )}
                                     {item.type === 'gold' && (
-                                        <div className="size-4 rounded-full bg-[#D4AF37] flex items-center justify-center text-[9px] font-extrabold text-slate-950 shadow-[0_0_6px_rgba(212,175,55,0.3)]">
-                                            A
-                                        </div>
+                                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/80">
+                                            ALTIN
+                                        </span>
                                     )}
                                     {item.type === 'tefas' && (
-                                        <div className="size-4 rounded-full bg-primary flex items-center justify-center text-[9px] font-extrabold text-slate-950 shadow-[0_0_6px_rgba(26,159,211,0.35)]">
-                                            T
-                                        </div>
+                                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/80">
+                                            FON
+                                        </span>
                                     )}
                                     {item.type === 'stock' && (
-                                        <div className="size-4 rounded bg-surface/80 border border-border/60 flex items-center justify-center text-[9px] text-slate-400">
-                                            📈
-                                        </div>
+                                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/80">
+                                            BIST
+                                        </span>
                                     )}
 
                                     {/* Varlık Adı */}
