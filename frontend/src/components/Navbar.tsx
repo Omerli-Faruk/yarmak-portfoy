@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { ArrowLeft, LogOut, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import NotificationBell from '@/components/NotificationBell';
 
 export default function Navbar() {
     const {user, loading, logOut} = useAuth();
@@ -53,6 +54,7 @@ export default function Navbar() {
                         <div className="h-9 w-24 rounded-xl bg-slate-800/40 animate-pulse" />
                     ) : user ? (
                         <>
+                            <NotificationBell />
                             <Link href="/profile" className="text-[#1A9FD3] hover:text-[#0C6991] font-semibold text-sm transition hover:underline">
                                 {user?.username}
                             </Link>
@@ -74,14 +76,17 @@ export default function Navbar() {
                     )}
                 </div>
 
-                {/* MOBILE MENU TOGGLE */}
-                <button 
-                    className="md:hidden text-slate-300 hover:text-white p-2.5 rounded-xl cursor-pointer"
-                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                    aria-label="Menüyü Aç/Kapat"
-                >
-                    {isMobileMenuOpen ? <X className="size-6" /> : <Menu className="size-6" />}
-                </button>
+                {/* MOBILE ACTIONS & MENU TOGGLE */}
+                <div className="flex md:hidden items-center gap-2">
+                    {user && <NotificationBell />}
+                    <button 
+                        className="text-slate-300 hover:text-white p-2 rounded-xl cursor-pointer"
+                        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                        aria-label="Menüyü Aç/Kapat"
+                    >
+                        {isMobileMenuOpen ? <X className="size-6" /> : <Menu className="size-6" />}
+                    </button>
+                </div>
             </div>
 
             {/* MOBILE MENU OVERLAY */}
