@@ -17,10 +17,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
     title: {
-        default: "Yarmak | Akıllı Borsa & Portföy Takip Terminali",
+        default: "Yarmak | Hisse, Fon ve Altın Portföy Takibi",
         template: "%s | Yarmak",
     },
-    description: "Borsa İstanbul (BIST) hisseleri, TEFAS yatırım fonları ve altın portföyünüzü canlı, dolar bazlı ve kuruşu kuruşuna doğru takip edin.",
+    description: "Borsa İstanbul hisseleri, TEFAS fonları, altın ve döviz yatırımlarınızı tek yerden takip edin; ortalama maliyetinizi, kâr/zararınızı ve temettülerinizi görün.",
     keywords: [
         "BIST portföy takip",
         "TEFAS fon takibi",
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
         "ağırlıklı ortalama maliyet",
         "Yarmak",
     ],
-    authors: [{ name: "Yarmak Portföy" }],
+    authors: [{ name: "Yarmak" }],
     icons: {
         icon: "/logo.png",
         apple: "/logo.png",
@@ -45,7 +45,7 @@ export default function RootLayout({children}: LayoutProps<"/">) {
         >
         <body className="min-h-full flex flex-col">
         <AuthProvider>
-            <div className="min-h-screen flex flex-col bg-ambient-spotlight">
+            <div className="min-h-screen flex flex-col">
                 <Navbar />
                 <main className="flex-1 flex flex-col">
                     {children}

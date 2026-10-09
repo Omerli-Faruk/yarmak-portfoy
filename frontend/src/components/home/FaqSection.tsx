@@ -9,8 +9,8 @@ export default function FaqSection() {
     return (
         <section id="destek" className="w-full max-w-3xl mx-auto px-4 py-24">
             <div className="text-center mb-12">
-                <h2 className="text-3xl font-extrabold text-white mb-4">Sıkça Sorulan Sorular</h2>
-                <p className="text-slate-400">Merak ettiğiniz tüm detaylar burada.</p>
+                <h2 className="text-3xl font-extrabold text-white mb-4">Sıkça sorulan sorular</h2>
+                <p className="text-slate-400">En çok sorulan soruların yanıtları.</p>
             </div>
             <div className="flex flex-col gap-4">
                 {faqItems.map((faq, idx) => {

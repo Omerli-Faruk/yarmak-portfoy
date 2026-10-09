@@ -1,32 +1,24 @@
-﻿import React from 'react';
-import { motion } from 'motion/react';
+import React from 'react';
 import { featureCards } from '@/data/homeData';
 
 export default function FeatureCardsSection() {
     return (
-        <section id="ozellikler" className="w-full max-w-6xl mx-auto px-4 py-24 border-t border-white/5 relative">
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent"></div>
-            
+        <section id="ozellikler" className="w-full max-w-6xl mx-auto px-4 py-24 border-t border-white/5">
             <div className="text-center mb-16">
-                <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-4">Portföyünüz İçin Gelişmiş Araçlar</h2>
-                <p className="text-slate-400 max-w-2xl mx-auto">Profesyonel portföy yöneticilerinin kullandığı araçları bireysel yatırımcılar için basitleştirdik.</p>
+                <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-4">Neler yapabilirsiniz?</h2>
+                <p className="text-slate-400 max-w-2xl mx-auto">Alım-satım ve temettü kayıtlarınızı girin; ortalama maliyet, kâr/zarar ve varlık dağılımını Yarmak hesaplasın.</p>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-                {featureCards.map((feat, idx) => (
-                    <motion.div
-                        key={idx}
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true, margin: "-50px" }}
-                        transition={{ duration: 0.5, delay: idx * 0.1 }}
-                        className="bg-surface border border-border/80 rounded-2xl p-6 sm:p-8 hover:border-primary/50 transition-colors group relative overflow-hidden"
+                {featureCards.map((feat) => (
+                    <div
+                        key={feat.title}
+                        className="bg-surface border border-border/80 rounded-2xl p-6 sm:p-8 hover:border-primary/50 transition-colors"
                     >
-                        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <feat.icon className="w-10 h-10 text-primary mb-5 group-hover:scale-110 transition-transform duration-300" />
+                        <feat.icon className="w-8 h-8 text-slate-300 mb-4" />
                         <h3 className="text-lg font-bold text-white mb-3">{feat.title}</h3>
                         <p className="text-slate-400 text-sm leading-relaxed">{feat.desc}</p>
-                    </motion.div>
+                    </div>
                 ))}
             </div>
         </section>

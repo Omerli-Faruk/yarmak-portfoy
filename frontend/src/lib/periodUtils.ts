@@ -1,9 +1,33 @@
 import { Period } from '@/types';
 
+// Periyot kodlarının ekrandaki kısa adları
+export const PERIOD_LABELS: Record<string, string> = {
+    '1D': '1G',
+    '1W': '1H',
+    '1M': '1A',
+    '3M': '3A',
+    '6M': '6A',
+    'YTD': 'YBB',
+    '1Y': '1Y',
+    '3Y': '3Y',
+    '5Y': '5Y',
+    'ALL': 'Tümü',
+};
+
+// Grafik periyot düğmeleri, soldan sağa bu sırayla
+export const CHART_PERIODS: { id: string; label: string }[] = [
+    '1D', '1W', '1M', '3M', '6M', 'YTD', '1Y', '3Y', '5Y', 'ALL',
+].map(id => ({ id, label: PERIOD_LABELS[id] }));
+
+// Bugünkü değer ve dönem getirisinden (%) dönem başındaki değeri bulur. -%100 ve altında başlangıç 0 sayılır.
+export function baseValueFromReturn(value: number, retPct: number): number {
+    return retPct <= -100 ? 0 : value / (1 + retPct / 100);
+}
+
 /**
- * Varlığın seçilen periyottan daha yeni olup olmadığını veya borsa geçmişinin yetip yetmediğini kontrol eder.
- * Eğer hisse bu periyottan daha yeniyse (veya kullanıcı bu hisseyi periyot başladıktan sonra aldıysa),
- * hissenin dönemsel kâr/zararı doğrudan kullanıcının pozisyon açılışından bugüne kadarki Net K/Z'sidir.
+ * Varlık seçilen periyottan daha yeniyse true döner: ya fiyat geçmişi periyodu kapsamıyor
+ * ya da kullanıcı varlığı periyot başladıktan sonra almış. Bu durumda dönem K/Z'si olarak
+ * pozisyon açılışından bugüne kadarki K/Z kullanılır.
  */
 export function isHoldingNewerThanPeriod(
     firstBuyDateStr: string | undefined,
@@ -13,7 +37,7 @@ export function isHoldingNewerThanPeriod(
 ): boolean {
     if (period === 'ALL') return true;
 
-    // 1) Hissenin borsa geçmişi seçilen periyoda yetmiyorsa (ALL ile aynı getiri dönmüşse):
+    // Fiyat geçmişi periyodu kapsamıyorsa getiri ALL ile aynı gelir.
     if (period !== '1D' && period !== '1W') {
         if (rawPeriodRet === null || isNaN(rawPeriodRet)) return true;
         if (retAll !== null && !isNaN(retAll) && Math.abs(rawPeriodRet - retAll) < 0.0001) {
@@ -21,7 +45,7 @@ export function isHoldingNewerThanPeriod(
         }
     }
 
-    // 2) Kullanıcının bu hisseyi portföye ilk alış tarihi seçilen periyodun başlangıcından daha sonraysa:
+    // İlk alış tarihi periyodun başlangıcından sonraysa
     if (firstBuyDateStr) {
         const buyDate = new Date(firstBuyDateStr);
         if (!isNaN(buyDate.getTime())) {
@@ -54,9 +78,7 @@ export function isHoldingNewerThanPeriod(
     return false;
 }
 
-/**
- * Seçilen periyot için tablo ve kart başlık etiketini döner.
- */
+// Seçilen periyot için tablo ve kart başlığı
 export function getPeriodHeaderLabel(selectedPeriod: Period): string {
     switch (selectedPeriod) {
         case 'ALL':
@@ -72,7 +94,7 @@ export function getPeriodHeaderLabel(selectedPeriod: Period): string {
         case '6M':
             return '6 Aylık (6A) K/Z';
         case 'YTD':
-            return 'Yılbaşından Bugüne (YTD) K/Z';
+            return 'Yılbaşından Bugüne (YBB) K/Z';
         case '1Y':
             return 'Yıllık (1Y) K/Z';
         case '3Y':

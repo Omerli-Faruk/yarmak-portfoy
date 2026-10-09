@@ -19,11 +19,12 @@ import {
     ArrowDownRight,
 } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { CHART_PERIODS } from '@/lib/periodUtils';
+import { formatSignedPercent } from '@/lib/formatters';
 
 export interface ChartPeriod {
-    id: string; // '1D', '1W', '1M', '3M', '6M', 'YTD', '1Y', '3Y', '5Y', 'ALL'
-    label: string; // '1G', '1H', etc.
-    changePercent?: number | null;
+    id: string;    // '1D', '1W', ... 'ALL'
+    label: string; // ekranda görünen kısa ad: '1G', '1H', ...
 }
 
 export interface ChartDataPoint {
@@ -38,10 +39,9 @@ export interface ChartDataPoint {
 export interface InteractiveAreaChartProps {
     title?: string;
     subtitle?: string;
-    icon?: React.ReactNode;
     data: ChartDataPoint[];
-    dataKey?: string; // default 'value'
-    dateKey?: string; // default 'date'
+    dataKey?: string; // varsayılan 'value'
+    dateKey?: string; // varsayılan 'date'
     periods?: ChartPeriod[];
     activePeriod: string;
     onPeriodChange: (periodId: string) => void;
@@ -51,35 +51,20 @@ export interface InteractiveAreaChartProps {
     showBrush?: boolean;
     showStats?: boolean;
     isLoading?: boolean;
-    loadingMessage?: string;
     emptyMessage?: string;
-    height?: number;
-    colorMode?: 'dynamic' | 'cyan' | 'indigo' | 'emerald';
-    onBrushChange?: (e: { startIndex?: number; endIndex?: number }) => void;
-    headerExtra?: React.ReactNode;
 }
 
-const DEFAULT_PERIODS: ChartPeriod[] = [
-    { id: '1D', label: '1G' },
-    { id: '1W', label: '1H' },
-    { id: '1M', label: '1A' },
-    { id: '3M', label: '3A' },
-    { id: '6M', label: '6A' },
-    { id: 'YTD', label: 'YBB' },
-    { id: '1Y', label: '1Y' },
-    { id: '3Y', label: '3Y' },
-    { id: '5Y', label: '5Y' },
-    { id: 'ALL', label: 'Tümü' },
-];
+const CHART_HEIGHT = 340;
+const UP_COLOR = '#10b981';
+const DOWN_COLOR = '#f43f5e';
 
 export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.memo(({
     title = 'Portföy Değer Gelişimi',
     subtitle,
-    icon,
     data,
     dataKey = 'value',
     dateKey = 'date',
-    periods = DEFAULT_PERIODS,
+    periods = CHART_PERIODS,
     activePeriod,
     onPeriodChange,
     currencySymbol = '₺',
@@ -88,25 +73,20 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
     showBrush = true,
     showStats = true,
     isLoading = false,
-    loadingMessage = 'Grafik verileri yükleniyor...',
     emptyMessage = 'Seçilen aralıkta grafik verisi bulunamadı.',
-    height = 340,
-    colorMode = 'dynamic',
-    onBrushChange,
-    headerExtra,
 }) => {
     const rawGradientId = useId();
     const gradientId = `chartGrad_${rawGradientId.replace(/:/g, '_')}`;
 
-    // Brush ile seçilen aralık (indeksler)
+    // Kaydırıcıyla seçilen aralığın başlangıç ve bitiş indeksleri
     const [brushRange, setBrushRange] = useState<{ start?: number; end?: number }>({});
 
-    // Aktif periyot değiştiğinde brush aralığını sıfırla
+    // Periyot değişince seçili aralık sıfırlanır
     React.useEffect(() => {
         setBrushRange({});
     }, [activePeriod]);
 
-    // Veri noktalarından sayısal değeri alma
+    // Veri noktasının sayısal değeri
     const getVal = useCallback((item: ChartDataPoint | undefined): number => {
         if (!item) return 0;
         if (typeof item[dataKey] === 'number') return item[dataKey];
@@ -117,7 +97,7 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
         return isNaN(parsed) ? 0 : parsed;
     }, [dataKey]);
 
-    // Görünür veri dilimi (Brush hareket ettiğinde filtrelenen)
+    // Kaydırıcıyla seçilen aralıkta kalan noktalar
     const visibleData = useMemo(() => {
         if (!data || data.length === 0) return [];
         const start = brushRange.start !== undefined ? brushRange.start : 0;
@@ -125,7 +105,7 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
         return data.slice(Math.max(0, start), Math.min(data.length, end + 1));
     }, [data, brushRange]);
 
-    // Zirve (Max), Dip (Min), İlk ve Son Değer
+    // Görünen aralığın en düşük ve en yüksek değeri, ilk ve son nokta arasındaki yüzde değişim
     const { minVal, maxVal, periodReturn } = useMemo(() => {
         if (!visibleData || visibleData.length === 0) {
             return { minVal: 0, maxVal: 0, periodReturn: 0 };
@@ -140,10 +120,10 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
         const first = getVal(visibleData[0]);
         const last = getVal(visibleData[visibleData.length - 1]);
         const ret = first > 0 ? ((last - first) / first) * 100 : 0;
-        return { minVal: min, maxVal: max, firstVal: first, lastVal: last, periodReturn: ret };
+        return { minVal: min, maxVal: max, periodReturn: ret };
     }, [visibleData, getVal]);
 
-    // Brush çubuğunun kullanılıp kullanılmadığını tespit et (varsayılandan daraltılmış mı?)
+    // Kaydırıcı daraltıldı mı (başı ya da sonu kenardan içeri çekildi mi)
     const isCustomRangeSelected = useMemo(() => {
         if (!data || data.length === 0) return false;
         const isStartMoved = brushRange.start !== undefined && brushRange.start > 0;
@@ -155,38 +135,11 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
         return periods.find(p => p.id === activePeriod);
     }, [periods, activePeriod]);
 
-    // Grafik Getirisi: 1D hariç tüm periyotlarda ekranda görünen gerçek veri noktalarının
-    // ilk ve son değeri arasındaki değişimi (periodReturn) esas alır.
-    // Böylece grafikte düşen bir eğri yukarıda pozitif (yeşil) görünmez!
-    const effectiveReturn = useMemo(() => {
-        if (!isCustomRangeSelected && activePeriod === '1D' && activePeriodObj && activePeriodObj.changePercent !== undefined && activePeriodObj.changePercent !== null) {
-            return activePeriodObj.changePercent;
-        }
-        if (periodReturn !== undefined && periodReturn !== null && !isNaN(periodReturn)) {
-            return periodReturn;
-        }
-        if (!isCustomRangeSelected && activePeriodObj && activePeriodObj.changePercent !== undefined && activePeriodObj.changePercent !== null) {
-            return activePeriodObj.changePercent;
-        }
-        return periodReturn;
-    }, [activePeriod, isCustomRangeSelected, activePeriodObj, periodReturn]);
+    // Yüzde ve çizgi rengi görünen ilk ve son noktaya göre belirlenir, düşen eğri yeşil görünmez
+    const isUp = periodReturn >= 0;
+    const lineColor = isUp ? UP_COLOR : DOWN_COLOR;
 
-    // Dinamik renk belirleme
-    const { strokeColor, fillColor } = useMemo(() => {
-        if (colorMode === 'emerald') {
-            return { strokeColor: '#10b981', fillColor: '#10b981' };
-        }
-        if (colorMode === 'cyan' || colorMode === 'indigo') {
-            return { strokeColor: '#1A9FD3', fillColor: '#1A9FD3' };
-        }
-        // Dynamic mode: Getiriye göre yeşil ya da kırmızı
-        if (effectiveReturn >= 0) {
-            return { strokeColor: '#10b981', fillColor: '#10b981' }; // Yeşil: Kâr
-        }
-        return { strokeColor: '#f43f5e', fillColor: '#f43f5e' }; // Kırmızı: Zarar
-    }, [colorMode, effectiveReturn]);
-
-    // Standart değer biçimlendirici
+    // valueFormatter verilmezse kullanılan biçim
     const defaultFormat = useCallback((val: number): string => {
         if (valueFormatter) return valueFormatter(val);
         const prefix = currencySymbol ? `${currencySymbol} ` : '';
@@ -196,17 +149,18 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
         })}`;
     }, [currencySymbol, valueFormatter]);
 
-    // Y Ekseni kompakt biçimlendirici (12.5K, 1.2M vb.) — Kuruş altı fon fiyatlarını (0.0125 TL) hassas destekler
+    // Y ekseni etiketleri. Binlerde kısaltma yapmıyoruz: dar aralıkta (ör. 6.600-6.700 altın) her etiket "7K" oluyordu.
+    // Kuruşun altındaki fon fiyatlarında daha çok basamak gösterilir.
     const yAxisFormatter = useCallback((val: number): string => {
-        if (val >= 1e6) return `${(val / 1e6).toFixed(1)}M`;
-        if (val >= 1e3) return `${(val / 1e3).toFixed(0)}K`;
+        if (val >= 1e6) return `${(val / 1e6).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}M`;
+        if (val >= 1e3) return val.toLocaleString('tr-TR', { maximumFractionDigits: 0 });
         if (val >= 100) return val.toFixed(0);
         if (val >= 1) return val.toFixed(2);
         if (val >= 0.01) return val.toFixed(4);
         return val.toFixed(6);
     }, []);
 
-    // Brush değişim yöneticisi (requestAnimationFrame ile 60fps akıcı throttle ve jank önleme)
+    // Kaydırıcı sürüklenirken state güncellemesini kare başına bire indirmek için requestAnimationFrame kullanılır
     const rafRef = React.useRef<number | null>(null);
     const lastRangeRef = React.useRef<{ start?: number; end?: number }>({});
 
@@ -228,10 +182,9 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
         }
         rafRef.current = requestAnimationFrame(() => {
             setBrushRange({ start: e.startIndex, end: e.endIndex });
-            if (onBrushChange) onBrushChange(e);
             rafRef.current = null;
         });
-    }, [onBrushChange]);
+    }, []);
 
     const currentStartIndex = brushRange.start !== undefined ? brushRange.start : 0;
     const currentEndIndex = brushRange.end !== undefined ? brushRange.end : (data && data.length > 0 ? data.length - 1 : 0);
@@ -240,12 +193,12 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
 
     return (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col w-full transition-all">
-            {/* 1. ÜST BAŞLIK VE PERİYOT SEÇİCİ */}
+            {/* Başlık ve periyot seçici */}
             <div className="flex flex-col xl:flex-row xl:items-center justify-between pb-4 gap-3 border-b border-slate-800/80">
                 <div className="flex items-start sm:items-center justify-between gap-4">
                     <div>
                         <div className="flex items-center gap-2.5">
-                            {icon || <Activity className="w-5 h-5 text-[#1A9FD3] shrink-0" />}
+                            <Activity className="w-5 h-5 text-[#1A9FD3] shrink-0" />
                             <h3 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
                                 {title}
                             </h3>
@@ -258,7 +211,7 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
                     </div>
                 </div>
 
-                {/* Periyot Butonları (Pills Bar) */}
+                {/* Periyot düğmeleri */}
                 <div className="flex items-center gap-1.5 self-start xl:self-auto max-w-full">
                     <div className="flex bg-slate-800/90 rounded-xl p-1 border border-slate-700/60 overflow-x-auto no-scrollbar touch-pan-x max-w-full gap-1">
                         {periods.map(p => {
@@ -279,14 +232,13 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
                             );
                         })}
                     </div>
-                    {headerExtra}
                 </div>
             </div>
 
-            {/* 2. DÖNEM VE GRAFİK İSTATİSTİKLERİ (Seçili Getiri, Zirve, Dip) */}
+            {/* Görünen aralığın değişimi, en düşük ve en yüksek değeri */}
             {showStats && (
                 <div className="flex items-center justify-between py-2.5 gap-2 text-xs min-h-[46px] overflow-x-auto no-scrollbar">
-                    {/* Seçili Periyot Getirisi ve Tarih Aralığı */}
+                    {/* Değişim ve tarih aralığı */}
                     <div className="flex items-center gap-2 shrink-0 whitespace-nowrap">
                         <span className="text-slate-400 font-medium">
                             {isCustomRangeSelected ? 'Seçili Aralık:' : `${activePeriodObj?.label || activePeriod} Getirisi:`}
@@ -297,24 +249,23 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
                             </span>
                         )}
                         <span
-                            title={!isCustomRangeSelected ? "Borsa resmi dönem kapanış fiyatına göre hesaplanan getiri" : "Grafikte seçilen zaman aralığındaki fiyat değişimi"}
+                            title={!isCustomRangeSelected ? 'Dönem başındaki değer ile son değer arasındaki değişim' : 'Seçilen aralığın ilk ve son değeri arasındaki değişim'}
                             className={`px-2.5 py-1 rounded-lg font-bold flex items-center border ${
-                                effectiveReturn >= 0
+                                isUp
                                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                                     : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
                             }`}
                         >
-                            {effectiveReturn >= 0 ? (
+                            {isUp ? (
                                 <TrendingUp className="w-3.5 h-3.5 mr-1" />
                             ) : (
                                 <TrendingDown className="w-3.5 h-3.5 mr-1" />
                             )}
-                            {effectiveReturn >= 0 ? '+' : ''}
-                            {effectiveReturn.toFixed(2)}%
+                            {formatSignedPercent(periodReturn)}
                         </span>
                     </div>
 
-                    {/* Zirve ve Dip Değerleri */}
+                    {/* Dip ve zirve */}
                     <div className="flex items-center gap-2.5 shrink-0 whitespace-nowrap">
                         {minVal > 0 && maxVal > 0 && (
                             <>
@@ -331,17 +282,17 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
                             </>
                         )}
                         <span className="text-[11px] text-slate-500 font-mono hidden xl:inline">
-                            {currency === 'USD' ? '($)' : '(₺)'}
+                            {currency === 'USD' ? '($)' : currencySymbol ? `(${currencySymbol})` : null}
                         </span>
                     </div>
                 </div>
             )}
 
-            {/* 3. GRAFİK VE ZAMAN KAYDIRICI (BRUSH) ALANI */}
-            <div className="w-full relative" style={{ minHeight: `${height}px`, height: `${height}px` }}>
+            {/* Grafik ve zaman kaydırıcı */}
+            <div className="w-full relative" style={{ minHeight: CHART_HEIGHT, height: CHART_HEIGHT }}>
                 {isLoading ? (
                     <div className="absolute inset-0 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs rounded-xl">
-                        <LoadingSpinner fullScreen={false} message={loadingMessage} />
+                        <LoadingSpinner fullScreen={false} message="Grafik verileri yükleniyor..." />
                     </div>
                 ) : !data || data.length === 0 ? (
                     <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 text-center px-4">
@@ -356,8 +307,8 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
                         >
                             <defs>
                                 <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor={fillColor} stopOpacity={0.12} />
-                                    <stop offset="95%" stopColor={fillColor} stopOpacity={0.0} />
+                                    <stop offset="5%" stopColor={lineColor} stopOpacity={0.12} />
+                                    <stop offset="95%" stopColor={lineColor} stopOpacity={0.0} />
                                 </linearGradient>
                             </defs>
 
@@ -404,20 +355,20 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
                             <Area
                                 type="monotone"
                                 dataKey={dataKey}
-                                stroke={strokeColor}
+                                stroke={lineColor}
                                 strokeWidth={2.2}
                                 fillOpacity={1}
                                 fill={`url(#${gradientId})`}
-                                activeDot={{ r: 5, fill: strokeColor, stroke: '#0f172a', strokeWidth: 2 }}
+                                activeDot={{ r: 5, fill: lineColor, stroke: '#0f172a', strokeWidth: 2 }}
                                 isAnimationActive={false}
                             />
 
-                            {/* ZAMAN KAYDIRICI (BRUSH) - HER PERİYOT İÇİN AYARLAMA ÇUBUĞU */}
+                            {/* Zaman kaydırıcı: periyot içinde aralığı daraltmak için */}
                             {showBrush && data.length > 1 && (
                                 <Brush
                                     dataKey={dateKey}
                                     height={28}
-                                    stroke={strokeColor}
+                                    stroke={lineColor}
                                     fill="#1e293b"
                                     travellerWidth={10}
                                     onChange={handleInternalBrushChange}
@@ -429,7 +380,7 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
                 )}
             </div>
 
-            {/* 4. BRUSH BAŞLANGIÇ - BİTİŞ GÖSTERGE ÇUBUĞU */}
+            {/* Seçili aralığın başlangıç ve bitiş tarihi */}
             {showBrush && data && data.length > 1 && (
                 <div className="flex items-center justify-between mt-4 pt-3.5 border-t border-slate-800/80 px-1 text-xs min-h-[44px] whitespace-nowrap overflow-hidden">
                     <div className="flex items-center gap-1.5 bg-slate-800/90 px-2.5 py-1 rounded-lg border border-slate-700/60 font-mono text-[11px] text-slate-200 shadow-xs shrink-0">

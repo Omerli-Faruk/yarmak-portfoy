@@ -4,10 +4,8 @@ import { useState, useCallback } from 'react';
 
 export type Currency = 'TRY' | 'USD';
 
-/**
- * useCurrency hook — Manages active currency ('TRY' | 'USD') with localStorage persistence.
- * Initializes lazily to avoid cascading renders and SSR mismatch.
- */
+// Seçili para birimini (TRY/USD) tutar ve tarayıcıda saklar.
+// İlk değer useState içinde bir kez okunur; böylece ilk render'dan sonra ikinci bir güncelleme gerekmez.
 export function useCurrency(defaultCurrency: Currency = 'TRY') {
     const [currency, setCurrencyState] = useState<Currency>(() => {
         if (typeof window !== 'undefined') {

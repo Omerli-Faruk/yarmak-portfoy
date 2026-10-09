@@ -44,14 +44,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-.bg-ambient-spotlight {
-  background-color: #0A0E14;
-  background-image:
-          radial-gradient(ellipse 80% 50% at 50% -5%, rgba(26, 159, 211, 0.18) 0%, rgba(10, 14, 20, 0) 70%),
-          radial-gradient(circle at 50% 0%, rgba(26, 159, 211, 0.06) 0%, rgba(10, 14, 20, 0) 90%);
-}
-
-/* Mobilde yatay kaydırılabilir buton barlarında çirkin tarayıcı çubuğunu gizleme */
+/* Yatay kaydırılan buton satırlarında kaydırma çubuğunu gizler */
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -65,12 +58,12 @@ button, a, input, select {
   touch-action: manipulation;
 }
 
-/* Recharts Brush Tutamaç Metinlerinin İçe Girmesini ve Taşmasını Önleme */
+/* Recharts Brush tutamaç metinleri taştığı için gizlenir */
 .recharts-brush-texts {
   display: none !important;
 }
 
-/* Şık ve zarif özel kaydırma çubuğu */
+/* İnce kaydırma çubuğu */
 .custom-horizontal-scrollbar,
 .custom-scrollbar {
   scrollbar-width: thin;
@@ -95,7 +88,7 @@ button, a, input, select {
   background: rgba(26, 159, 211, 0.85);
 }
 
-/* Tüm uygulamada klasik kaba gri Windows kaydırma çubuğunu önleyen modern genel stil */
+/* Genel kaydırma çubuğu stili */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

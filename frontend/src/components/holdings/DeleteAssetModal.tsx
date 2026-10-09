@@ -47,7 +47,7 @@ export default function DeleteAssetModal({
                 </div>
 
                 <p className="text-xs text-slate-400 leading-relaxed">
-                    Bu hisseye ait sistemde kayıtlı <strong className="text-white">tüm geçmiş alım-satım işlemleri</strong> silinecektir ve varlık portföyünüzden tamamen kaldırılacaktır.
+                    Bu varlığa ait sistemde kayıtlı <strong className="text-white">tüm alım-satım işlemleri</strong> silinecek ve varlık portföyünüzden kaldırılacaktır.
                 </p>
 
                 <div className="flex items-center justify-end gap-3 pt-2">

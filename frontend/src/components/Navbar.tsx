@@ -9,8 +9,23 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import NotificationBell from '@/components/NotificationBell';
 
+// Giriş yapmış kullanıcının menüsü
+const USER_LINKS = [
+    { href: '/dashboard', label: 'Portföyüm' },
+    { href: '/holdings', label: 'Varlıklarım' },
+    { href: '/markets', label: 'Piyasalar' },
+    { href: '/alerts', label: 'Alarmlar' },
+];
+
+// Ziyaretçi menüsü; # ile başlayanlar ana sayfadaki bölümlere gider
+const GUEST_LINKS = [
+    { href: '/markets', label: 'Piyasalar' },
+    { href: '/#ozellikler', label: 'Özellikler' },
+    { href: '/#destek', label: 'Destek' },
+];
+
 export default function Navbar() {
-    const {user, loading, logOut} = useAuth();
+    const {user, logOut} = useAuth();
     const pathname = usePathname();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -22,65 +37,60 @@ export default function Navbar() {
         )
     }
 
+    const navLinks = user ? USER_LINKS : GUEST_LINKS;
+    const closeMobileMenu = () => setIsMobileMenuOpen(false);
+
     return (
         <header className="w-full relative z-40">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
-                {/* LOGO */}
                 <Link className="flex justify-center items-center" href={user ? "/dashboard" : "/"}>
                     <Image src="/logo.png" alt="Yarmak Logo" width={48} height={48} className="size-12 object-contain" loading="eager"/>
                 </Link>
 
-                {/* DESKTOP MENU */}
+                {/* Masaüstü menü */}
                 <div className="hidden md:flex items-center gap-x-8 text-xs uppercase tracking-widest font-bold">
-                    {user ? (
-                        <>
-                            <Link href="/dashboard" className={`${pathname === '/dashboard' ? 'text-primary font-black' : 'text-slate-300 hover:text-primary'} transition-colors`}>Portföyüm</Link>
-                            <Link href="/holdings" className={`${pathname === '/holdings' ? 'text-primary font-black' : 'text-slate-300 hover:text-primary'} transition-colors`}>Varlıklarım</Link>
-                            <Link href="/markets" className={`${pathname === '/markets' ? 'text-primary font-black' : 'text-slate-300 hover:text-primary'} transition-colors`}>Piyasalar</Link>
-                            <Link href="/alerts" className={`${pathname === '/alerts' ? 'text-primary font-black' : 'text-slate-300 hover:text-primary'} transition-colors`}>Alarmlar</Link>
-                        </>
-                    ) : (
-                        <>
-                            <Link href="/markets" className={`${pathname === '/markets' ? 'text-primary font-black' : 'text-slate-300 hover:text-primary'} transition-colors`}>Piyasalar</Link>
-                            <Link href="/#ozellikler" className="hover:text-primary transition-colors">Özellikler</Link>
-                            <Link href="/#destek" className="hover:text-primary transition-colors">Destek</Link>
-                        </>
-                    )}
+                    {navLinks.map(link => (
+                        <Link
+                            key={link.href}
+                            href={link.href}
+                            className={`${pathname === link.href ? 'text-primary font-black' : 'text-slate-300 hover:text-primary'} transition-colors`}
+                        >
+                            {link.label}
+                        </Link>
+                    ))}
                 </div>
 
-                {/* DESKTOP RIGHT (USER ACTIONS) */}
-                <div className="hidden md:flex items-center gap-x-6 min-w-[200px] justify-end">
-                    {loading ? (
-                        <div className="h-9 w-24 rounded-xl bg-slate-800/40 animate-pulse" />
-                    ) : user ? (
-                        <>
-                            <NotificationBell />
-                            <Link href="/profile" className="text-[#1A9FD3] hover:text-[#0C6991] font-semibold text-sm transition hover:underline">
-                                {user?.username}
-                            </Link>
-                            <button onClick={() => logOut()}
-                                    className="text-xs text-slate-400 hover:text-rose-400 transition cursor-pointer flex items-center gap-1.5 font-medium bg-slate-800/50 px-3 py-2 rounded-lg">
-                                <LogOut className="size-4"/> Çıkış Yap
-                            </button>
-                        </>
-                    ) : (
-                        <>
-                            <Link href="/login" className="text-sm font-semibold text-slate-300 hover:text-[#1A9FD3] transition">
-                                Giriş Yap
-                            </Link>
-                            <Link href="/register"
-                                  className="bg-primary hover:bg-primary-hover text-white font-bold px-5 py-2.5 rounded-xl transition shadow-lg shadow-primary/20 text-sm">
-                                Ücretsiz Hesap Oluştur
-                            </Link>
-                        </>
-                    )}
-                </div>
-
-                {/* MOBILE ACTIONS & MENU TOGGLE */}
-                <div className="flex md:hidden items-center gap-2">
+                {/* Sağ taraf. Bildirim çanı her genişlikte tek kez render edilir:
+                    masaüstünde [çan][kullanıcı adı][çıkış], mobilde [çan][menü düğmesi]. */}
+                <div className="flex items-center justify-end gap-2 md:gap-x-6 md:min-w-[200px]">
                     {user && <NotificationBell />}
-                    <button 
-                        className="text-slate-300 hover:text-white p-2 rounded-xl cursor-pointer"
+
+                    <div className="hidden md:flex items-center gap-x-6">
+                        {user ? (
+                            <>
+                                <Link href="/profile" className="text-[#1A9FD3] hover:text-[#0C6991] font-semibold text-sm transition hover:underline">
+                                    {user.username}
+                                </Link>
+                                <button onClick={() => logOut()}
+                                        className="text-xs text-slate-400 hover:text-rose-400 transition cursor-pointer flex items-center gap-1.5 font-medium bg-slate-800/50 px-3 py-2 rounded-lg">
+                                    <LogOut className="size-4"/> Çıkış Yap
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <Link href="/login" className="text-sm font-semibold text-slate-300 hover:text-[#1A9FD3] transition">
+                                    Giriş Yap
+                                </Link>
+                                <Link href="/register"
+                                      className="bg-primary hover:bg-primary-hover text-white font-bold px-5 py-2.5 rounded-xl transition shadow-lg shadow-primary/20 text-sm">
+                                    Ücretsiz Hesap Oluştur
+                                </Link>
+                            </>
+                        )}
+                    </div>
+
+                    <button
+                        className="md:hidden text-slate-300 hover:text-white p-2 rounded-xl cursor-pointer"
                         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                         aria-label="Menüyü Aç/Kapat"
                     >
@@ -89,49 +99,49 @@ export default function Navbar() {
                 </div>
             </div>
 
-            {/* MOBILE MENU OVERLAY */}
+            {/* Mobil menü */}
             <AnimatePresence>
                 {isMobileMenuOpen && (
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, y: -20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
                         className="absolute top-20 left-0 w-full bg-[#0A0E14]/95 backdrop-blur-xl border-b border-slate-800 shadow-2xl flex flex-col p-4 md:hidden gap-4 z-50"
                     >
-                        {user ? (
-                            <div className="flex flex-col gap-4 text-sm font-bold text-slate-300 uppercase tracking-wider mb-2">
-                                <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className={`p-2 rounded-lg ${pathname === '/dashboard' ? 'text-primary bg-primary/10' : 'hover:text-primary bg-white/5'}`}>Portföyüm</Link>
-                                <Link href="/holdings" onClick={() => setIsMobileMenuOpen(false)} className={`p-2 rounded-lg ${pathname === '/holdings' ? 'text-primary bg-primary/10' : 'hover:text-primary bg-white/5'}`}>Varlıklarım</Link>
-                                <Link href="/markets" onClick={() => setIsMobileMenuOpen(false)} className={`p-2 rounded-lg ${pathname === '/markets' ? 'text-primary bg-primary/10' : 'hover:text-primary bg-white/5'}`}>Piyasalar</Link>
-                                <Link href="/alerts" onClick={() => setIsMobileMenuOpen(false)} className={`p-2 rounded-lg ${pathname === '/alerts' ? 'text-primary bg-primary/10' : 'hover:text-primary bg-white/5'}`}>Alarmlar</Link>
-                                <div className="h-px bg-white/10 my-2"></div>
+                        <div className="flex flex-col gap-4 text-sm font-bold text-slate-300 uppercase tracking-wider mb-2">
+                            {navLinks.map(link => (
+                                <Link
+                                    key={link.href}
+                                    href={link.href}
+                                    onClick={closeMobileMenu}
+                                    className={`p-2 rounded-lg ${pathname === link.href ? 'text-primary bg-primary/10' : 'hover:text-primary bg-white/5'}`}
+                                >
+                                    {link.label}
+                                </Link>
+                            ))}
+                            <div className="h-px bg-white/10 my-2"></div>
+                            {user ? (
                                 <div className="flex items-center justify-between px-2">
-                                    <Link href="/profile" onClick={() => setIsMobileMenuOpen(false)} className="text-[#1A9FD3] hover:text-[#0C6991] font-semibold normal-case">
-                                        {user?.username}
+                                    <Link href="/profile" onClick={closeMobileMenu} className="text-[#1A9FD3] hover:text-[#0C6991] font-semibold normal-case">
+                                        {user.username}
                                     </Link>
-                                    <button onClick={() => { logOut(); setIsMobileMenuOpen(false); }}
+                                    <button onClick={() => { logOut(); closeMobileMenu(); }}
                                             className="text-rose-400 hover:text-rose-300 transition flex items-center gap-1.5 normal-case">
                                         <LogOut className="size-4"/> Çıkış
                                     </button>
                                 </div>
-                            </div>
-                        ) : (
-                            <div className="flex flex-col gap-4 text-sm font-bold text-slate-300 uppercase tracking-wider mb-2">
-                                <Link href="/markets" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-primary p-2 bg-white/5 rounded-lg">Piyasalar</Link>
-                                <Link href="/#ozellikler" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-primary p-2 bg-white/5 rounded-lg">Özellikler</Link>
-                                <Link href="/#destek" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-primary p-2 bg-white/5 rounded-lg">Destek</Link>
-                                <div className="h-px bg-white/10 my-2"></div>
+                            ) : (
                                 <div className="flex flex-col gap-3">
-                                    <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="text-center font-semibold text-slate-300 hover:text-[#1A9FD3] bg-slate-800 p-3 rounded-xl transition">
+                                    <Link href="/login" onClick={closeMobileMenu} className="text-center font-semibold text-slate-300 hover:text-[#1A9FD3] bg-slate-800 p-3 rounded-xl transition">
                                         Giriş Yap
                                     </Link>
-                                    <Link href="/register" onClick={() => setIsMobileMenuOpen(false)}
+                                    <Link href="/register" onClick={closeMobileMenu}
                                           className="text-center bg-primary hover:bg-primary-hover text-white font-bold p-3 rounded-xl shadow-lg shadow-primary/20 transition">
                                         Ücretsiz Hesap Oluştur
                                     </Link>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>

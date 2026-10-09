@@ -27,23 +27,23 @@ export default function RegisterPage() {
         e.preventDefault()
         setError('')
         if (username.trim().length < 3 || username.trim().length > 15) {
-            setError("Kullanıcı adı 3 ile 15 karakter arasında olmalıdır!");
+            setError("Kullanıcı adı 3-15 karakter olmalı; yalnızca harf (ç, ğ, ı, ö, ş, ü hariç), rakam ve alt çizgi (_) içerebilir.");
             return;
         }
         if (password.trim().length < 8 || password.trim().length > 72) {
-            setError("Şifreniz en az 8 karakter olmalıdır!");
+            setError("Şifreniz 8 ile 72 karakter arasında olmalıdır.");
             return;
         }
         if (password.trim() !== passwordConfirm.trim()) {
-            setError("Şifreler birbiriyle eşleşmiyor!");
+            setError("Şifreler eşleşmiyor.");
             return;
         }
         if (!acceptedTerms) {
-            setError("Devam etmek için Kullanım Şartları ve Yasal Uyarı'yı onaylamanız gerekmektedir.");
+            setError("Devam etmek için Kullanım Şartları'nı ve Yasal Uyarı'yı kabul etmeniz gerekiyor.");
             return;
         }
         if (!acceptedKVKK) {
-            setError("Devam etmek için KVKK Aydınlatma Metni'ni onaylamanız gerekmektedir.");
+            setError("Devam etmek için Gizlilik Politikası ve KVKK Aydınlatma Metni'ni okuduğunuzu işaretlemeniz gerekiyor.");
             return;
         }
         setLoading(true);
@@ -73,8 +73,8 @@ export default function RegisterPage() {
                            className="size-16 object-contain mb-2"/>
                 </Link>
                 <div className="flex flex-col items-center justify-center text-center">
-                    <span className="tracking-widest font-black text-2xl">Portföyünüzü Oluşturun</span>
-                    <p className="text-slate-400 text-xs tracking-widest mt-1">Tüm yatırımlarınızı tek ekrandan yönetmeye başlayın.</p>
+                    <span className="font-black text-2xl">Portföyünüzü oluşturun</span>
+                    <p className="text-slate-400 text-xs mt-1">Yatırımlarınızı tek ekrandan takip etmeye başlayın.</p>
                 </div>
                 <form onSubmit={handleSubmit} className="w-full space-y-4 mt-10">
                     {error && <div
@@ -149,7 +149,7 @@ export default function RegisterPage() {
                         </button>
                     </div>
 
-                    {/* Hukuki Onaylar: Kullanım Şartları ve KVKK ayrı ayrı */}
+                    {/* Kullanım şartları kabul edilir; aydınlatma metni için yalnızca okunduğu işaretlenir. İkisi ayrı tutulur. */}
                     <div className="pt-2 space-y-3">
                         <label className="flex items-start gap-2.5 cursor-pointer group text-xs text-slate-400 select-none">
                             <input

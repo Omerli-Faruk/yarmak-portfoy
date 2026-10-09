@@ -3,7 +3,24 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Calendar } from 'lucide-react';
 import api from '@/lib/api';
+import { formatTRY } from '@/lib/formatters';
+import { normalizeDividend } from '@/lib/normalize';
 import { UserHolding, Dividend } from '@/types';
+
+// Bireysel yatırımcıda nakit temettü stopajı 22.12.2024'ten beri %15. Şirkete göre farklı olabildiği için alan düzenlenebilir.
+const DEFAULT_TAX_RATE = '15';
+
+// Düzenlemede oran kayıttaki brüt ve stopaj tutarından bulunur; brüt yoksa varsayılan kullanılır.
+function taxRateFromRecord(d: Dividend): string {
+    const { gross, tax } = normalizeDividend(d);
+    return gross > 0 ? String(Math.round((tax / gross) * 100)) : DEFAULT_TAX_RATE;
+}
+
+// Yerel saate göre bugünün tarihi (YYYY-MM-DD); toISOString UTC tarihini verir, gece yarısından sonra dün çıkar.
+function todayLocalStr(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 interface AddDividendModalProps {
     isOpen: boolean;
@@ -22,25 +39,25 @@ export default function AddDividendModal({
 }: AddDividendModalProps) {
     const isEditMode = !!initialDividend;
 
-    // Yalnızca hisse senetleri temettü dağıtabilir (Fon, Döviz ve Altın hariç tutulur)
+    // Temettü kaydını şimdilik yalnızca hisselere açıyoruz
     const stockHoldings = useMemo(() => {
         return holdings.filter(h => h.asset_type === 'HISSE');
     }, [holdings]);
 
     const [selectedAssetId, setSelectedAssetId] = useState<number>(0);
-    const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
+    const [paymentDate, setPaymentDate] = useState(todayLocalStr);
     const [calcMode, setCalcMode] = useState<'PER_SHARE' | 'TOTAL'>('TOTAL');
     const [amountValue, setAmountValue] = useState('');
+    const [taxRateValue, setTaxRateValue] = useState(DEFAULT_TAX_RATE);
     const [submitting, setSubmitting] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-    // Modal açıldığında form doldur / sıfırla
+    // Modal her açıldığında form kayıttan doldurulur ya da sıfırlanır
     useEffect(() => {
         if (isOpen) {
             // eslint-disable-next-line react-hooks/set-state-in-effect
             setErrorMsg(null);
             if (initialDividend) {
-                // Düzenleme modu: Mevcut verileri doldur
                 const assetId = Number(initialDividend.asset_id || initialDividend.AssetID || 0);
                 setSelectedAssetId(assetId);
 
@@ -48,32 +65,32 @@ export default function AddDividendModal({
                 if (dateStr) {
                     setPaymentDate(new Date(dateStr).toISOString().split('T')[0]);
                 } else {
-                    setPaymentDate(new Date().toISOString().split('T')[0]);
+                    setPaymentDate(todayLocalStr());
                 }
 
                 const netVal = initialDividend.net_amount || initialDividend.NetAmount || initialDividend.amount || initialDividend.Amount || '';
                 setAmountValue(netVal ? parseFloat(netVal).toString() : '');
+                setTaxRateValue(taxRateFromRecord(initialDividend));
                 setCalcMode('TOTAL');
             } else {
-                // Yeni ekleme modu
                 if (stockHoldings.length > 0) {
                     setSelectedAssetId(stockHoldings[0].asset_id);
                 } else {
                     setSelectedAssetId(0);
                 }
-                setPaymentDate(new Date().toISOString().split('T')[0]);
+                setPaymentDate(todayLocalStr());
                 setAmountValue('');
+                setTaxRateValue(DEFAULT_TAX_RATE);
                 setCalcMode('TOTAL');
             }
         }
     }, [isOpen, initialDividend, stockHoldings]);
 
-    // Seçili hisse
     const selectedHolding = useMemo(() => {
         return stockHoldings.find(h => h.asset_id === selectedAssetId) || null;
     }, [stockHoldings, selectedAssetId]);
 
-    // Canlı net tutar hesaplama dökümü
+    // Girilen tutara göre hesaba geçecek net nakit önizlemesi
     const preview = useMemo(() => {
         const val = parseFloat(amountValue);
         if (isNaN(val) || val <= 0) return null;
@@ -90,12 +107,18 @@ export default function AddDividendModal({
             perShareNet = lots > 0 ? val / lots : 0;
         }
 
+        // Net tutar stopaj düşülmüş hâli olduğu için brütü geri hesaplıyoruz: brüt = net / (1 - oran)
+        const rate = parseFloat(taxRateValue) / 100;
+        const gross = rate >= 0 && rate < 1 ? totalNet / (1 - rate) : totalNet;
+
         return {
             totalNet,
             perShareNet,
             lots,
+            gross,
+            tax: gross - totalNet,
         };
-    }, [amountValue, calcMode, selectedHolding]);
+    }, [amountValue, calcMode, selectedHolding, taxRateValue]);
 
     if (!isOpen) return null;
 
@@ -110,12 +133,17 @@ export default function AddDividendModal({
             setErrorMsg('Lütfen geçerli bir temettü tutarı girin.');
             return;
         }
+        const rate = parseFloat(taxRateValue);
+        if (isNaN(rate) || rate < 0 || rate >= 100) {
+            setErrorMsg('Lütfen geçerli bir stopaj oranı girin (%0 ile %99 arası).');
+            return;
+        }
 
         try {
             setSubmitting(true);
             setErrorMsg(null);
 
-            // Bankadan/Midas'tan hesaba geçen net nakit doğrudan kaydedilir
+            // Hesaba yatan net tutar olduğu gibi kaydedilir; brüt ve stopajı sunucu bu orana göre hesaplar
             const payload: {
                 asset_id: number;
                 payment_date: string;
@@ -126,7 +154,8 @@ export default function AddDividendModal({
             } = {
                 asset_id: selectedAssetId,
                 payment_date: new Date(paymentDate).toISOString(),
-                tax_rate: '0', // Kullanıcı hesaba yatan net tutarı girdiği için ek vergi kesintisi uygulanmaz
+                // Sunucu 1'den büyük değeri yüzde sayıyor; %1 gibi oranlar karışmasın diye oran 0-1 aralığında gönderilir
+                tax_rate: String(rate / 100),
                 is_net: true,
             };
 
@@ -154,9 +183,9 @@ export default function AddDividendModal({
     };
 
     return (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4">
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-4">
-                {/* Başlık — Sade, profesyonel, abartısız insan tasarımı */}
+                {/* Başlık */}
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                     <div>
                         <h3 className="text-base font-bold text-white">
@@ -182,9 +211,9 @@ export default function AddDividendModal({
 
                 {stockHoldings.length === 0 ? (
                     <div className="py-6 text-center space-y-2">
-                        <p className="text-sm font-semibold text-slate-300">Portföyünüzde Hisse Senedi Bulunmuyor</p>
+                        <p className="text-sm font-semibold text-slate-300">Portföyünüzde hisse senedi bulunmuyor</p>
                         <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
-                            Temettü gelirleri yalnızca hisse senetleri için kaydedilebilir. Yatırım fonları, altın ve döviz temettü dağıtmaz.
+                            Temettü kaydı şu an yalnızca hisse senetleri için açık. Yatırım fonlarının çoğu temettü gelirini fon fiyatına yansıtır; altın ve döviz temettü ödemez.
                         </p>
                         <div className="pt-2">
                             <button
@@ -198,7 +227,7 @@ export default function AddDividendModal({
                     </div>
                 ) : (
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        {/* 1. Hisse Senedi Seçimi */}
+                        {/* Hisse seçimi */}
                         <div>
                             <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
                                 <span>Hisse Senedi</span>
@@ -222,7 +251,7 @@ export default function AddDividendModal({
                             </select>
                         </div>
 
-                        {/* 2. Ödeme Tarihi */}
+                        {/* Ödeme tarihi */}
                         <div>
                             <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
                                 <Calendar className="w-3.5 h-3.5 text-slate-400" />
@@ -232,13 +261,13 @@ export default function AddDividendModal({
                                 type="date"
                                 value={paymentDate}
                                 onChange={e => setPaymentDate(e.target.value)}
-                                max={new Date().toISOString().split('T')[0]}
+                                max={todayLocalStr()}
                                 required
                                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white font-mono focus:outline-none focus:border-[#1A9FD3]"
                             />
                         </div>
 
-                        {/* 3. Giriş Yöntemi — Sade 2 Seçenek */}
+                        {/* Toplam ya da hisse başına giriş */}
                         <div>
                             <label className="block text-xs font-semibold text-slate-300 mb-1.5">Giriş Türü</label>
                             <div className="grid grid-cols-2 gap-2 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60">
@@ -269,7 +298,7 @@ export default function AddDividendModal({
                             </div>
                         </div>
 
-                        {/* 4. Net Tutar Girişi */}
+                        {/* Net tutar */}
                         <div>
                             <label className="block text-xs font-semibold text-slate-300 mb-1.5">
                                 {calcMode === 'TOTAL'
@@ -293,15 +322,48 @@ export default function AddDividendModal({
                             </div>
                         </div>
 
-                        {/* 5. Otomatik Hesaplama Önizlemesi */}
+                        {/* Stopaj oranı: brüt tutar ve stopaj bu orana göre hesaplanır */}
+                        <div>
+                            <label htmlFor="dividend-tax-rate" className="block text-xs font-semibold text-slate-300 mb-1.5">
+                                Stopaj oranı (%)
+                            </label>
+                            <input
+                                id="dividend-tax-rate"
+                                type="number"
+                                step="any"
+                                min="0"
+                                max="99.99"
+                                value={taxRateValue}
+                                onChange={e => setTaxRateValue(e.target.value)}
+                                required
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white font-mono focus:outline-none focus:border-[#1A9FD3]"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                                Aracı kurumunuzda veya bankanızda hesaba yatan temettü, stopajı zaten kesilmiş net tutardır;
+                                ayrıca vergi ödemeniz gerekmez. Bu oran yalnızca brüt tutarı ve kesilen stopajı göstermek için kullanılır.
+                                Bireysel yatırımcılar için genel oran %15&apos;tir, bazı şirketlerde daha düşük olabilir.
+                            </p>
+                        </div>
+
+                        {/* Önizleme */}
                         {preview && (
                             <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3 text-xs space-y-1.5">
                                 <div className="flex items-center justify-between text-slate-400">
-                                    <span>Portföye Eklenecek Net Nakit:</span>
+                                    <span>
+                                        {calcMode === 'PER_SHARE' ? 'Portföye Eklenecek Net Nakit (tahmini):' : 'Portföye Eklenecek Net Nakit:'}
+                                    </span>
                                     <span className="font-mono font-bold text-emerald-400 text-sm">
-                                        +{preview.totalNet.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+                                        {formatTRY(preview.totalNet, 2, true)}
                                     </span>
                                 </div>
+                                {preview.tax > 0 && (
+                                    <div className="flex items-center justify-between text-slate-500 text-[11px]">
+                                        <span>Brüt tutar / kesilen stopaj:</span>
+                                        <span className="font-mono">
+                                            {formatTRY(preview.gross)} / {formatTRY(preview.tax)}
+                                        </span>
+                                    </div>
+                                )}
                                 {preview.lots > 0 && (
                                     <div className="flex items-center justify-between text-slate-500 text-[11px]">
                                         <span>Hesaplama Detayı:</span>
@@ -310,10 +372,15 @@ export default function AddDividendModal({
                                         </span>
                                     </div>
                                 )}
+                                {calcMode === 'PER_SHARE' && (
+                                    <p className="text-slate-500 text-[11px]">
+                                        Kayıtta, ödeme tarihindeki lot sayınız kullanılır.
+                                    </p>
+                                )}
                             </div>
                         )}
 
-                        {/* Eylem Butonları */}
+                        {/* Butonlar */}
                         <div className="flex items-center justify-end gap-3 pt-2">
                             <button
                                 type="button"

@@ -3,15 +3,16 @@
 import React, { useState } from 'react';
 import { FolderPlus, X, Check } from 'lucide-react';
 
+// Yeni grup için seçilebilen renkler; ilki varsayılan
 const AVAILABLE_COLORS = [
-    '#6366f1', // Indigo
-    '#10b981', // Emerald
-    '#f59e0b', // Amber
-    '#ec4899', // Pink
-    '#8b5cf6', // Purple
-    '#06b6d4', // Cyan
-    '#3b82f6', // Blue
-    '#ef4444', // Red
+    '#6366f1',
+    '#10b981',
+    '#f59e0b',
+    '#ec4899',
+    '#8b5cf6',
+    '#06b6d4',
+    '#3b82f6',
+    '#ef4444',
 ];
 
 interface CreateGroupModalProps {

@@ -1,7 +1,8 @@
-﻿User-agent: *
+User-agent: *
 Allow: /
 Disallow: /api/
-Disallow: /dashboard/
-Disallow: /transactions/
-Disallow: /holdings/
-Disallow: /alerts/
+Disallow: /dashboard
+Disallow: /transactions
+Disallow: /holdings
+Disallow: /alerts
+Disallow: /profile

@@ -37,9 +37,6 @@ export default function ProfilePage() {
                         <div className="text-center sm:text-left space-y-1.5 flex-1">
                             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
                                 <h1 className="text-2xl sm:text-3xl font-black text-white">{user.username}</h1>
-                                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700">
-                                    Aktif Yatırımcı
-                                </span>
                             </div>
                             <p className="text-sm text-slate-400 flex items-center justify-center sm:justify-start gap-1.5">
                                 <Mail className="w-4 h-4 text-slate-500" />
@@ -69,7 +66,7 @@ export default function ProfilePage() {
                             <Shield className="w-5 h-5 text-slate-400" />
                             <div>
                                 <p className="text-xs text-slate-400">Hesap Tipi</p>
-                                <p className="text-sm font-semibold text-white capitalize">{user.role || 'Standart Üye'}</p>
+                                <p className="text-sm font-semibold text-white">{user.role === 'ADMIN' ? 'Yönetici' : 'Standart Üye'}</p>
                             </div>
                         </div>
                     </div>
@@ -88,9 +85,9 @@ export default function ProfilePage() {
                             <ArrowRight className="w-5 h-5 text-slate-500 group-hover:text-slate-300 transition" />
                         </div>
                         <div>
-                            <h3 className="text-base font-bold text-white group-hover:text-slate-200 transition">Portföy Genel Bakış</h3>
+                            <h3 className="text-base font-bold text-white group-hover:text-slate-200 transition">Portföy özeti</h3>
                             <p className="text-xs text-slate-400 mt-1">
-                                Portföyünüzün büyüme grafiğini, kategori dağılımını ve net getirisini inceleyin.
+                                Portföyünüzün değer grafiğini, kategori dağılımını ve net getirisini inceleyin.
                             </p>
                         </div>
                     </Link>
@@ -106,9 +103,9 @@ export default function ProfilePage() {
                             <ArrowRight className="w-5 h-5 text-slate-500 group-hover:text-slate-300 transition" />
                         </div>
                         <div>
-                            <h3 className="text-base font-bold text-white group-hover:text-slate-200 transition">Varlıklarım & Gruplar</h3>
+                            <h3 className="text-base font-bold text-white group-hover:text-slate-200 transition">Varlıklarım ve gruplar</h3>
                             <p className="text-xs text-slate-400 mt-1">
-                                Hisselerinizi özel gruplara ayırın, 1D/1W getirilerini görün ve sıralayın.
+                                Varlıklarınızı özel gruplara ayırın, günlük ve haftalık (1G/1H) getirilerini görün ve sıralayın.
                             </p>
                         </div>
                     </Link>

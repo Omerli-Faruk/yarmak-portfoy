@@ -1,16 +1,16 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Zap, AlertTriangle } from 'lucide-react';
+import { Calendar, Clock, AlertTriangle } from 'lucide-react';
 
 interface TransactionDatePickerProps {
-    value: string; // ISO string or 'YYYY-MM-DDTHH:mm'
+    value: string; // ISO metin ya da 'YYYY-MM-DDTHH:mm'
     onChange: (isoString: string) => void;
     onErrorChange?: (hasError: boolean) => void;
 }
 
 export default function TransactionDatePicker({ value, onChange, onErrorChange }: TransactionDatePickerProps) {
-    // Helper to get local YYYY-MM-DD
+    // Yerel saate göre YYYY-MM-DD
     const getLocalDateStr = (d: Date): string => {
         const year = d.getFullYear();
         const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -18,7 +18,7 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
         return `${year}-${month}-${day}`;
     };
 
-    // Helper to get local HH:mm
+    // Yerel saate göre HH:mm
     const getLocalTimeStr = (d: Date): string => {
         const hours = String(d.getHours()).padStart(2, '0');
         const minutes = String(d.getMinutes()).padStart(2, '0');
@@ -41,7 +41,7 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
             d.setDate(d.getDate() - 2);
         } else if (day === 6) { // Cumartesi -> Cuma
             d.setDate(d.getDate() - 1);
-        } else if (day === 1 && d.getHours() < 10) { // Pazartesi sabah seans öncesi -> Cuma
+        } else if (day === 1) { // Pazartesi -> Cuma
             d.setDate(d.getDate() - 3);
         } else {
             d.setDate(d.getDate() - 1);
@@ -50,7 +50,7 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
     };
     const lastTradingDayStr = getLastTradingDay();
 
-    // Parse incoming value with future prevention
+    // Gelen değeri tarih ve saate ayırır, ileri tarihleri şu ana çeker
     const parseValue = (val: string) => {
         const d = val ? new Date(val) : new Date();
         if (isNaN(d.getTime())) {
@@ -98,10 +98,10 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
         setCurrentTime(parsed.time);
     }
 
-    // Emit combined ISO
+    // Tarih ve saati birleştirip ISO metin olarak dışarı verir
     const emitChange = (newDate: string, newTime: string) => {
         try {
-            // Gelecek kontrolü ve sınırlandırma
+            // İleri tarih veya saat seçilmişse şu ana çek
             let safeDate = newDate;
             let safeTime = newTime;
             const currentNowTime = getLocalTimeStr(new Date());
@@ -147,7 +147,7 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
         emitChange(currentDate, safeTime);
     };
 
-    // Format for preview badge: "21 Eylül 2026, Pzt • 14:30"
+    // Özet satırı için biçim, örnek: "21 Eyl 2026 Pzt • 14:30"
     const formatPreview = (dateStr: string, timeStr: string): string => {
         try {
             const [y, m, d] = dateStr.split('-').map(Number);
@@ -167,7 +167,7 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
 
     return (
         <div className="space-y-3 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/80">
-            {/* 1. TARİH SEÇİMİ */}
+            {/* Tarih */}
             <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
@@ -225,7 +225,7 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
                 />
             </div>
 
-            {/* 2. SAAT SEÇİMİ */}
+            {/* Saat */}
             <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
@@ -239,7 +239,7 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
                             type="button"
                             onClick={() => handleTimeChange(getLocalTimeStr(new Date()))}
                             className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-400 hover:text-[#1A9FD3] hover:bg-slate-700 transition cursor-pointer"
-                            title="Şu anki güncel saati seç"
+                            title="Şu anki saati seç"
                         >
                             Şimdi
                         </button>
@@ -286,20 +286,20 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
                 />
             </div>
 
-            {/* Gelecek Zaman Uyarısı */}
+            {/* İleri tarih uyarısı */}
             {isFuture && (
                 <div className="flex items-center gap-1.5 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 px-3 py-2 rounded-lg font-bold">
                     <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
-                    <span>Gelecek tarih veya saat seçilemez! Lütfen geçmiş veya güncel bir zaman seçin.</span>
+                    <span>Gelecekteki bir tarih veya saat seçilemez.</span>
                 </div>
             )}
 
-            {/* 3. ÖZET ROZETİ */}
+            {/* Seçilen zamanın özeti */}
             {!isFuture && (
                 <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg px-3 py-1.5 flex items-center justify-between text-[11px]">
                     <span className="text-slate-400 flex items-center gap-1">
-                        <Zap className="w-3 h-3 text-[#1A9FD3]" />
-                        İşlem Zamanı:
+                        <Clock className="w-3 h-3 text-slate-400" />
+                        İşlem zamanı:
                     </span>
                     <span className="font-bold text-[#1A9FD3] font-mono">
                         {formatPreview(currentDate, currentTime)}

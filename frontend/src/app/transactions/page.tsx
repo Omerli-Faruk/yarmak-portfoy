@@ -7,7 +7,7 @@ export default function TransactionsRedirectPage() {
     const router = useRouter();
 
     useEffect(() => {
-        router.replace('/markets');
+        router.replace('/holdings?tab=transactions');
     }, [router]);
 
     return (

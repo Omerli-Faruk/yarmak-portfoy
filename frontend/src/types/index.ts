@@ -6,9 +6,8 @@ export interface User {
     created_at: string;
 }
 
+// Oturum çerezlerle taşınıyor; giriş yanıtında yalnızca kullanıcı bilgisi döner.
 export interface AuthResponse {
-    token: string;
-    refresh_token: string;
     user: User;
 }
 
@@ -120,3 +119,89 @@ export interface Dividend {
 }
 
 export type Period = '1D' | '1W' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '3Y' | 'ALL';
+
+// Sembol -> { '1D': getiri %, '1W': ..., 'ALL': ... }
+export type AssetSummaryMap = Record<string, Record<string, number>>;
+
+// lib/normalize.ts çıktıları: backend'in PascalCase / snake_case alanları tek biçime indirilmiş hali.
+export interface NormalizedTransaction {
+    id: number;
+    symbol: string;
+    assetName: string;
+    assetType: string;
+    type: string; // 'BUY' | 'SELL', büyük harfe çevrilmiş
+    amount: number;
+    price: number;
+    commission: number;
+    realizedPnl: number;
+    date: string;
+}
+
+export interface NormalizedDividend {
+    id: number;
+    symbol: string;
+    assetName: string;
+    gross: number;
+    tax: number;
+    net: number;
+    date: string;
+}
+
+// /alerts yanıtındaki ham kayıt; alanlar bazen PascalCase bazen snake_case geliyor.
+export interface RawPriceAlert {
+    ID?: number;
+    id?: number;
+    UserID?: number;
+    user_id?: number;
+    AssetID?: number;
+    asset_id?: number;
+    TargetPrice?: string;
+    target_price?: string;
+    Direction?: 'ABOVE' | 'BELOW';
+    direction?: 'ABOVE' | 'BELOW';
+    IsTriggered?: boolean;
+    is_triggered?: boolean;
+    TriggeredAt?: { Time: string; Valid: boolean } | string | null;
+    triggered_at?: { Time: string; Valid: boolean } | string | null;
+    CreatedAt?: string;
+    created_at?: string;
+    Symbol?: string;
+    symbol?: string;
+    AssetName?: string;
+    asset_name?: string;
+    CurrentPrice?: string;
+    current_price?: string;
+}
+
+export interface NormalizedAlert {
+    id: number;
+    symbol: string;
+    assetName: string;
+    targetPrice: number;
+    currentPrice: number;
+    direction: 'ABOVE' | 'BELOW';
+    isTriggered: boolean;
+    triggeredAt: string | null;
+    createdAt: string;
+}
+
+// /api/markets yanıtındaki endeks ve varlık satırları
+export interface MarketIndexItem {
+    symbol: string;
+    name: string;
+    price: number;
+    change: string;
+    positive: boolean;
+}
+
+export interface MarketAssetItem {
+    id: number;
+    symbol: string;
+    name: string;
+    asset_type: string;
+    price: number;
+    change: string;
+    change_value: number;
+    positive: boolean;
+    volume?: string;
+}

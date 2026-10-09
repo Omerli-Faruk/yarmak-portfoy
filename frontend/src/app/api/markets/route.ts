@@ -1,50 +1,17 @@
 import { NextResponse } from 'next/server';
 import { scoreAssetMatch } from '@/lib/searchUtils';
+import {
+    BACKEND_URL,
+    type BackendAsset,
+    clientIpHeader,
+    fetchSpotGold,
+    fetchYahooChart,
+    getYahooAuth,
+    signedChange,
+} from '@/lib/marketData';
+import type { MarketAssetItem, MarketIndexItem } from '@/types';
 
 export const dynamic = 'force-dynamic';
-
-interface MarketIndexItem {
-    symbol: string;
-    name: string;
-    price: number;
-    change: string;
-    positive: boolean;
-}
-
-interface MarketAssetItem {
-    id: number;
-    symbol: string;
-    name: string;
-    asset_type: string;
-    price: number;
-    change: string;
-    change_value: number;
-    positive: boolean;
-    volume?: string;
-    sparkline?: number[];
-}
-
-interface ChartQuote {
-    price: number;
-    prev: number;
-    change: string;
-    positive: boolean;
-    name: string;
-}
-
-interface BackendAsset {
-    ID?: number;
-    id?: number;
-    Symbol?: string;
-    symbol?: string;
-    Name?: string;
-    name?: string;
-    AssetType?: string;
-    asset_type?: string;
-    CurrentPrice?: string;
-    current_price?: string;
-    Change?: string | number;
-}
 
 interface MarketData {
     indices: MarketIndexItem[];
@@ -54,53 +21,18 @@ interface MarketData {
     allItems: MarketAssetItem[];
 }
 
-// 30 saniyelik bellek önbelleği
+// Tüm piyasa verisi 30 saniye bellekte tutulur; filtre ve sıralama her istekte bunun üzerinden yapılır.
 let marketCache: {
     data: MarketData;
     timestamp: number;
 } | null = null;
 
-// Yahoo Crumb / Cookie Önbelleği (1 saat)
-let yahooCookieCache = '';
-let yahooCrumbCache = '';
-let yahooCrumbExpiry = 0;
-
-async function getYahooAuth(): Promise<{ cookie: string; crumb: string } | null> {
-    const now = Date.now();
-    if (yahooCookieCache && yahooCrumbCache && now < yahooCrumbExpiry) {
-        return { cookie: yahooCookieCache, crumb: yahooCrumbCache };
-    }
-    try {
-        const r1 = await fetch('https://fc.yahoo.com', {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            signal: AbortSignal.timeout(3500)
-        });
-        const cookie = r1.headers.get('set-cookie');
-        if (!cookie) return null;
-
-        const r2 = await fetch('https://query2.finance.yahoo.com/v1/test/getcrumb', {
-            headers: { 'User-Agent': 'Mozilla/5.0', 'Cookie': cookie },
-            signal: AbortSignal.timeout(3500)
-        });
-        if (!r2.ok) return null;
-        const crumb = await r2.text();
-        if (!crumb || crumb.includes('Too Many') || crumb.includes('Unauthorized')) return null;
-
-        yahooCookieCache = cookie;
-        yahooCrumbCache = crumb;
-        yahooCrumbExpiry = now + 60 * 60 * 1000;
-        return { cookie, crumb };
-    } catch {
-        return null;
-    }
-}
-
-// BIST Hisseleri Canlı Toplu Fiyat Çekici (Yahoo Quote v7)
+// BIST hisselerinin fiyatlarını Yahoo v7 quote ucundan toplu çeker (veri gecikmelidir)
 async function fetchBistLiveQuotes(symbols: string[]): Promise<Map<string, { price: number; changePercent: number; volume?: number; name?: string }>> {
     const map = new Map<string, { price: number; changePercent: number; volume?: number; name?: string }>();
     if (symbols.length === 0) return map;
 
-    const auth = await getYahooAuth();
+    const auth = await getYahooAuth(3500);
     if (!auth) return map;
 
     const chunkSize = 120;
@@ -133,7 +65,7 @@ async function fetchBistLiveQuotes(symbols: string[]): Promise<Map<string, { pri
                 }
             }
         } catch {
-            // chunk hatası sessizce geçilir
+            // Bu parça alınamazsa o hisseler veritabanı fiyatıyla gösterilir
         }
     }));
 
@@ -148,68 +80,12 @@ function formatVolume(vol?: number): string {
     return vol.toLocaleString('tr-TR');
 }
 
-// Spot Gram Altın (Kapalıçarşı Serbest Piyasa)
-async function fetchSpotGold(): Promise<ChartQuote | null> {
-    try {
-        const res = await fetch('https://finans.truncgil.com/v4/today.json', {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            signal: AbortSignal.timeout(3500),
-        });
-        if (!res.ok) return null;
-        const text = await res.text();
-        const m = text.match(/"GRA"\s*:\s*(\{[^}]+\})/);
-        if (!m) return null;
-
-        const gra = JSON.parse(m[1]);
-        const price = Number(gra.Selling || gra.Buying || 0);
-        if (price <= 0) return null;
-
-        const changePct = Number(gra.Change || 0);
-        const prev = price / (1 + changePct / 100);
-
-        return {
-            price,
-            prev,
-            change: (changePct >= 0 ? '+' : '') + changePct.toFixed(2),
-            positive: changePct >= 0,
-            name: 'Gram Altın',
-        };
-    } catch {
-        return null;
-    }
+// Endeks ve kurlar için günlük değişim: range '1d' ile önceki kapanış bir önceki seansın kapanışıdır
+function fetchDailyQuote(ticker: string, name: string) {
+    return fetchYahooChart(ticker, { range: '1d', timeoutMs: 3500, name });
 }
 
-// Yahoo Finance Tekil Veri Çekici
-async function fetchYahooQuote(ticker: string, customName?: string): Promise<ChartQuote | null> {
-    try {
-        const res = await fetch(
-            'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(ticker) + '?interval=1d&range=5d',
-            {
-                headers: { 'User-Agent': 'Mozilla/5.0' },
-                signal: AbortSignal.timeout(3500),
-            }
-        );
-        if (!res.ok) return null;
-        const data = await res.json();
-        const meta = data?.chart?.result?.[0]?.meta;
-        if (!meta || !meta.regularMarketPrice) return null;
-
-        const price = Number(meta.regularMarketPrice);
-        const prev = Number(meta.chartPreviousClose || meta.previousClose || price);
-        const pct = prev > 0 ? ((price - prev) / prev) * 100 : 0;
-
-        return {
-            price,
-            prev,
-            change: (pct >= 0 ? '+' : '') + pct.toFixed(2),
-            positive: pct >= 0,
-            name: customName || meta.longName || meta.shortName || ticker,
-        };
-    } catch {
-        return null;
-    }
-}
-
+// Sabit bir seçki; ölçülmüş bir popülerlik verisi değildir
 const POPULAR_BIST_SYMBOLS = [
     'THYAO', 'ASELS', 'TUPRS', 'EREGL', 'GARAN',
     'AKBNK', 'ISCTR', 'KCHOL', 'BIMAS', 'SAHOL',
@@ -221,18 +97,17 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url);
         const category = (searchParams.get('category') || 'ALL').toUpperCase(); // ALL, HISSE, FON, EMTIA
         const sort = searchParams.get('sort') || 'gainers'; // gainers, losers, popular, alpha
-        const search = (searchParams.get('search') || '').trim().toLowerCase();
+        // Benzerlik puanı her varlık için hesaplandığı için çok uzun aramaları kesiyoruz
+        const search = (searchParams.get('search') || '').trim().slice(0, 50).toLowerCase();
         const period = (searchParams.get('period') || '1D').toUpperCase();
 
         const now = Date.now();
-        const backendBase = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080/v1';
 
-        // 1. Önbellek geçerli ise doğrudan kullan (30 saniye boyunca sıfır gecikme ile filtrele)
         if (marketCache && (now - marketCache.timestamp < 30 * 1000)) {
             return formatResponse(marketCache.data, category, sort, period, search);
         }
 
-        // 2. Canlı Makro Endeksler ve Backend Verilerini Paralel Çek
+        const backendHeaders = clientIpHeader(request);
         const [
             spotGold,
             xu100,
@@ -242,19 +117,19 @@ export async function GET(request: Request) {
             backendAssetsRes,
             dailyChangesRes
         ] = await Promise.all([
-            fetchSpotGold(),
-            fetchYahooQuote('XU100.IS', 'BIST 100'),
-            fetchYahooQuote('XU030.IS', 'BIST 30'),
-            fetchYahooQuote('USDTRY=X', 'Dolar / TL'),
-            fetchYahooQuote('EURTRY=X', 'Euro / TL'),
-            fetch(`${backendBase}/assets`, { cache: 'no-store' }).catch(() => null),
-            fetch(`${backendBase}/assets/daily-changes`, { cache: 'no-store' }).catch(() => null),
+            fetchSpotGold(3500),
+            fetchDailyQuote('XU100.IS', 'BIST 100'),
+            fetchDailyQuote('XU030.IS', 'BIST 30'),
+            fetchDailyQuote('USDTRY=X', 'Dolar / TL'),
+            fetchDailyQuote('EURTRY=X', 'Euro / TL'),
+            fetch(`${BACKEND_URL}/assets`, { cache: 'no-store', headers: backendHeaders }).catch(() => null),
+            fetch(`${BACKEND_URL}/assets/daily-changes`, { cache: 'no-store', headers: backendHeaders }).catch(() => null),
         ]);
 
         const rawAssets: BackendAsset[] = (backendAssetsRes?.ok && await backendAssetsRes.json().catch(() => [])) || [];
         const dailyChangesMap: Record<string, number> = (dailyChangesRes?.ok && await dailyChangesRes.json().catch(() => ({}))) || {};
 
-        // BIST hisse sembollerini topla ve Yahoo Finance'den toplu canlı fiyatları çek
+        // Veritabanındaki BIST hisselerinin güncel fiyatlarını Yahoo'dan toplu çek
         const bistSymbols = rawAssets
             .filter(item => {
                 const at = String(item.AssetType ?? item.asset_type ?? 'HISSE').toUpperCase();
@@ -265,7 +140,6 @@ export async function GET(request: Request) {
 
         const liveBistQuotes = await fetchBistLiveQuotes(bistSymbols);
 
-        // Endeks Kartları
         const indices: MarketIndexItem[] = [
             {
                 symbol: 'XU100',
@@ -304,10 +178,9 @@ export async function GET(request: Request) {
             }
         ];
 
-        // Varlıkları normalize et (Tekilleştirilmiş Map kullanarak tekrarları tamamen engelle)
+        // Sembole göre tekilleştirilmiş varlık listesi; fiyat ve değişim varlık türüne göre farklı kaynaktan gelir
         const itemsMap = new Map<string, MarketAssetItem>();
 
-        // BIST, TEFAS, Altın ve Döviz varlıklarını backend kayıtları ile harmanla
         for (const item of rawAssets) {
             const id = Number(item.ID ?? item.id ?? 0);
             const symbol = String(item.Symbol ?? item.symbol ?? '').trim().toUpperCase();
@@ -367,7 +240,7 @@ export async function GET(request: Request) {
                 } else if (item.Change !== undefined && item.Change !== '') {
                     changeVal = parseFloat(String(item.Change).replace('+', '')) || 0;
                 }
-                // TEFAS fonlarında bölünme veya scraping anomalisini filtrele (+-25% üzeri anomali)
+                // Fonlarda ±%25'i aşan günlük değişim büyük olasılıkla bölünme ya da veri hatasıdır; 0 gösterilir
                 if (Math.abs(changeVal) > 25) {
                     changeVal = 0;
                 }
@@ -376,7 +249,7 @@ export async function GET(request: Request) {
             if (price <= 0 || !symbol) continue;
 
             const isPos = changeVal >= 0;
-            const changeStr = `${isPos ? '+' : ''}${changeVal.toFixed(2)}%`;
+            const changeStr = `${signedChange(changeVal)}%`;
 
             itemsMap.set(symbol, {
                 id,
@@ -391,7 +264,7 @@ export async function GET(request: Request) {
             });
         }
 
-        // Eğer backend'de ALTIN, USDTRY veya EURTRY tanımlı değilse canlı verilerden tamamla
+        // ALTIN, USDTRY veya EURTRY veritabanında yoksa dış kaynaktan gelen fiyatla ekle
         if (!itemsMap.has('ALTIN') && spotGold && spotGold.price > 0) {
             itemsMap.set('ALTIN', {
                 id: -1,
@@ -431,27 +304,22 @@ export async function GET(request: Request) {
 
         const allItems = Array.from(itemsMap.values());
 
-        // =====================================================================
-        // KRİTİK KURAL: GÜNÜN YÜKSELENLERİ, DÜŞENLERİ VE POPÜLERLERİ
-        // KESİNLİKLE VE SADECE BIST HİSSELERİNDEN OLUŞMALIDIR (FON YOK!)
-        // =====================================================================
+        // Yükselen, düşen ve seçili listeler yalnızca BIST hisselerinden oluşur (fonlar girmez).
+        // ±%10,5'i aşan değişimler veri hatası sayılıp listelere alınmaz.
         const stocksOnly = allItems.filter(
             x => x.asset_type === 'HISSE' && x.price > 0 && Math.abs(x.change_value) <= 10.5
         );
 
-        // Top Gainers (En çok yükselen BIST hisseleri - SADECE HİSSE)
         const topGainers = [...stocksOnly]
             .filter(x => x.change_value > 0)
             .sort((a, b) => b.change_value - a.change_value)
             .slice(0, 5);
 
-        // Top Losers (En çok düşen BIST hisseleri - SADECE HİSSE)
         const topLosers = [...stocksOnly]
             .filter(x => x.change_value < 0)
             .sort((a, b) => a.change_value - b.change_value)
             .slice(0, 5);
 
-        // Most Popular (Günün Popüler BIST hisseleri - SADECE HİSSE)
         const mostActive = [...stocksOnly]
             .filter(x => POPULAR_BIST_SYMBOLS.includes(x.symbol))
             .sort((a, b) => POPULAR_BIST_SYMBOLS.indexOf(a.symbol) - POPULAR_BIST_SYMBOLS.indexOf(b.symbol))
@@ -486,7 +354,6 @@ function formatResponse(
 ) {
     let filtered = [...(fullData.allItems || [])];
 
-    // 1. Kategori Filtresi
     if (category === 'HISSE') {
         filtered = filtered.filter(x => x.asset_type === 'HISSE');
     } else if (category === 'FON') {
@@ -495,7 +362,6 @@ function formatResponse(
         filtered = filtered.filter(x => x.asset_type === 'ALTIN' || x.asset_type === 'DOVIZ');
     }
 
-    // 2. Arama & Benzerlik Filtresi (Relevance & Fuzzy Matching)
     if (search) {
         const scoredItems: { item: MarketAssetItem; score: number }[] = [];
         for (const item of filtered) {
@@ -505,8 +371,7 @@ function formatResponse(
             }
         }
 
-        // Arama yapıldığında birincil öncelik alaka ve benzerlik puanıdır:
-        // Tam ve başlayan eşleşmeler en üstte, benzer olanlar aşağıda sıralanır.
+        // Aramada önce eşleşme puanına, eşitlikte seçili sıralamaya bakılır
         scoredItems.sort((a, b) => {
             if (a.score !== b.score) {
                 return b.score - a.score;
@@ -519,7 +384,6 @@ function formatResponse(
 
         filtered = scoredItems.map(x => x.item);
     } else {
-        // 3. Sıralama (Arama yokken kullanıcının seçtiği sıralama ölçütü)
         if (sort === 'gainers') {
             filtered.sort((a, b) => b.change_value - a.change_value);
         } else if (sort === 'losers') {
@@ -543,7 +407,7 @@ function formatResponse(
         topGainers: fullData.topGainers || [],
         topLosers: fullData.topLosers || [],
         mostActive: fullData.mostActive || [],
-        screener: filtered.slice(0, 100), // İlk 100 varlık
+        screener: filtered.slice(0, 100),
         totalCount: filtered.length,
     });
 }

@@ -25,6 +25,7 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
 
     useEffect(() => {
         async function checkAuth() {
+            // Asıl oturum HttpOnly çerezde. Bu bayrak sadece /me isteğinin gerekip gerekmediğini söyler.
             const isLoggedIn = localStorage.getItem('is_logged_in');
 
             if (isLoggedIn === 'true') {
@@ -68,6 +69,7 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
         router.push('/login');
     }
 
+    // Oturum kontrolü bitmeden alt bileşenler render edilmez; bu yüzden useAuth kullananlar loading'i hep false görür.
     if (loading) {
         return <LoadingSpinner withLogo />;
     }

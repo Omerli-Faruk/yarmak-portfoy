@@ -48,9 +48,8 @@ export default function LoginPage() {
                 </Link>
                 <div className="flex flex-col items-center justify-center text-center">
 
-                    <span className="tracking-widest font-black text-2xl">Yarmak Portföy</span>
-                    <p className="text-slate-400 text-xs tracking-widest mt-1">Finansal kontrol paneline erişmek için giriş
-                        yapın.</p>
+                    <span className="font-black text-2xl">Yarmak</span>
+                    <p className="text-slate-400 text-xs mt-1">Portföyünüze erişmek için giriş yapın.</p>
                 </div>
                 {user && (
                     <div className="w-full bg-primary/10 border border-primary/20 rounded-2xl p-4 mt-6 text-center">
@@ -58,7 +57,7 @@ export default function LoginPage() {
                             Şu anda <span className="text-primary font-bold">{user.username}</span> hesabıyla oturumunuz açık.
                         </p>
                         <Link href="/dashboard" className="inline-block mt-2 text-xs font-bold text-primary hover:underline">
-                            Portföyüme Git (Dashboard) →
+                            Portföyüme git →
                         </Link>
                     </div>
                 )}
@@ -103,21 +102,21 @@ export default function LoginPage() {
                     <button type="submit" disabled={loading}
                             className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-3 rounded-xl transition shadow-lg shadow-primary/20 cursor-pointer disabled:opacity-50 mt-6">{loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}</button>
                     
-                    {/* Hukuki & Çerez Kabul Bildirimi */}
+                    {/* Aydınlatma metni onaylatılmaz, yalnızca bilgi verilir */}
                     <p className="text-center text-[11px] text-slate-400 mt-4 leading-relaxed">
                         Giriş yaparak{' '}
                         <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-slate-300 hover:text-white underline">
                             Kullanım Şartları
                         </Link>
-                        &apos;nı,{' '}
+                        &apos;nı kabul etmiş olursunuz. Kişisel verilerinizin nasıl işlendiğini{' '}
                         <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-slate-300 hover:text-white underline">
-                            Gizlilik &amp; KVKK Metni
+                            Gizlilik ve KVKK Aydınlatma Metni
                         </Link>
-                        &apos;ni ve zorunlu oturum{' '}
+                        &apos;nde, kullandığımız zorunlu çerezleri{' '}
                         <Link href="/privacy#cerezler" target="_blank" rel="noopener noreferrer" className="text-slate-300 hover:text-white underline">
-                            Çerezleri
+                            çerezler
                         </Link>
-                        &apos;ni kabul etmiş sayılırsınız.
+                        {' '}bölümünde bulabilirsiniz.
                     </p>
 
                     <p className="text-center text-xs text-slate-400 mt-6">Hesabınız yok mu?

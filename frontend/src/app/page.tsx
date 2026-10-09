@@ -1,71 +1,29 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '@/context/AuthContext';
-import {
-    Search,
-    TrendingUp,
-    TrendingDown,
-    ArrowRight,
-    X,
-} from 'lucide-react';
-
-/* ═══════════════════════════════════════════════════════════════
-   MODEL & BAŞLANGIÇ VERİLERİ
-   ═══════════════════════════════════════════════════════════════ */
-interface Asset {
-    id: number;
-    symbol: string;
-    name: string;
-    asset_type: string;
-    current_price: string;
-    change: string;
-    positive: boolean;
-}
-
- function cleanText(text: string): string {
-    return (text || '')
-        .toLowerCase()
-        .replace(/ı/g, 'i')
-        .replace(/ğ/g, 'g')
-        .replace(/ü/g, 'u')
-        .replace(/ş/g, 's')
-        .replace(/ö/g, 'o')
-        .replace(/ç/g, 'c')
-        .trim();
-}
-
-
-import { popularTags, SLIDER_CONFIG } from '@/data/homeData';
+import type { CatalogAsset } from '@/data/homeData';
+import HeroSearch from '@/components/home/HeroSearch';
+import MarketTicker from '@/components/home/MarketTicker';
+import PortfolioShowcase from '@/components/home/PortfolioShowcase';
 import FeatureCardsSection from '@/components/home/FeatureCardsSection';
 import FaqSection from '@/components/home/FaqSection';
-import PortfolioShowcase from '@/components/home/PortfolioShowcase';
 
-
-/* ═══════════════════════════════════════════════════════════════
-   ANA SAYFA BİLEŞENİ
-   ═══════════════════════════════════════════════════════════════ */
 export default function Home() {
     const router = useRouter();
     const { user, loading: authLoading } = useAuth();
 
-    // Giriş yapmış kullanıcıları doğrudan Dashboard kokpitine yönlendir
+    // Giriş yapmış kullanıcıyı panele yönlendir
     useEffect(() => {
         if (!authLoading && user) {
             router.replace('/dashboard');
         }
     }, [user, authLoading, router]);
 
-    const [searchQuery, setSearchQuery] = useState('');
-    const [assets, setAssets] = useState<Asset[]>([]);
-    const [dynamicMatches, setDynamicMatches] = useState<Asset[]>([]);
-    const [isSearchFocused, setIsSearchFocused] = useState(false);
+    const [assets, setAssets] = useState<CatalogAsset[]>([]);
 
-    const searchRef = useRef<HTMLDivElement>(null);
-
-    // Veritabanından /api/assets üzerinden canlı varlık kataloğunu çek
+    // Varlık kataloğunu /api/assets'ten al, 20 saniyede bir yenile
     useEffect(() => {
         let isMounted = true;
 
@@ -92,143 +50,6 @@ export default function Home() {
         };
     }, []);
 
-    // Arama kutusuna yazıldığında dinamik piyasa keşfi yap (BIST veya TEFAS'taki her şeyi bulur)
-    useEffect(() => {
-        const q = searchQuery.trim();
-        if (!q) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setDynamicMatches([]);
-            return;
-        }
-        const timeout = setTimeout(async () => {
-            try {
-                const res = await fetch(`/api/assets?q=${encodeURIComponent(q)}`, { cache: 'no-store' });
-                if (res.ok) {
-                    const data = await res.json();
-                    if (Array.isArray(data)) {
-                        setDynamicMatches(data);
-                    }
-                }
-            } catch {
-                // Hata durumunda yerel filtre devam eder
-            }
-        }, 100);
-        return () => clearTimeout(timeout);
-    }, [searchQuery]);
-
-    // Arama dışına tıklayınca kapatma
-    useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-            if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-                setIsSearchFocused(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    // Fiyat formatlayıcı
-    const fmt = useCallback((priceStr: string | number) => {
-        const num = typeof priceStr === 'string' ? parseFloat(priceStr) : priceStr;
-        if (isNaN(num)) return '—';
-        return num.toLocaleString('tr-TR', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        });
-    }, []);
-
-    // Gelişmiş Arama Filtresi (Veritabanı + Canlı Dinamik Keşif Birleşimi)
-    const searchResults = useMemo(() => {
-        const raw = searchQuery.trim();
-        const q = cleanText(raw);
-
-        if (!q) {
-            // Arama boşken öne çıkan popüler varlıklar
-            return assets.filter((a) => ['ASELS', 'TUPRS', 'THYAO', 'ALTIN', 'XU100', 'USDTRY'].includes(a.symbol)).slice(0, 6);
-        }
-
-        // Finansal varlık alaka düzeyi puanlama fonksiyonu (API ile %100 uyumlu)
-        const scoreAsset = (symbol: string, name: string, change?: string): number => {
-            const sym = cleanText(symbol);
-            const nm = cleanText(name);
-
-            let score = 0;
-            if (sym === q) score = 10000;
-            else if (sym.startsWith(q)) score = 8000 - sym.length * 10;
-            else {
-                const words = nm.split(/\s+/);
-                if (words.some(w => w === q)) score = 6000;
-                else if (nm.startsWith(q)) score = 5000;
-                else if (words.some(w => w.startsWith(q))) score = 4000;
-                else if (sym.includes(q)) score = 3000;
-                const queryWords = q.split(/\s+/).filter(Boolean);
-                if (queryWords.length > 1 && queryWords.every(w => sym.includes(w) || nm.includes(w))) score = 2000;
-                else if (q.length >= 3 && nm.includes(q)) score = 1000;
-            }
-
-            if (score > 0) {
-                // Canlı, dünden bugüne işlem gören (değişimi %0.00 olmayan) hareketli varlıklara +2000 öncelik bonusu
-                const hasActiveMovement = change && change !== '0.00' && change !== '+0.00' && change !== '-0.00';
-                if (hasActiveMovement) {
-                    score += 2000;
-                }
-            }
-
-            return score;
-        };
-
-        // Eğer dinamik canlı arama sonuçları geldiyse öncelikle zenginleştirilmiş canlı sonuçları göster
-        if (dynamicMatches.length > 0) {
-            const dynamicSymbols = new Set(dynamicMatches.map(d => d.symbol));
-            const extraLocal = assets
-                .map(a => ({ asset: a, score: scoreAsset(a.symbol, a.name, a.change) }))
-                .filter(item => item.score > 0 && !dynamicSymbols.has(item.asset.symbol))
-                .sort((a, b) => b.score - a.score)
-                .map(item => item.asset);
-            return [...dynamicMatches, ...extraLocal].slice(0, 8);
-        }
-
-        // Sunucu yanıtı gelene kadar (ilk 100ms) anlık yerel puanlı filtre
-        return assets
-            .map(a => ({ asset: a, score: scoreAsset(a.symbol, a.name, a.change) }))
-            .filter(item => item.score > 0)
-            .sort((a, b) => {
-                if (a.score !== b.score) return b.score - a.score;
-                return a.asset.symbol.localeCompare(b.asset.symbol);
-            })
-            .map(item => item.asset)
-            .slice(0, 8);
-    }, [searchQuery, assets, dynamicMatches]);
-
-    // Canlı Kayan Şerit (Animated Marquee Ticker Slider) - Tamamen Dinamik (Sıfır Statik Fiyat)
-    const sliderItems = useMemo(() => {
-        if (assets.length === 0) return [];
-
-        // Kullanıcının talep ettiği tam sıralama:
-        // dolar, euro, bist100, bist30, altın gram, koç holding, sasa, thyao, aselsan, tüpraş, astor
-        
-
-        const items: { id: string; label: string; price: string; change: string; positive: boolean; type: string }[] = [];
-
-        SLIDER_CONFIG.forEach((cfg) => {
-            const asset = assets.find((a) => a.symbol === cfg.symbol);
-            if (asset && parseFloat(asset.current_price) > 0) {
-                const chg = asset.change || '+0.00';
-                const formattedChange = (chg.startsWith('+') || chg.startsWith('-') ? chg : '+' + chg) + '%';
-                items.push({
-                    id: cfg.symbol.toLowerCase(),
-                    label: cfg.label,
-                    price: fmt(asset.current_price),
-                    change: formattedChange,
-                    positive: asset.positive,
-                    type: cfg.type,
-                });
-            }
-        });
-
-        return items;
-    }, [assets, fmt]);
-
     if (!authLoading && user) {
         return (
             <div className="flex-1 flex items-center justify-center min-h-[60vh]">
@@ -242,289 +63,27 @@ export default function Home() {
 
     return (
         <div className="flex-1 flex flex-col items-center justify-start w-full overflow-hidden">
-            {/* ═══════════════ 1. HERO BÖLÜMÜ ═══════════════ */}
+            {/* Giriş bölümü: başlık, arama ve örnek portföy */}
             <section className="w-full max-w-6xl mx-auto px-4 pt-12 pb-12 flex flex-col items-center text-center">
+                <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-white max-w-3xl leading-[1.15]">
+                    Hisse, fon ve altın portföyünüz tek ekranda
+                </h1>
 
-                <motion.h1
-                    initial={{ opacity: 0, y: 18 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.45, delay: 0.05 }}
-                    className="text-4xl sm:text-6xl font-extrabold tracking-tight text-white max-w-3xl leading-[1.15]"
-                >
-                    Tarihin İlk Parasından{' '}
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-cyan-300">
-                        Geleceğin Akıllı Portföyüne
-                    </span>
-                </motion.h1>
+                <p className="text-slate-400 text-sm sm:text-base max-w-2xl mt-5 leading-relaxed">
+                    BIST hisseleri, TEFAS fonları ve altın işlemlerinizi kaydedin; ortalama maliyetinizi,
+                    kâr/zararınızı ve temettülerinizi TL ya da dolar karşılığıyla görün.
+                </p>
 
-                <motion.p
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.45, delay: 0.1 }}
-                    className="text-slate-400 text-sm sm:text-base max-w-2xl mt-5 leading-relaxed"
-                >
-                    BIST hisseleri, TEFAS fonları ve altın yatırımlarınızı tek çatı altında
-                    profesyonelce yönetin; kâr ve zararınızı anlık Dolar ve TL bazında izleyin.
-                </motion.p>
+                <HeroSearch assets={assets} />
 
-                {/* ——— ARAMA ÇUBUĞU (BIST & TEFAS CANLI DESTEKLİ) ——— */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.45, delay: 0.15 }}
-                    className="w-full max-w-xl mt-9 relative z-50"
-                    ref={searchRef}
-                >
-                    <form
-                        onSubmit={(e) => {
-                            e.preventDefault();
-                            if (searchQuery.trim() !== '') {
-                                router.push(`/assets/${searchQuery.trim().toUpperCase()}`);
-                            }
-                        }}
-                        className={`flex items-center gap-3 bg-[#131924]/90 backdrop-blur-xl border ${
-                            isSearchFocused
-                                ? 'border-primary shadow-[0_0_25px_rgba(26,159,211,0.25)] ring-1 ring-primary/40'
-                                : 'border-border/80 shadow-xl shadow-black/50 hover:border-slate-600'
-                        } rounded-full px-5 py-3.5 transition-all duration-200`}
-                    >
-                        <Search
-                            className={`size-5 shrink-0 transition-colors ${
-                                isSearchFocused ? 'text-primary' : 'text-slate-400'
-                            }`}
-                        />
-                        <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => {
-                                setSearchQuery(e.target.value);
-                                if (!isSearchFocused) setIsSearchFocused(true);
-                            }}
-                            onFocus={() => setIsSearchFocused(true)}
-                            placeholder="BIST hissesi veya TEFAS fonu ara (örn: intetra, tly, thy)..."
-                            className="w-full bg-transparent border-none outline-none text-sm text-white placeholder:text-slate-500 focus:outline-none"
-                            autoComplete="off"
-                            spellCheck={false}
-                        />
-                        {searchQuery && (
-                            <button
-                                type="button"
-                                onClick={() => setSearchQuery('')}
-                                className="text-slate-400 hover:text-white transition p-1 cursor-pointer"
-                                aria-label="Temizle"
-                            >
-                                <X className="size-4" />
-                            </button>
-                        )}
-                        <button
-                            type="submit"
-                            className="bg-primary hover:bg-primary-hover text-white text-xs font-bold px-4 py-2 rounded-full transition shrink-0 hidden sm:flex items-center gap-1.5 cursor-pointer"
-                        >
-                            Keşfet <ArrowRight className="size-3.5" />
-                        </button>
-                    </form>
-
-                    {/* Canlı Autocomplete Dropdown */}
-                    <AnimatePresence>
-                        {isSearchFocused && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 6, scale: 0.99 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: 4, scale: 0.99 }}
-                                transition={{ duration: 0.15 }}
-                                className="absolute top-full left-0 right-0 mt-2 bg-[#111722]/95 backdrop-blur-2xl border border-border/80 rounded-2xl shadow-2xl overflow-hidden z-[70] text-left divide-y divide-border/30"
-                            >
-                                <div className="px-4 py-2.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider bg-surface/40 flex items-center justify-between">
-                                    <span>{searchQuery ? `Sonuçlar (${searchResults.length})` : 'Öne Çıkan Varlıklar'}</span>
-                                    <span className="text-[9px] text-emerald-400 font-mono flex items-center gap-1">
-                                        <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                        BIST & TEFAS CANLI
-                                    </span>
-                                </div>
-
-                                {searchResults.length > 0 ? (
-                                    <div className="max-h-80 overflow-y-auto divide-y divide-border/20">
-                                        {searchResults.map((asset) => (
-                                            <div
-                                                key={asset.symbol}
-                                                onClick={() => {
-                                                    setSearchQuery(asset.symbol);
-                                                    setIsSearchFocused(false);
-                                                    router.push(`/assets/${asset.symbol}`);
-                                                }}
-                                                className="flex items-center justify-between px-4 py-3 hover:bg-primary/10 transition-colors group cursor-pointer"
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <div className="size-9 rounded-xl bg-[#1A2230] border border-border/60 flex items-center justify-center font-bold text-xs text-primary group-hover:border-primary/50 transition-colors">
-                                                        {asset.symbol.substring(0, 2)}
-                                                    </div>
-                                                    <div>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-sm font-bold text-white group-hover:text-primary transition-colors">
-                                                                {asset.symbol}
-                                                            </span>
-                                                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface border border-border/50 text-slate-400 font-semibold">
-                                                                {asset.asset_type}
-                                                            </span>
-                                                        </div>
-                                                        <div className="text-[11px] text-slate-400 line-clamp-1 max-w-[220px] sm:max-w-xs">
-                                                            {asset.name}
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="text-right">
-                                                    <div className="text-sm font-bold font-mono text-white">
-                                                        ₺{fmt(asset.current_price)}
-                                                    </div>
-                                                    {(() => {
-                                                        const num = parseFloat(String(asset.change || '0').replace('+', ''));
-                                                        const isZero = isNaN(num) || num === 0;
-                                                        const isPos = num > 0;
-                                                        return (
-                                                            <div
-                                                                className={`text-[11px] font-mono flex items-center justify-end gap-0.5 ${
-                                                                    isZero
-                                                                        ? 'text-slate-400'
-                                                                        : isPos
-                                                                        ? 'text-emerald-400'
-                                                                        : 'text-rose-400'
-                                                                }`}
-                                                            >
-                                                                {!isZero && (
-                                                                    isPos ? (
-                                                                        <TrendingUp className="size-3" />
-                                                                    ) : (
-                                                                        <TrendingDown className="size-3" />
-                                                                    )
-                                                                )}
-                                                                <span>{isZero ? '%0.00' : `${isPos ? '+' : ''}${num.toFixed(2)}%`}</span>
-                                                            </div>
-                                                        );
-                                                    })()}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="p-6 text-center text-sm text-slate-400">
-                                        &quot;{searchQuery}&quot; için piyasada hisse veya fon bulunamadı.
-                                    </div>
-                                )}
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-
-                    {/* Popüler Etiketler */}
-                    <div className="flex flex-wrap items-center justify-center gap-2 mt-5 text-xs">
-                        <span className="text-slate-500 font-medium">Popüler:</span>
-                        {popularTags.map((item) => (
-                            <button
-                                type="button"
-                                key={item.query}
-                                onClick={() => {
-                                    setSearchQuery(item.query);
-                                    setIsSearchFocused(true);
-                                }}
-                                className="px-3.5 py-1.5 rounded-full bg-[#131924]/60 border border-border/70 hover:border-primary/60 hover:bg-primary/10 text-slate-200 font-semibold text-xs transition shadow-sm cursor-pointer"
-                            >
-                                {item.label}
-                            </button>
-                        ))}
-                    </div>
-                </motion.div>
-
-                {/* ═══════════════ 2. DİNAMİK PORTFÖY VİTRİNİ (PRODUCT SHOWCASE) ═══════════════ */}
                 <PortfolioShowcase />
             </section>
 
-            {/* ═══════════════════════════════════════════════════════════════
-                3. CANLI PİYASA SLIDER (Sonsuz Kayan Canlı Ticker Marquee)
-                BIST 100, USD/TRY, ALTIN, TEFAS, THYAO, ASELS, INTET, TLY vb.
-               ═══════════════════════════════════════════════════════════════ */}
-            <section className="w-full border-y border-white/[0.08] bg-[#090D14] py-3.5 overflow-hidden flex items-center justify-center">
-                {sliderItems.length > 0 ? (
-                    <div className="flex w-full overflow-hidden select-none">
-                        <motion.div
-                            className="flex shrink-0 items-center gap-8 sm:gap-12"
-                            animate={{ x: ['0%', '-50%'] }}
-                            transition={{
-                                repeat: Infinity,
-                                repeatType: 'loop',
-                                duration: 32,
-                                ease: 'linear',
-                            }}
-                        >
-                            {/* Çift döngü ile kesintisiz, akıcı sonsuz kayma */}
-                            {[...sliderItems, ...sliderItems].map((item, idx) => (
-                                <div key={`${item.id}-${idx}`} className="flex items-center gap-2 shrink-0 group cursor-default">
-                                    {/* İkonlar / Varlık Türü Rozeti (Tutarlı ve Sade Tipografi) */}
-                                    {item.type === 'flag_us' && (
-                                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/80">
-                                            USD
-                                        </span>
-                                    )}
-                                    {item.type === 'flag_eu' && (
-                                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/80">
-                                            EUR
-                                        </span>
-                                    )}
-                                    {item.type === 'gold' && (
-                                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/80">
-                                            ALTIN
-                                        </span>
-                                    )}
-                                    {item.type === 'tefas' && (
-                                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/80">
-                                            FON
-                                        </span>
-                                    )}
-                                    {item.type === 'stock' && (
-                                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/80">
-                                            BIST
-                                        </span>
-                                    )}
+            <MarketTicker assets={assets} />
 
-                                    {/* Varlık Adı */}
-                                    <span className="text-slate-200 font-semibold tracking-wide text-xs sm:text-[13px]">
-                                        {item.label}
-                                    </span>
-
-                                    {/* Canlı Fiyat */}
-                                    <span
-                                        className={`font-mono font-bold text-xs sm:text-[13px] ${
-                                            item.positive ? 'text-emerald-400' : 'text-rose-400'
-                                        }`}
-                                    >
-                                        ₺{item.price}
-                                    </span>
-
-                                    {/* Değişim Yüzdesi */}
-                                    <span
-                                        className={`font-mono text-xs sm:text-[13px] ${
-                                            item.positive ? 'text-emerald-400' : 'text-rose-400'
-                                        }`}
-                                    >
-                                        {item.change}
-                                    </span>
-                                </div>
-                            ))}
-                        </motion.div>
-                    </div>
-                ) : (
-                    <div className="flex items-center gap-2 text-xs font-mono text-slate-400 py-1">
-                        <span className="size-2 rounded-full bg-primary animate-pulse" />
-                        <span>Canlı Borsa İstanbul ve TEFAS piyasa verileri senkronize ediliyor...</span>
-                    </div>
-                )}
-            </section>
-
-            {/* ═══════════════ 4. NEDEN YARMAK? ═══════════════ */}
             <FeatureCardsSection />
 
-            {/* ═══════════════ 5. SIKÇA SORULAN SORULAR ═══════════════ */}
             <FaqSection />
-
         </div>
     );
 }

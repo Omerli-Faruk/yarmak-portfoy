@@ -1,19 +1,19 @@
 import { NextResponse } from 'next/server';
+import {
+    BACKEND_URL,
+    type BackendAsset,
+    clientIpHeader,
+    fetchSpotGold,
+    formatApiPrice,
+    getYahooAuth,
+    signedChange,
+} from '@/lib/marketData';
+import { formatTRY } from '@/lib/formatters';
 
 export const dynamic = 'force-dynamic';
 
-interface BackendAsset {
-    id?: number;
-    ID?: number;
-    name?: string;
-    Name?: string;
-    symbol?: string;
-    Symbol?: string;
-    asset_type?: string;
-    AssetType?: string;
-    current_price?: string;
-    CurrentPrice?: string;
-}
+// İstemcinin gönderdiği periyotlar; başka bir değer gelirse varsayılan 1Y kullanılır
+const ALLOWED_RANGES = new Set(['1D', '1W', '1M', '3M', '6M', 'YTD', '1Y', '3Y', '5Y', 'ALL']);
 
 interface PriceRecord {
     RecordedAt?: string;
@@ -66,9 +66,7 @@ interface YahooQuoteSummaryData {
     };
 }
 
-const BACKEND_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080/v1';
-
-// Bellek içi sembol önbelleği (her buton tıklamasında gereksiz lookup isteği atılmasını engeller)
+// Sembol -> varlık id'si; periyot her değiştiğinde lookup isteği tekrarlanmasın
 const assetCache = new Map<string, { id: number; isTefas: boolean; asset?: BackendAsset }>();
 
 function getYahooTicker(symbol: string): string {
@@ -83,67 +81,16 @@ function getYahooTicker(symbol: string): string {
     return `${s}.IS`;
 }
 
-// Yahoo Crumb / Cookie Önbelleği (1 saat)
-let yahooCookieCache = '';
-let yahooCrumbCache = '';
-let yahooCrumbExpiry = 0;
-
-async function getYahooCrumb(): Promise<{ cookie: string; crumb: string } | null> {
-    const now = Date.now();
-    if (yahooCookieCache && yahooCrumbCache && now < yahooCrumbExpiry) {
-        return { cookie: yahooCookieCache, crumb: yahooCrumbCache };
-    }
-    try {
-        const r1 = await fetch('https://fc.yahoo.com', {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            signal: AbortSignal.timeout(3000)
-        });
-        const cookie = r1.headers.get('set-cookie');
-        if (!cookie) return null;
-
-        const r2 = await fetch('https://query2.finance.yahoo.com/v1/test/getcrumb', {
-            headers: { 'User-Agent': 'Mozilla/5.0', 'Cookie': cookie },
-            signal: AbortSignal.timeout(3000)
-        });
-        if (!r2.ok) return null;
-        const crumb = await r2.text();
-        if (!crumb || crumb.includes('Too Many') || crumb.includes('Unauthorized')) return null;
-
-        yahooCookieCache = cookie;
-        yahooCrumbCache = crumb;
-        yahooCrumbExpiry = now + 60 * 60 * 1000;
-        return { cookie, crumb };
-    } catch {
-        return null;
-    }
+// Büyük sayıları kısaltır: 1234567 -> "1,23 Mn", 2500000000 -> "2,50 Mr"
+function formatLargeNumberTR(num: number): string {
+    const two = (v: number) => v.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (num >= 1e12) return `${two(num / 1e12)} Tn`;
+    if (num >= 1e9) return `${two(num / 1e9)} Mr`;
+    if (num >= 1e6) return `${two(num / 1e6)} Mn`;
+    return num.toLocaleString('tr-TR');
 }
 
-// Spot Gram Altın (Truncgil / Kapalıçarşı Serbest Piyasa)
-async function fetchSpotGoldDetail(): Promise<{ price: number; change: string; positive: boolean } | null> {
-    try {
-        const res = await fetch('https://finans.truncgil.com/v4/today.json', {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            signal: AbortSignal.timeout(5000),
-        });
-        if (!res.ok) return null;
-        const text = await res.text();
-        const m = text.match(/"GRA"\s*:\s*(\{[^}]+\})/);
-        if (!m) return null;
-        const gra = JSON.parse(m[1]);
-        const price = Number(gra.Selling || gra.Buying || 0);
-        if (price <= 0) return null;
-        const changePct = Number(gra.Change || 0);
-        return {
-            price,
-            change: (changePct >= 0 ? '+' : '') + changePct.toFixed(2),
-            positive: changePct >= 0,
-        };
-    } catch {
-        return null;
-    }
-}
-
-// Temel Bilgiler Önbelleği (5 dakika)
+// Hisse temel verileri (piyasa değeri, F/K, temettü...), 5 dakika bellekte tutulur
 const fundamentalsCache = new Map<string, { data: Record<string, string>; timestamp: number }>();
 
 async function fetchFundamentals(ticker: string, isTefas: boolean): Promise<Record<string, string>> {
@@ -155,11 +102,11 @@ async function fetchFundamentals(ticker: string, isTefas: boolean): Promise<Reco
     }
 
     try {
-        const auth = await getYahooCrumb();
+        const auth = await getYahooAuth(3000);
         let qsData: YahooQuoteSummaryData | null = null;
         if (auth) {
             const qsRes = await fetch(
-                `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?crumb=${auth.crumb}&modules=summaryDetail,defaultKeyStatistics`,
+                `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}?crumb=${encodeURIComponent(auth.crumb)}&modules=summaryDetail,defaultKeyStatistics`,
                 {
                     headers: { 'User-Agent': 'Mozilla/5.0', 'Cookie': auth.cookie },
                     signal: AbortSignal.timeout(4000)
@@ -177,11 +124,10 @@ async function fetchFundamentals(ticker: string, isTefas: boolean): Promise<Reco
             if (!val) return '-';
             const num = typeof val === 'number' ? val : (typeof val === 'string' ? parseFloat(val) : (val.raw || 0));
             if (isNaN(num) || num <= 0) return '-';
-            if (num >= 1e12) return `${(num / 1e12).toFixed(2)}T ₺`;
-            if (num >= 1e9) return `${(num / 1e9).toFixed(2)} Mr ₺`;
-            if (num >= 1e6) return `${(num / 1e6).toFixed(2)} M ₺`;
-            return `${num.toLocaleString('tr-TR')} ₺`;
+            return `${formatLargeNumberTR(num)} ₺`;
         };
+
+        const volumeRaw = sd?.volume?.raw || sd?.regularMarketVolume?.raw;
 
         const exDateTimestamp = typeof sd?.exDividendDate === 'number' ? sd.exDividendDate : (sd?.exDividendDate?.raw || 0);
         const isExDateFuture = Boolean(exDateTimestamp && (exDateTimestamp * 1000 > Date.now()));
@@ -193,18 +139,30 @@ async function fetchFundamentals(ticker: string, isTefas: boolean): Promise<Reco
             return new Date(timestamp * 1000).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
         };
 
+        // Yahoo'nun fmt alanları İngilizce biçimde geliyor; hepsini raw değerden tr-TR ile yazıyoruz.
+        const rawOf = (...metrics: YahooMetric[]): number | null => {
+            for (const m of metrics) {
+                if (typeof m?.raw === 'number' && isFinite(m.raw)) return m.raw;
+            }
+            return null;
+        };
+        const trNumber = (val: number | null) =>
+            val === null ? '-' : val.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const trMoney = (val: number | null) => (val === null ? '-' : formatTRY(val));
+        const dividendYieldRaw = rawOf(sd?.dividendYield);
+
         const result: Record<string, string> = {
             marketCap: formatCap(sd?.marketCap || ks?.marketCap),
-            peRatio: sd?.trailingPE?.fmt || ks?.trailingPE?.fmt || (typeof sd?.trailingPE?.raw === 'number' ? sd.trailingPE.raw.toFixed(2) : '-'),
-            dividendYield: sd?.dividendYield?.fmt || (sd?.dividendYield?.raw ? `%${(sd.dividendYield.raw * 100).toFixed(2)}` : '-'),
-            dividendRate: sd?.dividendRate?.fmt ? `${sd.dividendRate.fmt} ₺` : (sd?.dividendRate?.raw ? `${sd.dividendRate.raw.toFixed(2)} ₺` : '-'),
+            peRatio: trNumber(rawOf(sd?.trailingPE, ks?.trailingPE)),
+            dividendYield: dividendYieldRaw === null ? '-' : `${trNumber(dividendYieldRaw * 100)}%`,
+            dividendRate: trMoney(rawOf(sd?.dividendRate)),
             exDividendDate: formatExDate(sd?.exDividendDate),
             isExDateFuture: isExDateFuture ? 'true' : 'false',
             exDividendLabel: isExDateFuture ? 'Açıklanan Temettü' : 'Son Temettü Tarihi',
-            beta: sd?.beta?.fmt || ks?.beta?.fmt || (typeof sd?.beta?.raw === 'number' ? sd.beta.raw.toFixed(2) : '-'),
-            fiftyTwoWeekHigh: sd?.fiftyTwoWeekHigh?.fmt ? `${sd.fiftyTwoWeekHigh.fmt} ₺` : (sd?.fiftyTwoWeekHigh?.raw ? `${sd.fiftyTwoWeekHigh.raw.toFixed(2)} ₺` : '-'),
-            fiftyTwoWeekLow: sd?.fiftyTwoWeekLow?.fmt ? `${sd.fiftyTwoWeekLow.fmt} ₺` : (sd?.fiftyTwoWeekLow?.raw ? `${sd.fiftyTwoWeekLow.raw.toFixed(2)} ₺` : '-'),
-            volume: sd?.volume?.fmt || sd?.regularMarketVolume?.fmt || (sd?.volume?.raw ? `${(sd.volume.raw / 1e6).toFixed(2)}M` : '-'),
+            beta: trNumber(rawOf(sd?.beta, ks?.beta)),
+            fiftyTwoWeekHigh: trMoney(rawOf(sd?.fiftyTwoWeekHigh)),
+            fiftyTwoWeekLow: trMoney(rawOf(sd?.fiftyTwoWeekLow)),
+            volume: volumeRaw ? formatLargeNumberTR(volumeRaw) : (sd?.volume?.fmt || sd?.regularMarketVolume?.fmt || '-'),
         };
 
         fundamentalsCache.set(ticker, { data: result, timestamp: Date.now() });
@@ -220,9 +178,10 @@ interface AccurateSummaryResult {
     currentPrice?: number;
 }
 
-// Getiri Özeti Önbelleği (5 dakika)
+// Periyot getirileri, 5 dakika bellekte tutulur
 const summaryHistoryCache = new Map<string, { data: AccurateSummaryResult; timestamp: number }>();
 
+// Hisse, döviz ve endekslerde periyot getirilerini Yahoo'nun 5 yıllık günlük kapanışlarından hesaplar
 async function getAccurateSummary(ticker: string, isTefas: boolean, backendSummary: AssetSummary | null): Promise<AccurateSummaryResult | null> {
     if (isTefas) {
         return backendSummary ? { summary: backendSummary } : null;
@@ -234,7 +193,7 @@ async function getAccurateSummary(ticker: string, isTefas: boolean, backendSumma
     }
 
     try {
-        const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=5y`, {
+        const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=5y`, {
             headers: { 'User-Agent': 'Mozilla/5.0' },
             signal: AbortSignal.timeout(5000),
         });
@@ -271,7 +230,7 @@ async function getAccurateSummary(ticker: string, isTefas: boolean, backendSumma
             ret1D = ((current - prev) / prev) * 100;
         }
 
-        // Dünkü resmi kapanış fiyatı (1D başlangıç noktası)
+        // Önceki kapanış; 1D grafiğinin başlangıç noktası
         let prevClose = 0;
         if (ret1D !== 0 && current > 0) {
             prevClose = Math.round((current / (1 + ret1D / 100)) * 100) / 100;
@@ -316,8 +275,8 @@ async function getAccurateSummary(ticker: string, isTefas: boolean, backendSumma
     }
 }
 
-// Gram Altın (ALTIN) için gerçek geçmiş mumlardan getiri hesaplama
-async function getAccurateGoldSummary(assetId: number): Promise<AccurateSummaryResult | null> {
+// Gram altında getiriler backend'deki 1 yıllık fiyat geçmişinden hesaplanır
+async function getAccurateGoldSummary(assetId: number, headers: Record<string, string>): Promise<AccurateSummaryResult | null> {
     const cacheKey = `ALTIN_${assetId}`;
     const cached = summaryHistoryCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
@@ -325,7 +284,7 @@ async function getAccurateGoldSummary(assetId: number): Promise<AccurateSummaryR
     }
 
     try {
-        const histRes = await fetch(`${BACKEND_URL}/assets/${assetId}/price-history?range=1Y`, { cache: 'no-store' });
+        const histRes = await fetch(`${BACKEND_URL}/assets/${assetId}/price-history?range=1Y`, { cache: 'no-store', headers });
         if (!histRes.ok) return null;
         const hist = await histRes.json();
         if (!hist || !Array.isArray(hist) || hist.length === 0) return null;
@@ -390,18 +349,18 @@ async function getAccurateGoldSummary(assetId: number): Promise<AccurateSummaryR
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const rawSymbol = searchParams.get('symbol');
-    const range = searchParams.get('range') || '1Y';
-    const startDateParam = searchParams.get('startDate');
-    const endDateParam = searchParams.get('endDate');
+    const requestedRange = (searchParams.get('range') || '1Y').toUpperCase();
+    const range = ALLOWED_RANGES.has(requestedRange) ? requestedRange : '1Y';
 
     if (!rawSymbol) {
-        return NextResponse.json({ error: 'Symbol is required' }, { status: 400 });
+        return NextResponse.json({ error: 'Sembol belirtilmedi' }, { status: 400 });
     }
 
-    const backendRange = range;
+    const backendHeaders = clientIpHeader(request);
+    const encodedSymbol = encodeURIComponent(rawSymbol);
 
     try {
-        // Step 1: Find the Asset ID (Önbellekten veya backend'den)
+        // 1) Varlığın id'si: önce bellekten, yoksa backend'den
         let assetId: number = 0;
         let isTefas: boolean = false;
         let assetObj: BackendAsset | null = null;
@@ -414,12 +373,18 @@ export async function GET(request: Request) {
                 assetObj = cached.asset || null;
             }
         } else {
-            let assetsRes = await fetch(BACKEND_URL + '/assets/lookup?symbol=' + rawSymbol, { cache: 'no-store' });
+            let assetsRes = await fetch(`${BACKEND_URL}/assets/lookup?symbol=${encodedSymbol}`, {
+                cache: 'no-store',
+                headers: backendHeaders,
+            });
             if (!assetsRes.ok && rawSymbol.length === 3) {
-                // 3 harfli sembol BIST'te bulunamadıysa TEFAS fonu olarak dene
-                assetsRes = await fetch(BACKEND_URL + '/assets/lookup?symbol=' + rawSymbol + '&type=FON', { cache: 'no-store' });
+                // 3 harfli sembol hisse olarak bulunamazsa TEFAS fonu olarak dene
+                assetsRes = await fetch(`${BACKEND_URL}/assets/lookup?symbol=${encodedSymbol}&type=FON`, {
+                    cache: 'no-store',
+                    headers: backendHeaders,
+                });
             }
-            if (!assetsRes.ok) throw new Error("Failed to fetch assets");
+            if (!assetsRes.ok) throw new Error('Varlık bulunamadı');
             assetObj = await assetsRes.json();
             
             if (!assetObj || (!assetObj.ID && !assetObj.id)) {
@@ -433,35 +398,38 @@ export async function GET(request: Request) {
 
         const yahooTicker = getYahooTicker(rawSymbol);
 
-        // Step 2: Fetch Chart Data + Backend Summary + Real Fundamentals/Summary in parallel
-        // no-store kullanılır: TEFAS ve BIST için anlık ve taze veriler gecikmesiz gelir
+        // 2) Fiyat geçmişi, backend özeti, temel veriler ve getiriler paralel çekilir
         const [historyRes, summaryRes, extraFundamentals, accurateResult, spotGoldResult] = await Promise.all([
-            fetch(`${BACKEND_URL}/assets/${assetId}/price-history?range=${backendRange}`, { cache: 'no-store' }),
-            fetch(`${BACKEND_URL}/assets/${assetId}/summary`, { cache: 'no-store' }),
+            fetch(`${BACKEND_URL}/assets/${assetId}/price-history?range=${encodeURIComponent(range)}`, {
+                cache: 'no-store',
+                headers: backendHeaders,
+            }),
+            fetch(`${BACKEND_URL}/assets/${assetId}/summary`, { cache: 'no-store', headers: backendHeaders }),
             fetchFundamentals(yahooTicker, isTefas),
             rawSymbol === 'ALTIN'
-                ? getAccurateGoldSummary(assetId)
+                ? getAccurateGoldSummary(assetId, backendHeaders)
                 : (!isTefas ? getAccurateSummary(yahooTicker, isTefas, null) : Promise.resolve(null)),
-            rawSymbol === 'ALTIN' ? fetchSpotGoldDetail() : Promise.resolve(null),
+            rawSymbol === 'ALTIN' ? fetchSpotGold(5000) : Promise.resolve(null),
         ]);
 
         let chartData: { date: string; price: number, rawDate?: Date }[] = [];
-        
+
         if (historyRes.ok) {
             let history = await historyRes.json();
             if (history && history.length > 0) {
-                // Ensure array is strictly oldest-first (ASC)
+                // Eskiden yeniye sırala
                 history.sort((a: PriceRecord, b: PriceRecord) => {
                     const dA = new Date(a.RecordedAt || a.recorded_at || '').getTime();
                     const dB = new Date(b.RecordedAt || b.recorded_at || '').getTime();
                     return dA - dB;
                 });
 
-                // Filter history by range
+                // Seçilen periyoda göre kırp
                 const now = new Date();
-                let cutoffDate = new Date(0); // ALL
-                
+                let cutoffDate = new Date(0);
+
                 if (range === '1D') {
+                    // Yalnızca son kaydın olduğu gün (İstanbul saatiyle)
                     if (history.length > 0) {
                         const lastRec = history[history.length - 1];
                         const lastDate = new Date(lastRec.RecordedAt || lastRec.recorded_at);
@@ -471,14 +439,6 @@ export async function GET(request: Request) {
                             return recDate.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' }) === lastDayStr;
                         });
                     }
-                } else if (range === 'CUSTOM' && startDateParam) {
-                    const sDate = new Date(startDateParam);
-                    const eDate = endDateParam ? new Date(endDateParam) : new Date();
-                    eDate.setHours(23, 59, 59, 999);
-                    history = history.filter((record: PriceRecord) => {
-                        const recDate = new Date(record.RecordedAt || record.recorded_at || '');
-                        return recDate.getTime() >= sDate.getTime() && recDate.getTime() <= eDate.getTime();
-                    });
                 } else {
                     if (range === '1W') {
                         cutoffDate = new Date(now);
@@ -501,6 +461,7 @@ export async function GET(request: Request) {
                         cutoffDate = new Date(now);
                         cutoffDate.setFullYear(now.getFullYear() - 3);
                     } else if (range === '5Y' || range === 'ALL') {
+                        // ALL da en fazla 5 yıl gösterir
                         cutoffDate = new Date(now);
                         cutoffDate.setFullYear(now.getFullYear() - 5);
                     }
@@ -511,7 +472,7 @@ export async function GET(request: Request) {
                     });
                 }
 
-                // 6M: 12 saatte bir (Her işlem günü sabah ve akşam olmak üzere günde 2 nokta)
+                // 6M'de nokta çoksa her günden ilk ve son kaydı bırak
                 if (range === '6M' && history.length > 250) {
                     const sampled: PriceRecord[] = [];
                     const byDay = new Map<string, PriceRecord[]>();
@@ -565,12 +526,6 @@ export async function GET(request: Request) {
                         dateStr = d.toLocaleDateString('tr-TR', { ...tzOptions, day: 'numeric', month: 'short', year: '2-digit' });
                     } else if (range === 'ALL' || range === '5Y') {
                         dateStr = d.toLocaleDateString('tr-TR', { ...tzOptions, day: 'numeric', month: 'short', year: '2-digit' });
-                    } else if (range === 'CUSTOM') {
-                        if (history.length <= 40) {
-                            dateStr = d.toLocaleDateString('tr-TR', { ...tzOptions, day: 'numeric', month: 'short' });
-                        } else {
-                            dateStr = d.toLocaleDateString('tr-TR', { ...tzOptions, day: 'numeric', month: 'short', year: 'numeric' });
-                        }
                     } else {
                         dateStr = d.toLocaleDateString('tr-TR', { ...tzOptions, day: 'numeric', month: 'short' });
                     }
@@ -597,10 +552,13 @@ export async function GET(request: Request) {
             }
         }
 
-        // Fonlar ve 3Y eksik olan varlıklar için 3Y ve 5Y hesaplama desteği
+        // Özette 3Y yoksa (fonlarda olduğu gibi) 3Y ve 5Y'yi tüm fiyat geçmişinden hesapla
         if (summaryData && (!summaryData['3Y'] || summaryData['3Y'] === 0)) {
             try {
-                const allHistRes = await fetch(`${BACKEND_URL}/assets/${assetId}/price-history?range=ALL`, { cache: 'no-store' });
+                const allHistRes = await fetch(`${BACKEND_URL}/assets/${assetId}/price-history?range=ALL`, {
+                    cache: 'no-store',
+                    headers: backendHeaders,
+                });
                 if (allHistRes.ok) {
                     const allHist = await allHistRes.json();
                     if (allHist && allHist.length > 0) {
@@ -633,12 +591,12 @@ export async function GET(request: Request) {
             }
         }
 
-        // Step 3: Check if we need to trigger backfill
+        // 3) Fiyat geçmişi neredeyse boşsa backend'den geçmişi doldurmasını iste (yanıtı beklenmez)
         if (chartData.length < 3 && range !== '1D') {
-            fetch(`${BACKEND_URL}/assets/${assetId}/backfill`, { method: 'POST' }).catch(console.error);
+            fetch(`${BACKEND_URL}/assets/${assetId}/backfill`, { method: 'POST', headers: backendHeaders }).catch(console.error);
         }
 
-        // Step 4: Fundamentals / UI Hints & Son Güncelleme Kontrolü
+        // 4) Son kaydın tarihine göre "Son Güncelleme" notu
         let latestRecordTime: Date | null = null;
         if (chartData.length > 0) {
             latestRecordTime = chartData[chartData.length - 1].rawDate || null;
@@ -679,9 +637,9 @@ export async function GET(request: Request) {
         }
 
         if (rawSymbol === 'ALTIN') {
-            const spot = spotGoldResult || (await fetchSpotGoldDetail());
+            const spot = spotGoldResult || (await fetchSpotGold(5000));
             if (spot && spot.price > 0) {
-                // Canlı spot altın fiyatını güncel noktaya senkronize et (tüm geçmiş eğriyi yapay oranla bozma)
+                // Güncel gram altın fiyatı yalnızca son noktaya yazılır, geçmiş eğriye dokunulmaz
                 if (chartData.length > 0) {
                     const lastPt = chartData[chartData.length - 1];
                     const todayStr = new Date().toDateString();
@@ -733,7 +691,7 @@ export async function GET(request: Request) {
             lastUpdateDate: lastUpdateDateStr
         };
 
-        // Clean rawDate before sending to client
+        // rawDate istemciye gönderilmez
         const cleanChartData = chartData.map(d => ({ date: d.date, price: d.price }));
         if (range === '1D' && previousClose && previousClose > 0) {
             cleanChartData.unshift({
@@ -762,28 +720,24 @@ export async function GET(request: Request) {
         let latestPositive = true;
         if (summaryData && typeof summaryData['1D'] === 'number' && !isNaN(summaryData['1D'])) {
             const val = summaryData['1D'];
-            latestChange = (val >= 0 ? '+' : '') + val.toFixed(2);
+            latestChange = signedChange(val);
             latestPositive = val >= 0;
         } else if (cleanChartData.length >= 2) {
             const last = cleanChartData[cleanChartData.length - 1].price;
             const prev = cleanChartData[0].price;
             if (prev > 0) {
                 const pct = ((last - prev) / prev) * 100;
-                latestChange = (pct >= 0 ? '+' : '') + pct.toFixed(2);
+                latestChange = signedChange(pct);
                 latestPositive = pct >= 0;
             }
         }
-
-        const formatPriceLocal = (p: number): string => {
-            return p >= 100 ? p.toFixed(2) : (p >= 1 ? p.toFixed(2) : p.toFixed(4));
-        };
 
         const assetInfo = assetObj ? {
             id: assetId,
             symbol: rawSymbol,
             name: assetObj.Name || assetObj.name || rawSymbol,
             asset_type: isTefas ? 'FON' : (assetObj.AssetType || assetObj.asset_type || 'HISSE'),
-            current_price: latestPrice > 0 ? formatPriceLocal(latestPrice) : (assetObj.CurrentPrice || assetObj.current_price || '0'),
+            current_price: latestPrice > 0 ? formatApiPrice(latestPrice) : (assetObj.CurrentPrice || assetObj.current_price || '0'),
             change: latestChange,
             positive: latestPositive,
         } : null;
@@ -793,7 +747,7 @@ export async function GET(request: Request) {
             { headers: { 'Cache-Control': 'no-store, max-age=0' } }
         );
     } catch (error) {
-        console.error("Route error:", error);
+        console.error('/api/assets/detail hatası:', error);
         return NextResponse.json(
             { chart: [], fundamentals: null, summary: null },
             { headers: { 'Cache-Control': 'no-store, max-age=0' } }

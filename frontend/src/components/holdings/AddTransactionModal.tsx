@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import api from '@/lib/api';
+import { formatTRY } from '@/lib/formatters';
 import TransactionDatePicker from '@/components/TransactionDatePicker';
 
 interface AddTransactionModalProps {
@@ -13,6 +14,8 @@ interface AddTransactionModalProps {
     initialPrice?: string;
     initialType?: 'BUY' | 'SELL';
     maxLots?: number;
+    // initialSymbol'ün türü (HISSE, FON, ALTIN, DOVIZ). Varlık veritabanında yoksa backend fiyat kaynağını buna göre seçer.
+    assetType?: string;
 }
 
 export default function AddTransactionModal({
@@ -23,6 +26,7 @@ export default function AddTransactionModal({
     initialPrice = '',
     initialType = 'BUY',
     maxLots,
+    assetType = 'HISSE',
 }: AddTransactionModalProps) {
     const [txSymbol, setTxSymbol] = useState(initialSymbol);
     const [txType, setTxType] = useState<'BUY' | 'SELL'>(initialType);
@@ -65,9 +69,11 @@ export default function AddTransactionModal({
         }
         try {
             setTxSubmitting(true);
+            const symbol = txSymbol.toUpperCase();
             await api.post('/transactions', {
-                symbol: txSymbol.toUpperCase(),
-                asset_type: 'HISSE',
+                symbol,
+                // Kullanıcı sembolü değiştirdiyse verilen tür artık geçerli değil; eskisi gibi HISSE gönderilir
+                asset_type: symbol === initialSymbol.toUpperCase() ? assetType : 'HISSE',
                 type: txType,
                 amount: txAmount,
                 price: txPrice,
@@ -115,7 +121,7 @@ export default function AddTransactionModal({
                                 txType === 'BUY' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'
                             }`}
                         >
-                            Alış (BUY)
+                            Alış
                         </button>
                         <button
                             type="button"
@@ -124,7 +130,7 @@ export default function AddTransactionModal({
                                 txType === 'SELL' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-400'
                             }`}
                         >
-                            Satış (SELL)
+                            Satış
                         </button>
                     </div>
 
@@ -191,7 +197,7 @@ export default function AddTransactionModal({
                             placeholder="0.00"
                             className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-[#1A9FD3]"
                         />
-                        <p className="text-[11px] text-slate-400 mt-1">Komisyon girilirse alış maliyetine eklenir, kâr/zarar hesabını etkiler.</p>
+                        <p className="text-[11px] text-slate-400 mt-1">Alışta girilen komisyon maliyete eklenir; satışta girilen komisyon gerçekleşen kârdan düşülür.</p>
                     </div>
 
                     {/* Toplam İşlem Tutarı Özeti */}
@@ -200,21 +206,22 @@ export default function AddTransactionModal({
                             <div className="flex justify-between items-center text-slate-400">
                                 <span>İşlem Tutarı:</span>
                                 <span className="font-mono text-slate-200 font-medium">
-                                    {((parseFloat(txAmount) || 0) * (parseFloat(txPrice) || 0)).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+                                    {formatTRY((parseFloat(txAmount) || 0) * (parseFloat(txPrice) || 0))}
                                 </span>
                             </div>
                             {parseFloat(txCommission) > 0 && (
                                 <div className="flex justify-between items-center text-slate-300">
-                                    <span>+ Komisyon:</span>
+                                    <span>{txType === 'BUY' ? '+' : '-'} Komisyon:</span>
                                     <span className="font-mono font-medium">
-                                        {parseFloat(txCommission).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+                                        {formatTRY(parseFloat(txCommission))}
                                     </span>
                                 </div>
                             )}
+                            {/* Alışta komisyon maliyete eklenir, satışta hesaba geçecek tutardan düşülür */}
                             <div className="pt-2 border-t border-slate-700 flex justify-between items-center">
                                 <span className="text-slate-300 font-medium">Toplam {txType === 'BUY' ? 'Maliyet' : 'Net Tutar'}:</span>
                                 <span className="font-bold text-white font-mono text-sm sm:text-base">
-                                    {(((parseFloat(txAmount) || 0) * (parseFloat(txPrice) || 0)) + (txType === 'BUY' ? (parseFloat(txCommission) || 0) : -(parseFloat(txCommission) || 0))).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+                                    {formatTRY(((parseFloat(txAmount) || 0) * (parseFloat(txPrice) || 0)) + (txType === 'BUY' ? (parseFloat(txCommission) || 0) : -(parseFloat(txCommission) || 0)))}
                                 </span>
                             </div>
                         </div>

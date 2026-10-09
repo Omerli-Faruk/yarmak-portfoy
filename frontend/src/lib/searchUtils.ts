@@ -1,14 +1,7 @@
-/**
- * Finansal Varlık Arama ve Benzerlik Yardımcısı (Search & Fuzzy Matching Engine)
- * - Türkçe karakter ve aksan normalizasyonu (İ, ı, ö, ü, ş, ç, ğ)
- * - Akronim / Kısaltma tespiti (Örn: Türk Hava Yolları -> THY)
- * - Alaka puanlama motoru (Relevance Scoring Engine)
- * - Levenshtein mesafesi ile tam yazılmasa bile benzer varlıkları listeleme
- */
+// Varlık araması için yardımcılar: Türkçe karakterleri sadeleştirme, baş harf kısaltması
+// (Türk Hava Yolları -> thy), alaka puanı ve küçük yazım hatalarını yakalamak için Levenshtein mesafesi.
 
-/**
- * Türkçe harf, aksan ve noktalama işaretlerini arama için normalize eder
- */
+// Karşılaştırma için metni küçük harfe, Türkçe karakterleri ASCII karşılığına çevirir ve noktalamayı atar.
 export function normalizeSearchText(text: string): string {
     return (text || '')
         .replace(/İ/g, 'i')
@@ -27,9 +20,7 @@ export function normalizeSearchText(text: string): string {
         .trim();
 }
 
-/**
- * Levenshtein mesafesi (iki kelime arasındaki harf farkı/düzenleme sayısı)
- */
+// İki metin arasındaki düzenleme (ekleme, silme, değiştirme) sayısı
 export function levenshteinDistance(a: string, b: string): number {
     if (a === b) return 0;
     if (a.length === 0) return b.length;
@@ -59,27 +50,18 @@ export function levenshteinDistance(a: string, b: string): number {
     return matrix[b.length][a.length];
 }
 
-/**
- * Kelimelerin baş harflerinden kısaltma / akronim üretir (örn: Türk Hava Yolları -> THY)
- */
+// Kelimelerin baş harflerinden kısaltma üretir: "Türk Hava Yolları" -> "thy"
 export function getAcronym(text: string): string {
     const clean = normalizeSearchText(text);
     return clean.split(/\s+/).map(w => w[0]).join('');
 }
 
 /**
- * Finansal varlık arama alaka puanlayıcısı
- * Puan > 0 ise varlık arama sonucuyla eşleşmiştir.
- * 
- * Sıralama Hiyerarşisi:
- * - 10000+: Birebir sembol veya tam isim eşleşmesi
- * - 8000+:  Arama terimiyle başlayan semboller (Örn: "ASE" -> "ASELS")
- * - 7000+:  Akronim eşleşmesi (Örn: "thy" -> "Turk Hava Yollari")
- * - 6000+:  İsimdeki kelimelerden biri tam eşleşiyorsa (Örn: "garanti" -> "Garanti Bankasi")
- * - 5000+:  İsim arama terimiyle başlıyorsa
- * - 4000+:  Sembol içinde alt dize veya çoklu kelimelerin tamamı varsa
- * - 2500+:  Çoklu kelimelerin bir kısmı varsa
- * - 500-2000: Benzerlik / Fuzzy eşleşme (Harf hatası olsa bile benzerler aşağıda çıkar)
+ * Aramanın bir varlıkla ne kadar eşleştiğini puanlar; 0 eşleşme yok demektir.
+ * Sıra: tam sembol/isim (9500-10000), sembolün başı (8300-8800), kısaltma (7800),
+ * isimdeki bir kelime (7000), ismin başı (6500), kelime başı (5800), sembol içinde (5200),
+ * aranan kelimelerin hepsi (4800), isim içinde (3800), kelimelerin bir kısmı (2200-3200),
+ * yazım hatası toleransı (900-1900).
  */
 export function scoreAssetMatch(
     rawSymbol: string,
@@ -92,12 +74,11 @@ export function scoreAssetMatch(
     const symbol = normalizeSearchText(rawSymbol);
     const name = normalizeSearchText(rawName);
 
-    // 1. TAM EŞLEŞME (En yüksek öncelik)
+    // Tam eşleşme
     if (symbol === query) return 10000;
     if (name === query) return 9500;
 
-    // 2. SEMBOLLE BAŞLAMA
-    // Kısa semboller daha öncelikli (örn: "SA" -> "SAS" > "SASA" > "SAFKR")
+    // Sembol aramayla başlıyorsa kısa semboller öne çıkar ("SA" -> "SAS" > "SASA" > "SAFKR")
     if (symbol.startsWith(query)) {
         return 8800 - Math.min(symbol.length * 20, 500);
     }
@@ -106,42 +87,42 @@ export function scoreAssetMatch(
     const queryWords = query.split(/\s+/).filter(Boolean);
     const acronym = getAcronym(rawName);
 
-    // 3. AKRONİM EŞLEŞMESİ (Örn: "thy" -> "Turk Hava Yollari", "ykb" -> "Yapi Kredi Bankasi")
+    // Kısaltma eşleşmesi ("thy" -> "Turk Hava Yollari", "ykb" -> "Yapi Kredi Bankasi")
     if (query.length >= 2 && (acronym === query || acronym.startsWith(query))) {
         return 7800;
     }
 
-    // 4. İSİMDEKİ KELİMELERDEN BİRİ BİREBİR EŞLEŞİYORSA
+    // İsimdeki kelimelerden biri aramayla aynıysa
     if (nameWords.some(w => w === query)) {
         return 7000;
     }
 
-    // 5. İSİM ARAMA TERİMİYLE BAŞLIYORSA (Örn: "turk hava" -> "Turk Hava Yollari")
+    // İsim aramayla başlıyorsa ("turk hava" -> "Turk Hava Yollari")
     if (name.startsWith(query)) {
         return 6500;
     }
 
-    // 6. İSİMDEKİ BİR KELİME ARAMA İLE BAŞLIYORSA (Örn: "sab" -> "Haci Omer Sabanci...")
+    // İsimdeki bir kelime aramayla başlıyorsa ("sab" -> "Haci Omer Sabanci...")
     if (nameWords.some(w => w.startsWith(query))) {
         return 5800;
     }
 
-    // 7. SEMBOL ARAMAYI İÇERİYORSA (Örn: "th" -> "GRTHO")
+    // Sembol aramayı içeriyorsa ("th" -> "GRTHO")
     if (symbol.includes(query)) {
         return 5200;
     }
 
-    // 8. ÇOKLU KELİME ARAMASI: TÜM KELİMELER EŞLEŞİYORSA (Örn: "eregli celik" -> "Eregli Demir Celik")
+    // Çok kelimeli aramada bütün kelimeler bulunuyorsa ("eregli celik" -> "Eregli Demir Celik")
     if (queryWords.length > 1 && queryWords.every(qw => symbol.includes(qw) || nameWords.some(nw => nw.includes(qw)))) {
         return 4800;
     }
 
-    // 9. İSİM İÇİNDE ALT DİZE (SUBSTRING)
+    // İsim aramayı içeriyorsa
     if (query.length >= 2 && name.includes(query)) {
         return 3800;
     }
 
-    // 10. ÇOKLU KELİMEDE HERHANGİ BİR KELİME EŞLEŞİYORSA
+    // Çok kelimeli aramada kelimelerin bir kısmı bulunuyorsa
     if (queryWords.length > 1) {
         const matchedWordsCount = queryWords.filter(qw => qw.length >= 2 && (symbol.includes(qw) || name.includes(qw))).length;
         if (matchedWordsCount > 0) {
@@ -149,22 +130,22 @@ export function scoreAssetMatch(
         }
     }
 
-    // 11. BENZERLİK / FUZZY MATCHING (Benzer olanlar aşağıda çıksın)
+    // Yazım hatası toleransı; bu eşleşmeler listenin altında kalır
     if (query.length >= 3) {
-        // Sembole Levenshtein yakınlığı (Örn: "aselsn" -> "asels", "tuprs" -> "tuprs")
+        // Sembole 1-2 harf uzaklık ("aselsn" -> "asels")
         const symDist = levenshteinDistance(query, symbol);
         if (symDist === 1) return 1900;
         if (symDist === 2 && query.length >= 5) return 1400;
 
-        // Sembol aramayı prefix veya ters prefix olarak içeriyorsa
+        // Arama sembolle başlıyorsa ("aselsan" -> "asels")
         if (query.startsWith(symbol) && symbol.length >= 3) {
             return 1700;
         }
 
-        // İsimdeki kelimelerle harf ve hece benzerliği
+        // İsimdeki kelimelere benzerlik
         for (const nw of nameWords) {
             if (nw.length >= 3) {
-                // Ön ek benzerliği (kelimenin ilk 3-4 harfi tutuyorsa)
+                // İlk 3 harf tutuyorsa
                 const minLen = Math.min(query.length, nw.length);
                 if (minLen >= 3 && query.slice(0, 3) === nw.slice(0, 3)) {
                     return 1500;

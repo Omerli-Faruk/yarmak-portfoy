@@ -4,8 +4,8 @@ import { ArrowLeft, FileText, CheckCircle, AlertCircle, ShieldCheck } from 'luci
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: 'Kullanım Şartları | Yarmak',
-    description: 'Yarmak Borsa & Portföy Takip Sistemi kullanıcı sözleşmesi ve hizmet kullanım şartları.',
+    title: 'Kullanım Şartları',
+    description: 'Yarmak portföy takip aracının kullanıcı sözleşmesi ve kullanım şartları.',
 };
 
 export default function TermsPage() {
@@ -33,7 +33,9 @@ export default function TermsPage() {
                         Kullanım Şartları
                     </h1>
                     <p className="text-sm text-slate-400 leading-relaxed">
-                        Yarmak platformuna kayıt olarak veya platformu ziyaret ederek bu Kullanım Şartlarını ve gizlilik kurallarını kabul etmiş sayılırsınız. Lütfen hizmet kapsamımızı ve yükümlülüklerinizi dikkatle inceleyiniz.
+                        Yarmak&apos;a kayıt olarak bu Kullanım Şartları&apos;nı kabul etmiş olursunuz. Kişisel verilerinizin nasıl işlendiği{' '}
+                        <Link href="/privacy" className="text-white underline hover:text-slate-300">Gizlilik ve KVKK Aydınlatma Metni</Link>
+                        &apos;nde açıklanmıştır. Lütfen hizmet kapsamını ve yükümlülüklerinizi dikkatle inceleyiniz.
                     </p>
                 </div>
 
@@ -43,10 +45,10 @@ export default function TermsPage() {
                     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-3">
                         <div className="flex items-center gap-2.5 text-white font-bold text-base">
                             <CheckCircle className="w-5 h-5 text-slate-400" />
-                            <h2>1. Hizmetin Niteliği ve Kapsamı</h2>
+                            <h2>1. Hizmetin niteliği ve kapsamı</h2>
                         </div>
                         <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                            Yarmak; yatırımcıların Borsa İstanbul (BIST), TEFAS yatırım fonları, altın ve döviz pozisyonlarını tek bir arayüzde takip edebilmeleri amacıyla geliştirilmiş bağımsız bir <strong>portföy analiz ve simülasyon aracıdır</strong>. Yarmak bir banka, aracı kurum, portföy yönetim şirketi veya yatırım kuruluşu değildir; sermaye piyasası emir iletimi, saklama veya aracılık faaliyeti icra etmez.
+                            Yarmak; yatırımcıların Borsa İstanbul (BIST), TEFAS yatırım fonları, altın ve döviz pozisyonlarını tek bir arayüzde takip edebilmeleri amacıyla geliştirilmiş bağımsız bir <strong>portföy takip aracıdır</strong>. Yarmak bir banka, aracı kurum, portföy yönetim şirketi veya yatırım kuruluşu değildir; sermaye piyasası emir iletimi, saklama veya aracılık faaliyeti icra etmez.
                         </p>
                     </div>
 
@@ -54,10 +56,10 @@ export default function TermsPage() {
                     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-3">
                         <div className="flex items-center gap-2.5 text-white font-bold text-base">
                             <AlertCircle className="w-5 h-5 text-slate-400" />
-                            <h2>2. Yatırım Tavsiyesi ve Fiyat Farklılıkları</h2>
+                            <h2>2. Yatırım tavsiyesi ve fiyat farklılıkları</h2>
                         </div>
                         <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                            Platformda görüntülenen hiçbir veri, grafik, getiri analizi veya kullanıcı bildirimi <strong>yatırım tavsiyesi niteliği taşımaz</strong>. Fiyatlar ve hesaplamalar ne kadar titizlikle sağlansa da teknik gecikmeler ve veri sağlayıcı kaynaklı anlık farklılıklar içerebilir; gerçek işlem fiyatları veya resmi hesap ekstrelerinizle uyuşmayabilir. Yatırım kararları tamamen kullanıcının kendi hür iradesine aittir.
+                            Platformda görüntülenen hiçbir veri, grafik, getiri analizi veya kullanıcı bildirimi <strong>yatırım tavsiyesi niteliği taşımaz</strong>. Fiyatlar ve hesaplamalar ne kadar titizlikle sağlansa da teknik gecikmeler ve veri sağlayıcı kaynaklı farklılıklar içerebilir; gerçek işlem fiyatları veya resmi hesap ekstrelerinizle uyuşmayabilir. Yatırım kararları tamamen kullanıcının kendi hür iradesine aittir.
                         </p>
                     </div>
 
@@ -65,7 +67,7 @@ export default function TermsPage() {
                     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-3">
                         <div className="flex items-center gap-2.5 text-white font-bold text-base">
                             <ShieldCheck className="w-5 h-5 text-slate-400" />
-                            <h2>3. Hesap Güvenliği ve Kullanıcı Yükümlülükleri</h2>
+                            <h2>3. Hesap güvenliği ve kullanıcı yükümlülükleri</h2>
                         </div>
                         <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
                             Kullanıcı, oluşturduğu hesabın ve giriş bilgilerinin gizliliğini korumakla yükümlüdür. Yarmak, kullanıcıdan hiçbir koşulda banka veya aracı kurum şifresi talep etmez. Kullanıcıların platformu hukuka aykırı, haksız kazanç sağlamaya yönelik veya sistemin işleyişini bozacak şekilde (otomatik botlar, DoS saldırıları vb.) kullanması yasaktır.
@@ -76,7 +78,7 @@ export default function TermsPage() {
                     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-3">
                         <div className="flex items-center gap-2.5 text-white font-bold text-base">
                             <FileText className="w-5 h-5 text-slate-400" />
-                            <h2>4. Fikri Mülkiyet Hakları</h2>
+                            <h2>4. Fikri mülkiyet hakları</h2>
                         </div>
                         <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
                             Yarmak arayüz tasarımı, logo, yazılım kodları, portföy hesaplama algoritmaları ve platform mimarisi fikri mülkiyet mevzuatıyla korunmaktadır. Yazılı izin olmaksızın platformun kopyalanması, tersine mühendisliğe tabi tutulması veya ticari amaçla izinsiz dağıtılması yasaktır.
@@ -87,17 +89,17 @@ export default function TermsPage() {
                     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-3">
                         <div className="flex items-center gap-2.5 text-white font-bold text-base">
                             <AlertCircle className="w-5 h-5 text-slate-400" />
-                            <h2>5. Hizmette Değişiklik ve Fesih</h2>
+                            <h2>5. Hizmette değişiklik ve fesih</h2>
                         </div>
                         <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                            Yarmak, platform özelliklerini önceden bildirmeksizin güncelleme, değiştirme veya dilediğinde askıya alma hakkını saklı tutar. Kullanıcı dilediği zaman profil ayarlarından hesabını kapatabilir veya kullanımına son verebilir.
+                            Yarmak, platform özelliklerini önceden bildirmeksizin güncelleme, değiştirme veya askıya alma hakkını saklı tutar. Kullanıcı dilediği zaman kayıtlı e-posta adresinden <a href="mailto:destek@yarmak.com" className="text-white underline hover:text-slate-300">destek@yarmak.com</a> adresine yazarak hesabının kapatılmasını ve verilerinin silinmesini isteyebilir.
                         </p>
                     </div>
                 </div>
 
                 {/* Alt Bilgi */}
                 <div className="pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-                    <p>Son Güncelleme: 1 Ekim 2026</p>
+                    <p>Son güncelleme: 9 Ekim 2026</p>
                     <div className="flex items-center gap-4">
                         <Link href="/disclaimer" className="hover:text-slate-300 transition">Yasal Uyarı (SPK)</Link>
                         <span>•</span>

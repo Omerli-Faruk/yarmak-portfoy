@@ -11,13 +11,16 @@ import {
     Trash2,
     ChevronRight,
 } from 'lucide-react';
-import { AssetGroup, Period, UserHolding } from '@/types';
-import { isHoldingNewerThanPeriod, getPeriodHeaderLabel } from '@/lib/periodUtils';
+import type { AssetGroup, AssetSummaryMap, Period, UserHolding } from '@/types';
+import { getPeriodHeaderLabel } from '@/lib/periodUtils';
+import { ASSET_TYPE_LABELS, formatSignedPercent } from '@/lib/formatters';
+import { getHoldingRowMetrics } from './holdingRowMetrics';
+import GroupBadges from './GroupBadges';
 
 interface HoldingsTableProps {
     items: UserHolding[];
     selectedPeriod: Period;
-    assetSummaries: Record<string, Record<string, number>>;
+    assetSummaries: AssetSummaryMap;
     groups: AssetGroup[];
     assetGroups: Record<string, string[]>;
     fmt: (amountTRY: number, showPlusSign?: boolean) => string;
@@ -53,20 +56,44 @@ export default function HoldingsTable({
 
     const periodHeaderLabel = getPeriodHeaderLabel(selectedPeriod);
 
-    const handleDrop = (targetSymbol: string) => {
-        if (!draggedSymbol || draggedSymbol === targetSymbol) {
-            setDraggedSymbol(null);
-            setDragOverSymbol(null);
-            return;
-        }
-        onDropAsset(draggedSymbol, targetSymbol);
+    const resetDrag = () => {
         setDraggedSymbol(null);
         setDragOverSymbol(null);
     };
 
+    const handleDrop = (targetSymbol: string) => {
+        if (draggedSymbol && draggedSymbol !== targetSymbol) {
+            onDropAsset(draggedSymbol, targetSymbol);
+        }
+        resetDrag();
+    };
+
+    // Masaüstü satırı ve mobil kart aynı sürükle-bırak davranışını kullanır
+    const dragHandlers = (symbol: string) => ({
+        draggable: true,
+        onDragStart: (e: React.DragEvent) => {
+            e.dataTransfer.setData('text/plain', symbol);
+            e.dataTransfer.effectAllowed = 'move';
+            setDraggedSymbol(symbol);
+        },
+        onDragOver: (e: React.DragEvent) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (dragOverSymbol !== symbol) setDragOverSymbol(symbol);
+        },
+        onDragLeave: () => {
+            if (dragOverSymbol === symbol) setDragOverSymbol(null);
+        },
+        onDrop: (e: React.DragEvent) => {
+            e.preventDefault();
+            handleDrop(symbol);
+        },
+        onDragEnd: resetDrag,
+    });
+
     return (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-            {/* MASAÜSTÜ TABLO GÖRÜNÜMÜ */}
+            {/* Masaüstü: tablo */}
             <div className="hidden md:block overflow-x-auto custom-horizontal-scrollbar">
                 <table className="w-full text-left border-collapse">
                     <thead>
@@ -83,32 +110,8 @@ export default function HoldingsTable({
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 text-sm">
                         {items.map((h, idx) => {
-                            const costVal = h.average_cost * h.total_amount;
-                            const pnl = h.profit_loss;
-                            const pnlPct = costVal > 0 ? (pnl / costVal) * 100 : 0;
-                            const isPos = pnl >= 0;
-
-                            const sum = assetSummaries[h.symbol];
-                            const rawPeriodRet = (sum && sum[selectedPeriod] !== undefined) ? sum[selectedPeriod] : null;
-                            const retAll = (sum && sum['ALL'] !== undefined) ? sum['ALL'] : null;
-
-                            const isNewer = isHoldingNewerThanPeriod(h.first_buy_date, selectedPeriod, rawPeriodRet, retAll);
-
-                            let periodRetVal: number | null = null;
-                            let periodPnl: number | null = null;
-
-                            if (isNewer) {
-                                periodRetVal = pnlPct;
-                                periodPnl = pnl;
-                            } else if (rawPeriodRet !== null) {
-                                periodRetVal = rawPeriodRet;
-                                if (periodRetVal > -100) {
-                                    periodPnl = h.total_value - (h.total_value / (1 + (periodRetVal / 100)));
-                                } else {
-                                    periodPnl = -h.total_value;
-                                }
-                            }
-                            const isPeriodPos = periodPnl !== null ? periodPnl >= 0 : true;
+                            const { pnl, pnlPct, isPos, periodRetVal, periodPnl, isPeriodPos } =
+                                getHoldingRowMetrics(h, selectedPeriod, assetSummaries);
 
                             const assignedGroupIds = assetGroups[h.symbol] || [];
                             const assignedGroupObjects = groups.filter(g => assignedGroupIds.includes(g.id));
@@ -119,33 +122,12 @@ export default function HoldingsTable({
                             return (
                                 <tr
                                     key={h.symbol}
-                                    draggable
-                                    onDragStart={e => {
-                                        e.dataTransfer.setData('text/plain', h.symbol);
-                                        e.dataTransfer.effectAllowed = 'move';
-                                        setDraggedSymbol(h.symbol);
-                                    }}
-                                    onDragOver={e => {
-                                        e.preventDefault();
-                                        e.dataTransfer.dropEffect = 'move';
-                                        if (dragOverSymbol !== h.symbol) setDragOverSymbol(h.symbol);
-                                    }}
-                                    onDragLeave={() => {
-                                        if (dragOverSymbol === h.symbol) setDragOverSymbol(null);
-                                    }}
-                                    onDrop={e => {
-                                        e.preventDefault();
-                                        handleDrop(h.symbol);
-                                    }}
-                                    onDragEnd={() => {
-                                        setDraggedSymbol(null);
-                                        setDragOverSymbol(null);
-                                    }}
+                                    {...dragHandlers(h.symbol)}
                                     className={`hover:bg-slate-800/40 transition-colors group select-none ${
                                         isDragging ? 'opacity-30 bg-slate-800/90' : ''
                                     } ${isOver ? 'border-t-2 border-[#1A9FD3] bg-[#1A9FD3]/15' : ''}`}
                                 >
-                                    {/* SIRA & SÜRÜKLE TUTAMACI */}
+                                    {/* Sıra numarası ve sürükleme tutamacı */}
                                     <td className="py-3.5 pl-4 pr-1 text-center whitespace-nowrap">
                                         <div
                                             className="flex items-center justify-center gap-1 cursor-grab active:cursor-grabbing text-slate-500 hover:text-white transition py-1 rounded"
@@ -158,7 +140,7 @@ export default function HoldingsTable({
                                         </div>
                                     </td>
 
-                                    {/* VARLIK (Sembol & Şirket Adı & Grup Etiketleri) */}
+                                    {/* Sembol, ad ve grup etiketleri */}
                                     <td className="py-3.5 pl-2 pr-3">
                                         <div className="flex items-center gap-3">
                                             <Link
@@ -183,25 +165,8 @@ export default function HoldingsTable({
                                                 <p className="text-xs text-slate-400 truncate max-w-[180px] lg:max-w-[240px]">
                                                     {h.asset_name}
                                                 </p>
-                                                {/* Grup Etiketleri & Düzenle Butonu */}
                                                 <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                                                    {assignedGroupObjects.map(g => (
-                                                        <span
-                                                            key={g.id}
-                                                            className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border"
-                                                            style={{
-                                                                backgroundColor: `${g.color}15`,
-                                                                color: g.color,
-                                                                borderColor: `${g.color}35`,
-                                                            }}
-                                                        >
-                                                            <span
-                                                                className="w-1.5 h-1.5 rounded-full"
-                                                                style={{ backgroundColor: g.color }}
-                                                            />
-                                                            {g.name}
-                                                        </span>
-                                                    ))}
+                                                    <GroupBadges groups={assignedGroupObjects} />
                                                     <button
                                                         type="button"
                                                         onClick={() => onAssignAsset(h)}
@@ -218,14 +183,12 @@ export default function HoldingsTable({
                                         </div>
                                     </td>
 
-                                    {/* TÜR ROZETİ */}
                                     <td className="py-3.5 px-3 whitespace-nowrap">
                                         <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700/80">
-                                            {h.asset_type}
+                                            {ASSET_TYPE_LABELS[h.asset_type] ?? h.asset_type}
                                         </span>
                                     </td>
 
-                                    {/* ADET & ORT. MALİYET */}
                                     <td className="py-3.5 px-3 text-right whitespace-nowrap">
                                         <div className="text-sm font-semibold text-slate-200 tabular-nums">
                                             {h.total_amount.toLocaleString('tr-TR')} Adet
@@ -235,14 +198,13 @@ export default function HoldingsTable({
                                         </div>
                                     </td>
 
-                                    {/* GÜNCEL FİYAT */}
                                     <td className="py-3.5 px-3 text-right whitespace-nowrap">
                                         <div className="text-sm sm:text-base font-bold text-white font-mono tabular-nums">
                                             {fmt(h.current_price)}
                                         </div>
                                     </td>
 
-                                    {/* DÖNEMSEL KÂR / ZARAR */}
+                                    {/* Seçili dönemin K/Z'si */}
                                     <td className="py-3.5 px-3 text-right whitespace-nowrap">
                                         {periodPnl !== null && periodRetVal !== null ? (
                                             <>
@@ -258,8 +220,7 @@ export default function HoldingsTable({
                                                         isPeriodPos ? 'text-emerald-400/90' : 'text-rose-400/90'
                                                     }`}
                                                 >
-                                                    {periodRetVal >= 0 ? '+' : ''}
-                                                    {periodRetVal.toFixed(2)}%
+                                                    {formatSignedPercent(periodRetVal)}
                                                 </div>
                                             </>
                                         ) : (
@@ -267,7 +228,7 @@ export default function HoldingsTable({
                                         )}
                                     </td>
 
-                                    {/* NET KÂR / ZARAR */}
+                                    {/* Pozisyonun toplam K/Z'si */}
                                     <td className="py-3.5 px-3 text-right whitespace-nowrap">
                                         <div
                                             className={`text-sm sm:text-base font-black font-mono tabular-nums ${
@@ -281,15 +242,12 @@ export default function HoldingsTable({
                                                 isPos ? 'text-emerald-400/90' : 'text-rose-400/90'
                                             }`}
                                         >
-                                            {isPos ? '+' : ''}
-                                            {pnlPct.toFixed(2)}%
+                                            {formatSignedPercent(pnlPct)}
                                         </div>
                                     </td>
 
-                                    {/* HIZLI İŞLEMLER */}
                                     <td className="py-3.5 pl-2 pr-5 text-right whitespace-nowrap">
                                         <div className="flex items-center justify-end gap-1.5">
-                                            {/* Hızlı İşlem Ekle */}
                                             <button
                                                 type="button"
                                                 onClick={() => onQuickAddTx(h.symbol)}
@@ -299,7 +257,6 @@ export default function HoldingsTable({
                                                 <Plus className="w-3.5 h-3.5" />
                                             </button>
 
-                                            {/* Hızlı Satış Yap */}
                                             <button
                                                 type="button"
                                                 onClick={() => onQuickSellTx(h)}
@@ -309,29 +266,27 @@ export default function HoldingsTable({
                                                 Sat
                                             </button>
 
-                                            {/* Özel Gruptaysa: Gruptan Çıkar */}
+                                            {/* Özel grup seçiliyse gruptan çıkarma düğmesi */}
                                             {activeGroupMetrics.isCustomGroup && (
                                                 <button
                                                     type="button"
                                                     onClick={() => onRemoveFromCurrentGroup(h.symbol)}
                                                     className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-500/25 transition cursor-pointer"
-                                                    title={`Bu hisseyi "${activeGroupMetrics.groupName}" grubundan çıkar`}
+                                                    title={`Bu varlığı "${activeGroupMetrics.groupName}" grubundan çıkar`}
                                                 >
                                                     <MinusCircle className="w-3.5 h-3.5" />
                                                 </button>
                                             )}
 
-                                            {/* Portföyden Sil */}
                                             <button
                                                 type="button"
                                                 onClick={() => onDeleteAsset(h)}
                                                 className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/25 transition cursor-pointer"
-                                                title="Hisseyi ve Tüm İşlemlerini Portföyden Sil"
+                                                title="Varlığı ve tüm işlemlerini portföyden sil"
                                             >
                                                 <Trash2 className="w-3.5 h-3.5" />
                                             </button>
 
-                                            {/* Detay */}
                                             <Link
                                                 href={`/assets/${h.symbol}`}
                                                 className="p-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition"
@@ -348,35 +303,11 @@ export default function HoldingsTable({
                 </table>
             </div>
 
-            {/* MOBİL GÖRÜNÜM */}
+            {/* Mobil: kartlar */}
             <div className="md:hidden divide-y divide-slate-800/80">
                 {items.map((h, idx) => {
-                    const costVal = h.average_cost * h.total_amount;
-                    const pnl = h.profit_loss;
-                    const pnlPct = costVal > 0 ? (pnl / costVal) * 100 : 0;
-                    const isPos = pnl >= 0;
-
-                    const sum = assetSummaries[h.symbol];
-                    const rawPeriodRet = (sum && sum[selectedPeriod] !== undefined) ? sum[selectedPeriod] : null;
-                    const retAll = (sum && sum['ALL'] !== undefined) ? sum['ALL'] : null;
-
-                    const isNewer = isHoldingNewerThanPeriod(h.first_buy_date, selectedPeriod, rawPeriodRet, retAll);
-
-                    let periodRetVal: number | null = null;
-                    let periodPnl: number | null = null;
-
-                    if (isNewer) {
-                        periodRetVal = pnlPct;
-                        periodPnl = pnl;
-                    } else if (rawPeriodRet !== null) {
-                        periodRetVal = rawPeriodRet;
-                        if (periodRetVal > -100) {
-                            periodPnl = h.total_value - (h.total_value / (1 + (periodRetVal / 100)));
-                        } else {
-                            periodPnl = -h.total_value;
-                        }
-                    }
-                    const isPeriodPos = periodPnl !== null ? periodPnl >= 0 : true;
+                    const { pnl, pnlPct, isPos, periodRetVal, periodPnl, isPeriodPos } =
+                        getHoldingRowMetrics(h, selectedPeriod, assetSummaries);
 
                     const assignedGroupIds = assetGroups[h.symbol] || [];
                     const assignedGroupObjects = groups.filter(g => assignedGroupIds.includes(g.id));
@@ -387,33 +318,11 @@ export default function HoldingsTable({
                     return (
                         <div
                             key={h.symbol}
-                            draggable
-                            onDragStart={e => {
-                                e.dataTransfer.setData('text/plain', h.symbol);
-                                e.dataTransfer.effectAllowed = 'move';
-                                setDraggedSymbol(h.symbol);
-                            }}
-                            onDragOver={e => {
-                                e.preventDefault();
-                                e.dataTransfer.dropEffect = 'move';
-                                if (dragOverSymbol !== h.symbol) setDragOverSymbol(h.symbol);
-                            }}
-                            onDragLeave={() => {
-                                if (dragOverSymbol === h.symbol) setDragOverSymbol(null);
-                            }}
-                            onDrop={e => {
-                                e.preventDefault();
-                                handleDrop(h.symbol);
-                            }}
-                            onDragEnd={() => {
-                                setDraggedSymbol(null);
-                                setDragOverSymbol(null);
-                            }}
+                            {...dragHandlers(h.symbol)}
                             className={`p-4 space-y-3 transition-all select-none ${
                                 isDragging ? 'opacity-30 bg-slate-800/90' : ''
                             } ${isOver ? 'border-t-2 border-[#1A9FD3] bg-[#1A9FD3]/15' : ''}`}
                         >
-                            {/* ÜST BAŞLIK */}
                             <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2">
                                     <div
@@ -440,7 +349,7 @@ export default function HoldingsTable({
                                                 {h.symbol}
                                             </Link>
                                             <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-800 text-slate-300 border border-slate-700/80">
-                                                {h.asset_type}
+                                                {ASSET_TYPE_LABELS[h.asset_type] ?? h.asset_type}
                                             </span>
                                         </div>
                                         <p className="text-xs text-slate-400 line-clamp-1">{h.asset_name}</p>
@@ -463,13 +372,11 @@ export default function HoldingsTable({
                                             isPos ? 'text-emerald-400/90' : 'text-rose-400/90'
                                         }`}
                                     >
-                                        {isPos ? '+' : ''}
-                                        {pnlPct.toFixed(2)}%
+                                        {formatSignedPercent(pnlPct)}
                                     </div>
                                 </div>
                             </div>
 
-                            {/* ORTA VERİ GRİDİ */}
                             <div className="grid grid-cols-2 gap-2.5 py-2 px-3 bg-slate-800/40 rounded-xl border border-slate-800 text-xs">
                                 <div>
                                     <span className="text-slate-400 block mb-0.5">Adet • Ort. Maliyet</span>
@@ -499,8 +406,7 @@ export default function HoldingsTable({
                                                     isPeriodPos ? 'text-emerald-400/90' : 'text-rose-400/90'
                                                 }`}
                                             >
-                                                {periodRetVal >= 0 ? '+' : ''}
-                                                {periodRetVal.toFixed(2)}%
+                                                {formatSignedPercent(periodRetVal)}
                                             </span>
                                         </div>
                                     ) : (
@@ -517,26 +423,10 @@ export default function HoldingsTable({
                                 </div>
                             </div>
 
-                            {/* ALT GRUP ETİKETLERİ & HIZLI İŞLEM BUTONLARI */}
+                            {/* Grup etiketleri ve hızlı işlem düğmeleri */}
                             <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
                                 <div className="flex flex-wrap items-center gap-1.5">
-                                    {assignedGroupObjects.map(g => (
-                                        <span
-                                            key={g.id}
-                                            className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border"
-                                            style={{
-                                                backgroundColor: `${g.color}15`,
-                                                color: g.color,
-                                                borderColor: `${g.color}35`,
-                                            }}
-                                        >
-                                            <span
-                                                className="w-1.5 h-1.5 rounded-full"
-                                                style={{ backgroundColor: g.color }}
-                                            />
-                                            {g.name}
-                                        </span>
-                                    ))}
+                                    <GroupBadges groups={assignedGroupObjects} />
                                     <button
                                         type="button"
                                         onClick={() => onAssignAsset(h)}
