@@ -9,15 +9,13 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@firstthumb/tefas-api": "^2.0.0",
     "axios": "^1.20.0",
     "lucide-react": "^1.39.0",
     "motion": "^13.2.0",
     "next": "16.3.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "recharts": "^3.10.1",
-    "yahoo-finance2": "^4.0.2"
+    "recharts": "^3.10.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
