@@ -9,13 +9,14 @@ import (
 	"yarmak/internal/database"
 )
 
-// HandlerLogin — Kullanıcı adı ve şifreyle sisteme giriş yapar. Başarılı girişte access_token ve refresh_token üretip HTTP-only cookie olarak döner.
+// HandlerLogin — E-posta ya da kullanıcı adı ve şifreyle giriş yapar. Başarılı girişte access_token ve refresh_token
+// yalnızca HttpOnly çerez olarak gönderilir; yanıt gövdesinde sadece kullanıcı bilgisi döner.
 // @Summary Kullanıcı Girişi
-// @Description Email ve şifre ile sisteme giriş yapar ve tokenları cookie olarak döner
+// @Description E-posta veya kullanıcı adı ve şifreyle giriş yapar, tokenları çerez olarak döner
 // @Tags Auth
 // @Accept json
 // @Produce json
-// @Param request body loginRequest true "Giriş Bilgileri"
+// @Param request body authRequest true "Giriş Bilgileri"
 // @Success 200 {object} loginResponse
 // @Failure 401 {object} map[string]string
 // @Router /login [post]
@@ -99,8 +100,6 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   60 * 24 * 3600,
 	})
 	respondWithJSON(w, http.StatusOK, loginResponse{
-		Token:        token,
-		RefreshToken: refreshToken,
 		User: userResponse{
 			ID:        user.ID,
 			Email:     user.Email,

@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strconv"
 	"sync"
@@ -40,18 +41,32 @@ func LockUser(userID int64) func() {
 }
 
 type TransactionService struct {
-	DB *database.Queries
+	DB   *database.Queries
+	Conn *sql.DB
 }
 
-func NewTransactionService(db *database.Queries) *TransactionService {
-	return &TransactionService{DB: db}
+func NewTransactionService(db *database.Queries, conn *sql.DB) *TransactionService {
+	return &TransactionService{DB: db, Conn: conn}
 }
 
-func (s *TransactionService) RecalculateAssetRealizedPnL(ctx context.Context, userID, assetID int64) error {
-	if s.DB == nil {
-		return nil
+// inTx, verilen işi tek bir veritabanı transaction'ı içinde çalıştırır; hata olursa hepsi geri alınır.
+func (s *TransactionService) inTx(ctx context.Context, fn func(q *database.Queries) error) error {
+	tx, err := s.Conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("veritabanı işlemi başlatılamadı: %w", err)
 	}
-	userTxs, err := s.DB.GetUserTransactionsForAsset(ctx, database.GetUserTransactionsForAssetParams{
+	defer func() { _ = tx.Rollback() }()
+	if err := fn(s.DB.WithTx(tx)); err != nil {
+		// Sarmadan dönüyoruz; handler hata metnine bakarak 400/500 ayrımı yapıyor.
+		return err
+	}
+	return tx.Commit()
+}
+
+// recalculateRealizedPnL, varlığın tüm satışlarının gerçekleşen kâr/zararını baştan hesaplar.
+// Alım, satım, düzenleme ve silme ile aynı transaction içinde çağrılır.
+func recalculateRealizedPnL(ctx context.Context, q *database.Queries, userID, assetID int64) error {
+	userTxs, err := q.GetUserTransactionsForAsset(ctx, database.GetUserTransactionsForAssetParams{
 		UserID:  userID,
 		AssetID: assetID,
 	})
@@ -77,11 +92,14 @@ func (s *TransactionService) RecalculateAssetRealizedPnL(ctx context.Context, us
 			pnl := amount*(price-runningCost) - commission
 			cleanPnL := fmt.Sprintf("%.6f", pnl)
 			if tx.RealizedPnl != cleanPnL {
-				_ = s.DB.UpdateTransactionRealizedPnL(ctx, database.UpdateTransactionRealizedPnLParams{
+				err := q.UpdateTransactionRealizedPnL(ctx, database.UpdateTransactionRealizedPnLParams{
 					RealizedPnl: cleanPnL,
 					ID:          tx.ID,
 					UserID:      userID,
 				})
+				if err != nil {
+					return err
+				}
 			}
 			runningLot -= amount
 			if runningLot <= 0.000001 {

@@ -14,7 +14,7 @@ func StartTefasDailyWorker(ctx context.Context, db *database.Queries, wg *sync.W
 	go func() {
 		defer wg.Done()
 		slog.Info("TEFAS Daily worker başlatıldı")
-		
+
 		// Sunucu ilk açıldığında hemen bir kez güncel verileri çek
 		func() {
 			defer func() {
@@ -24,7 +24,7 @@ func StartTefasDailyWorker(ctx context.Context, db *database.Queries, wg *sync.W
 			}()
 			runTefasDailyCycle(ctx, db)
 		}()
-		
+
 		for {
 			loc, _ := time.LoadLocation("Europe/Istanbul")
 			now := time.Now().In(loc)
@@ -43,7 +43,7 @@ func StartTefasDailyWorker(ctx context.Context, db *database.Queries, wg *sync.W
 				next := time.Date(now.Year(), now.Month(), now.Day()+1, 9, 0, 0, 0, loc)
 				waitDuration = next.Sub(now)
 			}
-			
+
 			slog.Info(fmt.Sprintf("Bir sonraki TEFAS Daily işlemi %v sonra başlayacak", waitDuration))
 
 			select {
@@ -67,11 +67,11 @@ func StartTefasDailyWorker(ctx context.Context, db *database.Queries, wg *sync.W
 
 func runTefasDailyCycle(ctx context.Context, db *database.Queries) {
 	slog.Info("TEFAS Toplu Fiyat Çekimi Başladı...")
-	
-	// Fetch all funds for the latest trading day (once!)
+
+	// Son iş gününün bütün fon fiyatlarını tek seferde çek
 	fundTypes := []string{"YAT", "EMK"} // Yatırım Fonları ve Emeklilik Fonları
 	var allFunds []TEFASFundData
-	
+
 	for _, fType := range fundTypes {
 		funds, err := FetchAllTEFASFunds(time.Time{}, fType)
 		if err != nil {
@@ -86,7 +86,7 @@ func runTefasDailyCycle(ctx context.Context, db *database.Queries) {
 		return
 	}
 
-	// Sadece aktif (portföyde veya izleme listesinde olan) varlıkları bul (history için)
+	// Geçmişe yazılacak ve alarmı kontrol edilecek aktif fonlar (işlemi, izleme kaydı ya da bekleyen alarmı olanlar)
 	activeAssets, err := db.GetActiveAssets(ctx)
 	if err != nil {
 		slog.Error("Aktif varlıklar çekilemedi", "error", err)
@@ -102,20 +102,20 @@ func runTefasDailyCycle(ctx context.Context, db *database.Queries) {
 	updateCount := 0
 	for _, fund := range allFunds {
 		priceStr := fmt.Sprintf("%.6f", fund.Price)
-		
-		// 1. Her zaman fonu Upsert et (Böylece yeni fonlar sisteme girer, mevcutların live fiyatı güncellenir)
+
+		// 1. Fonu her durumda upsert et; yeni fonlar sisteme girer, mevcutların güncel fiyatı yenilenir
 		asset, err := db.UpsertAsset(ctx, database.UpsertAssetParams{
 			Symbol:       fund.Symbol,
 			Name:         fund.Name,
 			AssetType:    "FON",
 			CurrentPrice: priceStr,
 		})
-		
+
 		if err != nil {
 			continue // Veritabanı hatası
 		}
 
-		// 2. Eğer bu fon aktif bir fon ise, Price History tablosuna kaydet
+		// 2. Aktif fonsa fiyat geçmişine yaz ve bekleyen alarmlarını kontrol et
 		if activeMap[fund.Symbol] {
 			err = db.UpsertPriceHistory(ctx, database.UpsertPriceHistoryParams{
 				AssetID:    asset.ID,
@@ -124,6 +124,9 @@ func runTefasDailyCycle(ctx context.Context, db *database.Queries) {
 			})
 			if err == nil {
 				updateCount++
+			}
+			if fund.Price > 0 {
+				checkAndTriggerAlerts(ctx, db, asset, fund.Price, priceStr)
 			}
 		}
 	}

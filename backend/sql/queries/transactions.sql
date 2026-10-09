@@ -30,6 +30,11 @@ UPDATE transactions
 SET deleted_at = NOW()
 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL;
 
+-- name: DeleteUserAssetTransactions :exec
+UPDATE transactions
+SET deleted_at = NOW()
+WHERE user_id = $1 AND asset_id = $2 AND deleted_at IS NULL;
+
 -- name: GetTransactionByIDAndUser :one
 SELECT * FROM transactions
 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL;

@@ -1,4 +1,4 @@
-﻿package scraper
+package scraper
 
 import (
 	"context"
@@ -13,7 +13,7 @@ func StartBackfillWorker(ctx context.Context, db *database.Queries, wg *sync.Wai
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		slog.Info("Backfill Queue worker baÅŸlatÄ±ldÄ±")
+		slog.Info("Backfill kuyruk işleyicisi başlatıldı")
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 
@@ -30,13 +30,13 @@ func StartBackfillWorker(ctx context.Context, db *database.Queries, wg *sync.Wai
 }
 
 func processNextBackfill(ctx context.Context, db *database.Queries) {
-	// Skip if a backfill task is already running in this goroutine
+	// Kuyruktaki sıradaki işi al
 	task, err := db.GetNextBackfillTask(ctx)
 	if err != nil {
-		return // No tasks or error
+		return // Bekleyen iş yok ya da sorgu hata verdi
 	}
 
-	// Mark as processing
+	// İşi "işleniyor" olarak işaretle
 	err = db.UpdateBackfillTaskStatus(ctx, database.UpdateBackfillTaskStatusParams{
 		ID:           task.ID,
 		Status:       "PROCESSING",
@@ -48,11 +48,11 @@ func processNextBackfill(ctx context.Context, db *database.Queries) {
 
 	asset, err := db.GetAssetByID(ctx, int64(task.AssetID))
 	if err != nil {
-		_ = db.UpdateBackfillTaskStatus(ctx, database.UpdateBackfillTaskStatusParams{ID: task.ID, Status: "FAILED", ErrorMessage: "Asset bulunamadÄ±"})
+		_ = db.UpdateBackfillTaskStatus(ctx, database.UpdateBackfillTaskStatusParams{ID: task.ID, Status: "FAILED", ErrorMessage: "Varlık bulunamadı"})
 		return
 	}
 
-	slog.Info("GeÃ§miÅŸ veri doldurma (Backfill) baÅŸlatÄ±ldÄ±", "symbol", asset.Symbol, "type", asset.AssetType)
+	slog.Info("Geçmiş veri doldurma başlatıldı", "symbol", asset.Symbol, "type", asset.AssetType)
 
 	var processErr error
 	if asset.AssetType == "FON" {
@@ -62,14 +62,14 @@ func processNextBackfill(ctx context.Context, db *database.Queries) {
 	}
 
 	if processErr != nil {
-		slog.Error("Backfill baÅŸarÄ±sÄ±z", "symbol", asset.Symbol, "error", processErr)
+		slog.Error("Backfill başarısız", "symbol", asset.Symbol, "error", processErr)
 		_ = db.UpdateBackfillTaskStatus(ctx, database.UpdateBackfillTaskStatusParams{
 			ID:           task.ID,
 			Status:       "FAILED",
 			ErrorMessage: processErr.Error(),
 		})
 	} else {
-		slog.Info("Backfill tamamlandÄ±", "symbol", asset.Symbol)
+		slog.Info("Backfill tamamlandı", "symbol", asset.Symbol)
 		_ = db.UpdateBackfillTaskStatus(ctx, database.UpdateBackfillTaskStatusParams{
 			ID:           task.ID,
 			Status:       "COMPLETED",
@@ -79,13 +79,13 @@ func processNextBackfill(ctx context.Context, db *database.Queries) {
 }
 
 func backfillBIST(ctx context.Context, db *database.Queries, asset database.Asset) error {
-	// Yahoo Finance can fetch 5 years in a single fast call
+	// Yahoo 5 yıllık veriyi tek istekte veriyor
 	currentPrice, history, err := FetchBISTHistory(asset.Symbol, "5y")
 	if err != nil {
 		return err
 	}
 
-	// Update current price
+	// Güncel fiyatı da yaz
 	_, _ = db.UpdateAssetPrice(ctx, database.UpdateAssetPriceParams{
 		ID:           asset.ID,
 		CurrentPrice: fmt.Sprintf("%.6f", currentPrice),
@@ -105,32 +105,34 @@ func backfillTEFAS(ctx context.Context, db *database.Queries, asset database.Ass
 	today := time.Now()
 	oneMonthAgo := today.AddDate(0, -1, 0)
 
-	// Geriye kalan 5 yÄ±lÄ± yavaÅŸÃ§a (chunks halinde) Ã§ek
-	slog.Info("TEFAS Backfill Queue (Kalan 5 YÄ±l, YavaÅŸ Ã‡ekim)", "symbol", asset.Symbol)
-	
+	// Kalan 5 yılı 3 aylık parçalar halinde, aralarda bekleyerek çek
+	slog.Info("TEFAS backfill (kalan 5 yıl, yavaş çekim)", "symbol", asset.Symbol)
+
 	fiveYearsAgo := today.AddDate(-5, 0, 0)
-	currentEnd := oneMonthAgo.AddDate(0, 0, -1) // 1 ay Ã¶ncesinden geriye git
-	
+	currentEnd := oneMonthAgo.AddDate(0, 0, -1) // Son bir ayı QuickSyncAsset çektiği için ondan öncesine kadar gidiyoruz
+
+	failedChunks := 0
 	currentChunkStart := fiveYearsAgo
 	for currentChunkStart.Before(currentEnd) {
 		chunkEnd := currentChunkStart.AddDate(0, 3, 0)
 		if chunkEnd.After(currentEnd) {
 			chunkEnd = currentEnd
 		}
-		
+
+		// Parça kısmen alınamasa bile gelen veriyi kaydediyoruz; eksik parçaları sonda hata olarak bildiriyoruz.
 		hist, err := FetchTEFASFundHistory(asset.Symbol, currentChunkStart, chunkEnd)
 		if err != nil {
-			slog.Warn("TEFAS Backfill chunk Ã§ekiminde hata, atlanÄ±yor...", "symbol", asset.Symbol, "error", err)
-		} else {
-			for _, h := range hist {
-				_ = db.UpsertPriceHistory(ctx, database.UpsertPriceHistoryParams{
-					AssetID:    asset.ID,
-					Price:      fmt.Sprintf("%.6f", h.Price),
-					RecordedAt: h.Date.UTC(),
-				})
-			}
+			failedChunks++
+			slog.Warn("TEFAS backfill parçası tam alınamadı, gelen veri kaydediliyor", "symbol", asset.Symbol, "error", err)
 		}
-		
+		for _, h := range hist {
+			_ = db.UpsertPriceHistory(ctx, database.UpsertPriceHistoryParams{
+				AssetID:    asset.ID,
+				Price:      fmt.Sprintf("%.6f", h.Price),
+				RecordedAt: h.Date.UTC(),
+			})
+		}
+
 		currentChunkStart = chunkEnd.AddDate(0, 0, 1)
 		select {
 		case <-ctx.Done():
@@ -139,30 +141,33 @@ func backfillTEFAS(ctx context.Context, db *database.Queries, asset database.Ass
 		}
 	}
 
+	if failedChunks > 0 {
+		return fmt.Errorf("TEFAS geçmişinin %d parçası tam alınamadı", failedChunks)
+	}
 	return nil
 }
 
 func QuickSyncAsset(ctx context.Context, db *database.Queries, asset database.Asset) error {
-    if asset.AssetType == "FON" {
-        today := time.Now()
-        oneMonthAgo := today.AddDate(0, -1, 0)
-        recentHistory, err := FetchTEFASFundHistory(asset.Symbol, oneMonthAgo, today)
-        if err != nil { return err }
-        for _, h := range recentHistory {
-            _ = db.UpsertPriceHistory(ctx, database.UpsertPriceHistoryParams{
-                AssetID: asset.ID,
-                Price: fmt.Sprintf("%.6f", h.Price),
-                RecordedAt: h.Date.UTC(),
-            })
-        }
-        if len(recentHistory) > 0 {
-            _, _ = db.UpdateAssetPrice(ctx, database.UpdateAssetPriceParams{
-                ID: asset.ID,
-                CurrentPrice: fmt.Sprintf("%.6f", recentHistory[len(recentHistory)-1].Price),
-            })
-        }
-        return nil
-    } else {
-        return backfillBIST(ctx, db, asset)
-    }
+	if asset.AssetType != "FON" {
+		return backfillBIST(ctx, db, asset)
+	}
+
+	today := time.Now()
+	oneMonthAgo := today.AddDate(0, -1, 0)
+	// Hata gelse de alınabilen günleri önce kaydediyor, hatayı sonra dönüyoruz.
+	recentHistory, err := FetchTEFASFundHistory(asset.Symbol, oneMonthAgo, today)
+	for _, h := range recentHistory {
+		_ = db.UpsertPriceHistory(ctx, database.UpsertPriceHistoryParams{
+			AssetID:    asset.ID,
+			Price:      fmt.Sprintf("%.6f", h.Price),
+			RecordedAt: h.Date.UTC(),
+		})
+	}
+	if len(recentHistory) > 0 {
+		_, _ = db.UpdateAssetPrice(ctx, database.UpdateAssetPriceParams{
+			ID:           asset.ID,
+			CurrentPrice: fmt.Sprintf("%.6f", recentHistory[len(recentHistory)-1].Price),
+		})
+	}
+	return err
 }

@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 	"yarmak/internal/auth"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func TestHealthCheck(t *testing.T) {
@@ -53,6 +55,33 @@ func TestInvalidTransactionValidation(t *testing.T) {
 
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("Geçersiz istek 400 Bad Request dönmeliydi! Gelen: %v", rr.Code)
+	}
+}
+
+func TestUpdateTransactionRejectsFutureDate(t *testing.T) {
+	// Doğrulama veritabanına gitmeden önce bittiği için DB olmadan çalışır.
+	cfg := &ApiConfig{JWTSecret: "test-secret"}
+
+	future := time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339)
+	body := `{"type":"BUY","amount":10,"price":25.5,"transaction_date":"` + future + `"}`
+	req := httptest.NewRequest("PUT", "/v1/transactions/1", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	// chi.URLParam boş dönerse handler yanlış sebeple (geçersiz ID) 400 döner; rota bağlamını elle kuruyoruz.
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "1")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = context.WithValue(ctx, UserIDKey, int64(101))
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	cfg.HandlerUpdateTransaction(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("Gelecek tarihli güncelleme 400 dönmeliydi, gelen: %v", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "Gelecek tarihli") {
+		t.Errorf("Beklenen hata mesajı gelmedi: %s", rr.Body.String())
 	}
 }
 

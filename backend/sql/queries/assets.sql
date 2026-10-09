@@ -36,4 +36,8 @@ SET name = EXCLUDED.name,
     updated_at = CURRENT_TIMESTAMP
 RETURNING *;
 -- name: GetActiveAssets :many
-SELECT DISTINCT a.* FROM assets a LEFT JOIN transactions t ON a.id = t.asset_id LEFT JOIN user_watchlists w ON a.id = w.asset_id WHERE (t.id IS NOT NULL AND t.deleted_at IS NULL) OR w.id IS NOT NULL;
+-- Fiyatı takip edilen varlıklar: işlemi, izleme listesi kaydı ya da bekleyen fiyat alarmı olanlar.
+SELECT a.* FROM assets a
+WHERE EXISTS (SELECT 1 FROM transactions t WHERE t.asset_id = a.id AND t.deleted_at IS NULL)
+   OR EXISTS (SELECT 1 FROM user_watchlists w WHERE w.asset_id = a.id)
+   OR EXISTS (SELECT 1 FROM price_alerts p WHERE p.asset_id = a.id AND p.is_triggered = FALSE AND p.deleted_at IS NULL);

@@ -9,22 +9,23 @@ import (
 	"sync/atomic"
 	"time"
 	"yarmak/internal/database"
+	"yarmak/internal/wac"
 )
 
 // StartScraperWorker — Tüm arka plan görevlerini (TEFAS, BIST, Backfill, Portfolio Snapshot) asenkron olarak başlatan ana yöneticidir.
 func StartScraperWorker(ctx context.Context, db *database.Queries, interval time.Duration, wg *sync.WaitGroup) {
 	slog.Info("Yeni Mimari (v2) Scraper Yöneticisi Başlatılıyor...")
-	
-	// 1. TEFAS Günlük Güncelleyici (Akşam 20:00 ve Sabah 09:00)
+
+	// 1. TEFAS günlük fiyatları: sabah 09:00, akşam 18:15 ve 18:00-21:00 arasında yarım saatte bir
 	StartTefasDailyWorker(ctx, db, wg)
-	
-	// 2. BIST Gün İçi Canlı Fiyat Güncelleyici (Mesai saatleri içinde her 15 dakikada bir)
+
+	// 2. BIST, altın ve döviz fiyatları: iş günlerinde 10:00-18:15 arasında 5 dakikada bir
 	StartBistIntradayWorker(ctx, db, wg)
-	
+
 	// 3. Arka Plan Geçmiş Veri (Backfill) İşleyicisi (Kuyruk tabanlı)
 	StartBackfillWorker(ctx, db, wg)
 
-	// Portfolio Snapshot Manager
+	// 4. Günlük portföy özeti: saatte bir bakılır, 18:00'den sonra günde bir kez yazılır
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -55,7 +56,7 @@ func checkAndTriggerAlerts(ctx context.Context, db *database.Queries, asset data
 			if err != nil {
 				slog.Error("Fiyat alarmı durumu güncellenirken hata oluştu", "symbol", asset.Symbol, "error", err)
 			}
-			slog.Warn("🚨 FİYAT ALARMI TETİKLENDİ!",
+			slog.Warn("Fiyat alarmı tetiklendi",
 				"symbol", asset.Symbol,
 				"direction", alert.Direction,
 				"target_price", alert.TargetPrice,
@@ -93,7 +94,7 @@ func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
 				UserID:  userID,
 				AssetID: h.AssetID,
 			})
-			_, avgCost := calculateAssetHoldingAndCost(userTxs)
+			_, avgCost := wac.HoldingAndCost(userTxs)
 			totalValue += currentPrice * totalAmount
 			totalCost += avgCost * totalAmount
 		}
@@ -108,28 +109,4 @@ func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
 	}
 	_ = db.DeleteExpiredRefreshTokens(ctx)
 	lastSnapshotDay.Store(int32(now.YearDay()))
-}
-
-func calculateAssetHoldingAndCost(transactions []database.Transaction) (currentLot float64, avgCost float64) {
-	runningLot := 0.0
-	runningCost := 0.0
-	for _, tx := range transactions {
-		amount, _ := strconv.ParseFloat(tx.Amount, 64)
-		price, _ := strconv.ParseFloat(tx.Price, 64)
-		commission, _ := strconv.ParseFloat(tx.Commission, 64)
-		if tx.Type == "BUY" {
-			total := (amount * price) + commission
-			if (runningLot + amount) > 0 {
-				runningCost = (runningLot*runningCost + total) / (runningLot + amount)
-			}
-			runningLot = runningLot + amount
-		} else if tx.Type == "SELL" {
-			runningLot = runningLot - amount
-			if runningLot <= 0.000001 {
-				runningLot = 0
-				runningCost = 0
-			}
-		}
-	}
-	return runningLot, runningCost
 }

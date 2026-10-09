@@ -25,14 +25,13 @@ func clearAuthCookies(w http.ResponseWriter) {
 	})
 }
 
-// HandlerRefreshToken — Refresh token ile yeni access/refresh token çifti üretir. Token rotation + grace period ile concurrent request desteği sağlar.
+// HandlerRefreshToken — refresh_token çerezinden yeni bir access/refresh token çifti üretir ve çerezlere yazar.
+// Eski token iptal edilir; aynı anda gelen isteklerde oturum düşmesin diye 30 saniyelik tolerans vardır.
 // @Summary Access Token Yenile (Refresh)
-// @Description Süresi dolan access token yerine refresh token kullanarak yeni bir access token üretir
+// @Description refresh_token çerezini kullanarak yeni tokenları çerez olarak döner
 // @Tags Auth
-// @Accept json
 // @Produce json
-// @Param request body refreshTokenRequest true "Refresh Token Bilgisi"
-// @Success 200 {object} refreshTokenResponse
+// @Success 200 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Router /refresh [post]
 func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request) {
@@ -138,19 +137,14 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 		MaxAge:   60 * 24 * 3600,
 	})
 
-	respondWithJSON(w, http.StatusOK, refreshTokenResponse{
-		Token:        accessToken,
-		RefreshToken: newRefreshToken,
-	})
+	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Oturum yenilendi"})
 }
 
 // HandlerRevokeToken — Logout sırasında refresh token'ı DB'de iptal eder ve cookie'leri temizler.
 // @Summary Oturumu Kapat / Token İptal Et (Revoke)
 // @Description Kullanıcının refresh token'ını iptal ederek oturumunu kapatır (Logout)
 // @Tags Auth
-// @Accept json
 // @Produce json
-// @Param request body refreshTokenRequest true "İptal Edilecek Refresh Token"
 // @Success 200 {object} map[string]string
 // @Failure 400 {object} map[string]string
 // @Router /revoke [post]

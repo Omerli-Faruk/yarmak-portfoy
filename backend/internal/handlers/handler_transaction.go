@@ -73,15 +73,14 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 
 	transaction, err := cfg.Services.Transaction.CreateTransaction(r.Context(), userID, dto)
 	if err != nil {
-		if strings.Contains(err.Error(), "0'dan büyük olmalıdır") || strings.Contains(err.Error(), "Yetersiz bakiye") {
-			respondWithError(w, http.StatusBadRequest, err.Error(), nil)
+		msg := err.Error()
+		if strings.Contains(msg, "0'dan büyük olmalıdır") || strings.Contains(msg, "Yetersiz bakiye") || strings.Contains(msg, "eksiye düşürüyor") {
+			respondWithError(w, http.StatusBadRequest, msg, nil)
 		} else {
-			respondWithError(w, http.StatusInternalServerError, err.Error(), err)
+			respondWithError(w, http.StatusInternalServerError, "İşlem kaydedilemedi, lütfen biraz sonra tekrar deneyin", err)
 		}
 		return
 	}
-
-	_ = cfg.Services.Transaction.RecalculateAssetRealizedPnL(r.Context(), userID, params.AssetID)
 
 	// Varlık fiyatı 15 dakikadan eskiyse arka planda piyasa verisini otomatik güncelle
 	go func(assetID int64) {
@@ -160,13 +159,13 @@ func (cfg *ApiConfig) HandlerGetUserTransactions(w http.ResponseWriter, r *http.
 		Offset: int32(offset),
 	})
 	if err != nil {
-		respondWithError(w, http.StatusNotFound, "İşlemler bulunamadı", err)
+		respondWithError(w, http.StatusInternalServerError, "İşlemler alınamadı, lütfen biraz sonra tekrar deneyin", err)
 		return
 	}
 	respondWithJSON(w, http.StatusOK, transactions)
 }
 
-// HandlerDeleteTransaction — Kullanıcının yaptığı işlemi iptal edip siler. Geçmişteki satışı patlatacak bir alım silme işlemi varsa engeller.
+// HandlerDeleteTransaction — Kullanıcının bir işlemini siler. Silinecek alım, sonraki satışlarda bakiyeyi eksiye düşürecekse silmeye izin vermez.
 // @Summary Alım/Satım İşlemini Sil
 // @Description Kullanıcının gerçekleştirdiği bir alım veya satım işlemini siler
 // @Tags Transactions
@@ -193,11 +192,10 @@ func (cfg *ApiConfig) HandlerDeleteTransaction(w http.ResponseWriter, r *http.Re
 	unlock := services.LockUser(userID)
 	defer unlock()
 
-	tx, err := cfg.DB.GetTransactionByIDAndUser(r.Context(), database.GetTransactionByIDAndUserParams{
+	if _, err := cfg.DB.GetTransactionByIDAndUser(r.Context(), database.GetTransactionByIDAndUserParams{
 		ID:     transactionID,
 		UserID: userID,
-	})
-	if err != nil {
+	}); err != nil {
 		respondWithError(w, http.StatusNotFound, "İşlem bulunamadı veya yetkiniz yok", err)
 		return
 	}
@@ -207,12 +205,11 @@ func (cfg *ApiConfig) HandlerDeleteTransaction(w http.ResponseWriter, r *http.Re
 		if strings.Contains(err.Error(), "bakiye eksiye düşecektir") {
 			respondWithError(w, http.StatusBadRequest, err.Error(), nil)
 		} else {
-			respondWithError(w, http.StatusInternalServerError, err.Error(), err)
+			respondWithError(w, http.StatusInternalServerError, "İşlem silinemedi, lütfen biraz sonra tekrar deneyin", err)
 		}
 		return
 	}
 
-	_ = cfg.Services.Transaction.RecalculateAssetRealizedPnL(r.Context(), userID, tx.AssetID)
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "İşlem başarıyla silindi"})
 }
 
@@ -275,6 +272,10 @@ func (cfg *ApiConfig) HandlerUpdateTransaction(w http.ResponseWriter, r *http.Re
 	if params.Commission < 0 {
 		params.Commission = 0
 	}
+	if params.TransactionDate.After(time.Now().Add(2 * time.Minute)) {
+		respondWithError(w, http.StatusBadRequest, "Gelecek tarihli işlem kaydedilemez", nil)
+		return
+	}
 
 	unlock := services.LockUser(userID)
 	defer unlock()
@@ -286,6 +287,10 @@ func (cfg *ApiConfig) HandlerUpdateTransaction(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		respondWithError(w, http.StatusNotFound, "İşlem bulunamadı veya yetkiniz yok", err)
 		return
+	}
+	// Tarih gönderilmemişse işlemin mevcut tarihini koruyoruz.
+	if params.TransactionDate.IsZero() {
+		params.TransactionDate = tx.TransactionDate
 	}
 
 	dto := services.UpdateTransactionDTO{
@@ -301,18 +306,15 @@ func (cfg *ApiConfig) HandlerUpdateTransaction(w http.ResponseWriter, r *http.Re
 		if strings.Contains(err.Error(), "eksiye düşürmektedir") {
 			respondWithError(w, http.StatusBadRequest, err.Error(), nil)
 		} else {
-			respondWithError(w, http.StatusInternalServerError, err.Error(), err)
+			respondWithError(w, http.StatusInternalServerError, "İşlem güncellenemedi, lütfen biraz sonra tekrar deneyin", err)
 		}
 		return
 	}
 
-	// 3. WAC ve Realized PnL değerlerini anında baştan hesapla
-	_ = cfg.Services.Transaction.RecalculateAssetRealizedPnL(r.Context(), userID, tx.AssetID)
-
 	respondWithJSON(w, http.StatusOK, updatedTx)
 }
 
-// HandlerDeleteUserAssetHoldings — Kullanıcının belirli bir varlıktaki (sembol) TÜM alım-satım işlemlerini siler (portföyden varlığı tamamen kaldırır).
+// HandlerDeleteUserAssetHoldings — Kullanıcının bir varlıktaki tüm alım-satım işlemlerini siler, yani varlığı portföyden tamamen kaldırır.
 // @Summary Varlığı Portföyden Tamamen Sil
 // @Description Kullanıcının belirtilen sembole ait tüm işlemlerini soft-delete yaparak portföyünden kaldırır.
 // @Tags Portfolio
@@ -345,20 +347,13 @@ func (cfg *ApiConfig) HandlerDeleteUserAssetHoldings(w http.ResponseWriter, r *h
 		return
 	}
 
-	txs, err := cfg.DB.GetUserTransactionsForAsset(r.Context(), database.GetUserTransactionsForAssetParams{
+	// Tek sorguyla siliyoruz; yarıda kesilip bazı işlemlerin kalması mümkün olmasın.
+	if err := cfg.DB.DeleteUserAssetTransactions(r.Context(), database.DeleteUserAssetTransactionsParams{
 		UserID:  userID,
 		AssetID: asset.ID,
-	})
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Varlık işlemleri sorgulanamadı", err)
+	}); err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Varlık işlemleri silinemedi", err)
 		return
-	}
-
-	for _, tx := range txs {
-		_ = cfg.DB.DeleteTransaction(r.Context(), database.DeleteTransactionParams{
-			ID:     tx.ID,
-			UserID: userID,
-		})
 	}
 
 	respondWithJSON(w, http.StatusOK, map[string]string{

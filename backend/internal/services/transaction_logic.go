@@ -3,36 +3,69 @@ package services
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"time"
 	"yarmak/internal/database"
+	"yarmak/internal/wac"
 )
 
 // CalculateAssetHoldingAndCost — Varlığın tüm işlem listesini alarak WAC metoduna göre ortalama maliyetini ve eldeki mevcut lot sayısını hesaplar.
+// Hesap wac paketinde; bu fonksiyon mevcut çağıranlar için duruyor.
 func CalculateAssetHoldingAndCost(transactions []database.Transaction) (currentLot float64, avgCost float64) {
-	runningLot := 0.0
-	runningCost := 0.0
-	for _, tx := range transactions {
-		amount, _ := strconv.ParseFloat(tx.Amount, 64)
-		price, _ := strconv.ParseFloat(tx.Price, 64)
-		commission, _ := strconv.ParseFloat(tx.Commission, 64)
-		if tx.Type == "BUY" {
-			total := (amount * price) + commission
-			// Sıfıra bölme koruması: bozuk veri gelirse NaN yayılmasını engelle
-			if (runningLot + amount) > 0 {
-				runningCost = (runningLot*runningCost + total) / (runningLot + amount)
-			}
-			runningLot = runningLot + amount
-		} else if tx.Type == "SELL" {
-			runningLot = runningLot - amount
-			if runningLot <= 0.000001 {
-				runningLot = 0
-				runningCost = 0
+	return wac.HoldingAndCost(transactions)
+}
+
+// lotEvent, bakiye kontrolünde kullandığımız sade işlem kaydı.
+type lotEvent struct {
+	ID   int64
+	Date time.Time
+	Type string
+	Lot  float64
+}
+
+// Lotlar 6 hane tutulduğu için float toplama hatalarını bu kadarlık farkla tolere ediyoruz.
+const lotTolerance = 0.000001
+
+// firstNegativeLotEvent, hareketleri tarihe (aynı tarihte ID'ye) göre sıralar ve bakiyenin
+// ilk kez eksiye düştüğü satışın ID'sini döner. Bakiye hiç eksiye düşmüyorsa ikinci değer false olur.
+func firstNegativeLotEvent(events []lotEvent) (int64, bool) {
+	return scanNegativeLot(events, 0, true)
+}
+
+// firstNegativeLotEventFrom, firstNegativeLotEvent ile aynı hesabı yapar ama startID'li hareketten
+// önce sıralanan eksi noktaları atlar. O noktalar yeni işlemden önce geldiği için onun yüzünden
+// oluşmamıştır; eski kayıtlarda kalmış bir hata yüzünden bugünkü satışı reddetmek istemiyoruz.
+func firstNegativeLotEventFrom(events []lotEvent, startID int64) (int64, bool) {
+	return scanNegativeLot(events, startID, false)
+}
+
+func scanNegativeLot(events []lotEvent, startID int64, started bool) (int64, bool) {
+	sorted := make([]lotEvent, len(events))
+	copy(sorted, events)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		if sorted[i].Date.Equal(sorted[j].Date) {
+			return sorted[i].ID < sorted[j].ID
+		}
+		return sorted[i].Date.Before(sorted[j].Date)
+	})
+	balance := 0.0
+	for _, e := range sorted {
+		if e.ID == startID {
+			started = true
+		}
+		switch e.Type {
+		case "BUY":
+			balance += e.Lot
+		case "SELL":
+			balance -= e.Lot
+			if started && balance < -lotTolerance {
+				return e.ID, true
 			}
 		}
 	}
-	return runningLot, runningCost
+	return 0, false
 }
 
 func (s *TransactionService) CreateTransaction(ctx context.Context, userID int64, params CreateTransactionDTO) (database.Transaction, error) {
@@ -62,185 +95,173 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, userID int64
 			}
 		}
 	}
-	if params.Type == "SELL" {
-		userTxs, err := s.DB.GetUserTransactionsForAsset(ctx, database.GetUserTransactionsForAssetParams{
-			UserID:  userID,
-			AssetID: params.AssetID,
+
+	var transaction database.Transaction
+	err = s.inTx(ctx, func(q *database.Queries) error {
+		if params.Type == "SELL" {
+			userTxs, err := q.GetUserTransactionsForAsset(ctx, database.GetUserTransactionsForAssetParams{
+				UserID:  userID,
+				AssetID: params.AssetID,
+			})
+			if err != nil {
+				return fmt.Errorf("Geçmiş işlemler çekilemedi: %w", err)
+			}
+
+			// Yeni satış henüz kaydedilmediği için en büyük ID'yi veriyoruz; aynı tarihli kayıtların
+			// arkasına dizilir, veritabanına yazıldığında da sırası değişmez.
+			const newSellID = math.MaxInt64
+			events := make([]lotEvent, 0, len(userTxs)+1)
+			for _, t := range userTxs {
+				lot, _ := strconv.ParseFloat(t.Amount, 64)
+				events = append(events, lotEvent{ID: t.ID, Date: t.TransactionDate, Type: t.Type, Lot: lot})
+			}
+			events = append(events, lotEvent{ID: newSellID, Date: params.TransactionDate, Type: "SELL", Lot: amountVal})
+			if failedID, negative := firstNegativeLotEventFrom(events, newSellID); negative {
+				if failedID == newSellID {
+					return fmt.Errorf("Yetersiz bakiye: Elinizdeki miktardan fazlasını satamazsınız")
+				}
+				return fmt.Errorf("Geçmiş tarihli bu işlem, sonraki günlerde bakiyeyi eksiye düşürüyor")
+			}
+			realizedPnL = 0
+		}
+
+		cleanAmount := fmt.Sprintf("%.6f", amountVal)
+		cleanPrice := fmt.Sprintf("%.6f", priceVal)
+		cleanRealizedPnL := fmt.Sprintf("%.6f", realizedPnL)
+		cleanCommission := fmt.Sprintf("%.6f", commissionVal)
+
+		var err error
+		transaction, err = q.CreateTransaction(ctx, database.CreateTransactionParams{
+			UserID:          userID,
+			AssetID:         params.AssetID,
+			Type:            params.Type,
+			Amount:          cleanAmount,
+			Price:           cleanPrice,
+			TransactionDate: params.TransactionDate,
+			RealizedPnl:     cleanRealizedPnL,
+			Commission:      cleanCommission,
 		})
 		if err != nil {
-			return database.Transaction{}, fmt.Errorf("Geçmiş işlemler çekilemedi: %w", err)
+			return fmt.Errorf("İşlem oluşturulamadı: %w", err)
 		}
 
-		runningLot := 0.0
-		isDatePassed := false
-		for _, tx := range userTxs {
-			txAmount, _ := strconv.ParseFloat(tx.Amount, 64)
-			if tx.TransactionDate.After(params.TransactionDate) {
-				isDatePassed = true
-			}
-			if tx.Type == "BUY" {
-				runningLot += txAmount
-			} else if tx.Type == "SELL" {
-				runningLot -= txAmount
-			}
-			if isDatePassed {
-				if runningLot-amountVal < 0 {
-					return database.Transaction{}, fmt.Errorf("Geçmiş tarihli bu işlem, sonraki günlerde bakiyeyi eksiye düşürüyor")
-				}
-			}
+		if err := recalculateRealizedPnL(ctx, q, userID, params.AssetID); err != nil {
+			return fmt.Errorf("Gerçekleşen kâr/zarar hesaplanamadı: %w", err)
 		}
-		if amountVal > runningLot {
-			return database.Transaction{}, fmt.Errorf("Yetersiz bakiye: Elinizdeki miktardan fazlasını satamazsınız")
-		}
-		realizedPnL = 0
-	}
-
-	cleanAmount := fmt.Sprintf("%.6f", amountVal)
-	cleanPrice := fmt.Sprintf("%.6f", priceVal)
-	cleanRealizedPnL := fmt.Sprintf("%.6f", realizedPnL)
-	cleanCommission := fmt.Sprintf("%.6f", commissionVal)
-
-	transaction, err := s.DB.CreateTransaction(ctx, database.CreateTransactionParams{
-		UserID:          userID,
-		AssetID:         params.AssetID,
-		Type:            params.Type,
-		Amount:          cleanAmount,
-		Price:           cleanPrice,
-		TransactionDate: params.TransactionDate,
-		RealizedPnl:     cleanRealizedPnL,
-		Commission:      cleanCommission,
+		return nil
 	})
 	if err != nil {
-		return database.Transaction{}, fmt.Errorf("İşlem oluşturulamadı: %w", err)
+		return database.Transaction{}, err
 	}
 
 	return transaction, nil
 }
 
 func (s *TransactionService) UpdateTransaction(ctx context.Context, userID int64, txID int64, params UpdateTransactionDTO) (database.Transaction, error) {
-	// 1. Mevcut işlemi doğrula ve varlık ID'sini öğren
-	tx, err := s.DB.GetTransactionByIDAndUser(ctx, database.GetTransactionByIDAndUserParams{
-		ID:     txID,
-		UserID: userID,
-	})
-	if err != nil {
-		return database.Transaction{}, fmt.Errorf("İşlem bulunamadı veya yetkiniz yok")
-	}
-
-	// 2. Bakiye Simülasyonu
-	userTxs, err := s.DB.GetUserTransactionsForAsset(ctx, database.GetUserTransactionsForAssetParams{
-		UserID:  userID,
-		AssetID: tx.AssetID,
-	})
-	if err != nil {
-		return database.Transaction{}, fmt.Errorf("İşlem geçmişi kontrol edilemedi: %w", err)
-	}
-
-	type simTx struct {
-		ID   int64
-		Date time.Time
-		Type string
-		Lot  float64
-	}
-	var simList []simTx
-	for _, t := range userTxs {
-		tAmt, _ := strconv.ParseFloat(t.Amount, 64)
-		if t.ID == txID {
-			simList = append(simList, simTx{
-				ID:   txID,
-				Date: params.TransactionDate,
-				Type: params.Type,
-				Lot:  params.Amount,
-			})
-		} else {
-			simList = append(simList, simTx{
-				ID:   t.ID,
-				Date: t.TransactionDate,
-				Type: t.Type,
-				Lot:  tAmt,
-			})
+	var updatedTx database.Transaction
+	err := s.inTx(ctx, func(q *database.Queries) error {
+		// 1. Mevcut işlemi doğrula ve varlık ID'sini öğren
+		tx, err := q.GetTransactionByIDAndUser(ctx, database.GetTransactionByIDAndUserParams{
+			ID:     txID,
+			UserID: userID,
+		})
+		if err != nil {
+			return fmt.Errorf("İşlem bulunamadı veya yetkiniz yok")
 		}
-	}
 
-	sort.SliceStable(simList, func(i, j int) bool {
-		if simList[i].Date.Equal(simList[j].Date) {
-			return simList[i].ID < simList[j].ID
-		}
-		return simList[i].Date.Before(simList[j].Date)
-	})
-
-	var currentLot float64
-	for _, item := range simList {
-		if item.Type == "BUY" {
-			currentLot += item.Lot
-		} else if item.Type == "SELL" {
-			currentLot -= item.Lot
-			if currentLot < -0.000001 {
-				return database.Transaction{}, fmt.Errorf("Bu güncelleme, ilgili tarihteki veya sonraki satış işlemleri için bakiyeyi eksiye düşürmektedir")
-			}
-		}
-	}
-
-	cleanAmount := fmt.Sprintf("%.6f", params.Amount)
-	cleanPrice := fmt.Sprintf("%.6f", params.Price)
-	cleanCommission := fmt.Sprintf("%.6f", params.Commission)
-
-	updatedTx, err := s.DB.UpdateTransaction(ctx, database.UpdateTransactionParams{
-		Type:            params.Type,
-		Amount:          cleanAmount,
-		Price:           cleanPrice,
-		TransactionDate: params.TransactionDate,
-		Commission:      cleanCommission,
-		ID:              txID,
-		UserID:          userID,
-	})
-	if err != nil {
-		return database.Transaction{}, fmt.Errorf("İşlem güncellenemedi: %w", err)
-	}
-
-	return updatedTx, nil
-}
-
-func (s *TransactionService) DeleteTransaction(ctx context.Context, userID int64, txID int64) error {
-	tx, err := s.DB.GetTransactionByIDAndUser(ctx, database.GetTransactionByIDAndUserParams{
-		ID:     txID,
-		UserID: userID,
-	})
-	if err != nil {
-		return fmt.Errorf("İşlem bulunamadı veya yetkiniz yok")
-	}
-	if tx.Type == "BUY" {
-		userTxs, err := s.DB.GetUserTransactionsForAsset(ctx, database.GetUserTransactionsForAssetParams{
+		// 2. İşlemin yeni hâliyle bakiyenin hiçbir tarihte eksiye düşmediğini kontrol et
+		userTxs, err := q.GetUserTransactionsForAsset(ctx, database.GetUserTransactionsForAssetParams{
 			UserID:  userID,
 			AssetID: tx.AssetID,
 		})
 		if err != nil {
 			return fmt.Errorf("İşlem geçmişi kontrol edilemedi: %w", err)
 		}
-		var simulatedLot float64
+
+		events := make([]lotEvent, 0, len(userTxs))
 		for _, t := range userTxs {
 			if t.ID == txID {
+				events = append(events, lotEvent{ID: txID, Date: params.TransactionDate, Type: params.Type, Lot: params.Amount})
 				continue
 			}
-			tAmount, _ := strconv.ParseFloat(t.Amount, 64)
-			if t.Type == "BUY" {
-				simulatedLot += tAmount
-			} else if t.Type == "SELL" {
-				simulatedLot -= tAmount
-				if simulatedLot < -0.000001 {
-					return fmt.Errorf("Bu alım işlemini silemezsiniz; geçmişteki satış işlemleriniz için bakiye eksiye düşecektir")
-				}
-			}
+			lot, _ := strconv.ParseFloat(t.Amount, 64)
+			events = append(events, lotEvent{ID: t.ID, Date: t.TransactionDate, Type: t.Type, Lot: lot})
 		}
-	}
-	err = s.DB.DeleteTransaction(ctx, database.DeleteTransactionParams{
-		ID:     txID,
-		UserID: userID,
+		if _, negative := firstNegativeLotEvent(events); negative {
+			return fmt.Errorf("Bu güncelleme, ilgili tarihteki veya sonraki satış işlemleri için bakiyeyi eksiye düşürmektedir")
+		}
+
+		cleanAmount := fmt.Sprintf("%.6f", params.Amount)
+		cleanPrice := fmt.Sprintf("%.6f", params.Price)
+		cleanCommission := fmt.Sprintf("%.6f", params.Commission)
+
+		updatedTx, err = q.UpdateTransaction(ctx, database.UpdateTransactionParams{
+			Type:            params.Type,
+			Amount:          cleanAmount,
+			Price:           cleanPrice,
+			TransactionDate: params.TransactionDate,
+			Commission:      cleanCommission,
+			ID:              txID,
+			UserID:          userID,
+		})
+		if err != nil {
+			return fmt.Errorf("İşlem güncellenemedi: %w", err)
+		}
+
+		if err := recalculateRealizedPnL(ctx, q, userID, tx.AssetID); err != nil {
+			return fmt.Errorf("Gerçekleşen kâr/zarar hesaplanamadı: %w", err)
+		}
+		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("İşlem silinemedi: %w", err)
+		return database.Transaction{}, err
 	}
-	return nil
+
+	return updatedTx, nil
+}
+
+func (s *TransactionService) DeleteTransaction(ctx context.Context, userID int64, txID int64) error {
+	return s.inTx(ctx, func(q *database.Queries) error {
+		tx, err := q.GetTransactionByIDAndUser(ctx, database.GetTransactionByIDAndUserParams{
+			ID:     txID,
+			UserID: userID,
+		})
+		if err != nil {
+			return fmt.Errorf("İşlem bulunamadı veya yetkiniz yok")
+		}
+		if tx.Type == "BUY" {
+			userTxs, err := q.GetUserTransactionsForAsset(ctx, database.GetUserTransactionsForAssetParams{
+				UserID:  userID,
+				AssetID: tx.AssetID,
+			})
+			if err != nil {
+				return fmt.Errorf("İşlem geçmişi kontrol edilemedi: %w", err)
+			}
+			events := make([]lotEvent, 0, len(userTxs))
+			for _, t := range userTxs {
+				if t.ID == txID {
+					continue
+				}
+				lot, _ := strconv.ParseFloat(t.Amount, 64)
+				events = append(events, lotEvent{ID: t.ID, Date: t.TransactionDate, Type: t.Type, Lot: lot})
+			}
+			if _, negative := firstNegativeLotEvent(events); negative {
+				return fmt.Errorf("Bu alım işlemini silemezsiniz; geçmişteki satış işlemleriniz için bakiye eksiye düşecektir")
+			}
+		}
+		err = q.DeleteTransaction(ctx, database.DeleteTransactionParams{
+			ID:     txID,
+			UserID: userID,
+		})
+		if err != nil {
+			return fmt.Errorf("İşlem silinemedi: %w", err)
+		}
+
+		if err := recalculateRealizedPnL(ctx, q, userID, tx.AssetID); err != nil {
+			return fmt.Errorf("Gerçekleşen kâr/zarar hesaplanamadı: %w", err)
+		}
+		return nil
+	})
 }
 
 func (s *TransactionService) GetUserHoldings(ctx context.Context, userID int64) ([]UserHoldingResponse, error) {

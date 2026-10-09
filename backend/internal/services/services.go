@@ -13,7 +13,7 @@ type Services struct {
 
 func NewServices(db *database.Queries, dbConn *sql.DB) *Services {
 	return &Services{
-		Transaction: NewTransactionService(db),
+		Transaction: NewTransactionService(db, dbConn),
 		Asset:       NewAssetService(db),
 		Portfolio:   NewPortfolioService(db),
 	}

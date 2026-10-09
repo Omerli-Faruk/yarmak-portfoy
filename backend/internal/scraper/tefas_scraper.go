@@ -20,12 +20,13 @@ var (
 	fundTypeCache   sync.Map
 )
 
-// SetFundType caches the known fund type for a fund symbol
+// SetFundType, fon kodunun bilinen fon tipini önbelleğe yazar.
 func SetFundType(symbol, fType string) {
 	fundTypeCache.Store(strings.ToUpper(strings.TrimSpace(symbol)), strings.ToUpper(strings.TrimSpace(fType)))
 }
 
-// detectFundType automatically discovers whether a fund is YAT, EMK, BYF, GYF or GSYF
+// detectFundType, fonun YAT, EMK, BYF, GYF ya da GSYF tiplerinden hangisi olduğunu TEFAS'a sorarak bulur.
+// Hiçbiri cevap vermezse YAT varsayılır.
 func detectFundType(symbol string) string {
 	symbol = strings.ToUpper(strings.TrimSpace(symbol))
 	if val, ok := fundTypeCache.Load(symbol); ok {
@@ -233,22 +234,22 @@ type TEFASFundData struct {
 	Price  float64
 }
 
-// GetLastTradingDay returns the most recent business day when TEFAS prices were finalized
+// GetLastTradingDay, TEFAS fiyatlarının kesinleştiği en son iş gününü döner.
 func GetLastTradingDay() time.Time {
 	t := time.Now()
-	// Fund closing prices are uploaded around 19:00 - 20:30 on weekdays.
-	// If it's before 19:00, use yesterday's prices.
+	// Fon kapanış fiyatları hafta içi 19:00-20:30 civarında yükleniyor.
+	// Saat 19:00'dan önceyse bir önceki günün fiyatlarını kullan.
 	if t.Hour() < 19 {
 		t = t.AddDate(0, 0, -1)
 	}
-	// Rewind over weekends to Friday
+	// Hafta sonuna denk gelirse cumaya geri git
 	for t.Weekday() == time.Saturday || t.Weekday() == time.Sunday {
 		t = t.AddDate(0, 0, -1)
 	}
 	return t
 }
 
-// FetchAllTEFASFunds fetches all funds for the latest available trading day
+// FetchAllTEFASFunds, verilen tipteki bütün fonların fiyatını en son yayımlanmış iş günü için çeker.
 func FetchAllTEFASFunds(tarih time.Time, fonTipi string) ([]TEFASFundData, error) {
 	if tarih.IsZero() {
 		// Önce bugünün tarihini dene (TEFAS 18:00'den sonra yeni fiyatları yayınlamaya başlar)
@@ -292,7 +293,7 @@ func FetchAllTEFASFunds(tarih time.Time, fonTipi string) ([]TEFASFundData, error
 
 		if resp.StatusCode == 429 {
 			resp.Body.Close()
-			time.Sleep(15 * time.Second) // WAF rate-limit cooldown
+			time.Sleep(15 * time.Second) // WAF istek sınırı için bekleme
 			continue
 		}
 
@@ -332,7 +333,7 @@ func FetchAllTEFASFunds(tarih time.Time, fonTipi string) ([]TEFASFundData, error
 			resp.Body.Close()
 		}
 
-		// Rewind to previous business day in case the chosen date was a holiday
+		// Seçilen gün tatil olabilir, bir önceki iş gününe geri git
 		tarih = tarih.AddDate(0, 0, -1)
 		for tarih.Weekday() == time.Saturday || tarih.Weekday() == time.Sunday {
 			tarih = tarih.AddDate(0, 0, -1)
@@ -342,12 +343,14 @@ func FetchAllTEFASFunds(tarih time.Time, fonTipi string) ([]TEFASFundData, error
 	return nil, fmt.Errorf("%s için güncel fon kataloğu bulunamadı", fonTipi)
 }
 
-// FetchTEFASFundHistory fetches price history by chunking maximum 30 days per request with rate-limit retries
+// FetchTEFASFundHistory, fon geçmişini istek başına en fazla 30 günlük aralıklarla çeker; 429 ve bağlantı
+// hatalarında tekrar dener. Alınamayan aralık olursa elde edilen veriyle birlikte hata da döner.
 func FetchTEFASFundHistory(symbol string, startDate, endDate time.Time) ([]TEFASFundData, error) {
 	symbol = strings.ToUpper(strings.TrimSpace(symbol))
 	fonTipi := detectFundType(symbol)
 
 	var allResults []TEFASFundData
+	failedWindows := 0
 	currentStart := startDate
 
 	for currentStart.Before(endDate) {
@@ -356,6 +359,8 @@ func FetchTEFASFundHistory(symbol string, startDate, endDate time.Time) ([]TEFAS
 			currentEnd = endDate
 		}
 
+		// Boş ama başarılı cevap da (ör. yeni kurulmuş fon) başarı sayılır.
+		fetched := false
 		retries := 0
 		for retries < 3 {
 			reqBody := tefasRequestBody{
@@ -364,7 +369,7 @@ func FetchTEFASFundHistory(symbol string, startDate, endDate time.Time) ([]TEFAS
 				BasTarih: currentStart.Format("20060102"),
 				BitTarih: currentEnd.Format("20060102"),
 				BasSira:  1,
-				BitSira:  100, // For a single fund, 100 days is enough, but API max is 30 days range
+				BitSira:  100, // Tek fonun bir aylık verisi 100 satırı geçmez
 				Dil:      "TR",
 			}
 
@@ -392,8 +397,8 @@ func FetchTEFASFundHistory(symbol string, startDate, endDate time.Time) ([]TEFAS
 			if resp.StatusCode == 429 {
 				resp.Body.Close()
 				retries++
-				slog.Warn("⏳ TEFAS Throttling (429) koruması: 15 saniye bekleniyor...", "fon", symbol, "deneme", retries)
-				time.Sleep(15 * time.Second) // WAF rate-limit cooldown
+				slog.Warn("TEFAS istek sınırı (429), 15 saniye bekleniyor", "fon", symbol, "deneme", retries)
+				time.Sleep(15 * time.Second) // WAF istek sınırı için bekleme
 				continue
 			}
 
@@ -420,6 +425,7 @@ func FetchTEFASFundHistory(symbol string, startDate, endDate time.Time) ([]TEFAS
 								Price:  item.Fiyat,
 							})
 						}
+						fetched = true
 						break
 					}
 				}
@@ -428,10 +434,16 @@ func FetchTEFASFundHistory(symbol string, startDate, endDate time.Time) ([]TEFAS
 			}
 			break
 		}
+		if !fetched {
+			failedWindows++
+		}
 
 		currentStart = currentEnd.AddDate(0, 0, 1)
-		time.Sleep(3 * time.Second) // Throttling protection (increased to 3s for safe background syncing)
+		time.Sleep(3 * time.Second) // İstek sınırına takılmamak için aralar arasında bekle
 	}
 
+	if failedWindows > 0 {
+		return allResults, fmt.Errorf("%s için %d tarih aralığı TEFAS'tan alınamadı", symbol, failedWindows)
+	}
 	return allResults, nil
 }

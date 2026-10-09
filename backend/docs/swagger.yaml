@@ -163,8 +163,16 @@ definitions:
       asset_id:
         example: 1
         type: integer
+      is_net:
+        example: false
+        type: boolean
       payment_date:
         example: "2026-08-21T12:00:00Z"
+        type: string
+      tax_rate:
+        description: Stopaj oranı (0.15 ya da 15). Boşsa yeni kayıtta %15, güncellemede
+          kaydın mevcut oranı kullanılır.
+        example: "0.15"
         type: string
     type: object
   handlers.createPriceAlertRequest:
@@ -211,7 +219,6 @@ definitions:
         example: HISSE
         type: string
       commission:
-        description: "\U0001F448 YENİ"
         example: "15.50"
         type: string
       price:
@@ -232,10 +239,6 @@ definitions:
     type: object
   handlers.loginResponse:
     properties:
-      refresh_token:
-        type: string
-      token:
-        type: string
       user:
         $ref: '#/definitions/handlers.userResponse'
     type: object
@@ -271,19 +274,6 @@ definitions:
         type: number
       usd_rate:
         type: number
-    type: object
-  handlers.refreshTokenRequest:
-    properties:
-      refresh_token:
-        example: e4d909c290d0fb1ca068ffaddf22cbd0adddef5b81a8b5e52a65492d5257e841
-        type: string
-    type: object
-  handlers.refreshTokenResponse:
-    properties:
-      refresh_token:
-        type: string
-      token:
-        type: string
     type: object
   handlers.userHoldingResponse:
     properties:
@@ -620,9 +610,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: E-posta veya kullanıcı adı ve şifre ile giriş yapıp JWT token üretir
+      description: E-posta veya kullanıcı adı ve şifreyle giriş yapar, tokenları
+        çerez olarak döner
       parameters:
-      - description: Kullanıcı Giriş Bilgileri
+      - description: Giriş Bilgileri
         in: body
         name: request
         required: true
@@ -743,24 +734,17 @@ paths:
       - Portfolio
   /refresh:
     post:
-      consumes:
-      - application/json
-      description: Süresi dolan access token yerine refresh token kullanarak yeni
-        bir access token üretir
-      parameters:
-      - description: Refresh Token Bilgisi
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.refreshTokenRequest'
+      description: refresh_token çerezini kullanarak yeni tokenları çerez olarak
+        döner
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.refreshTokenResponse'
+            additionalProperties:
+              type: string
+            type: object
         "401":
           description: Unauthorized
           schema:
@@ -800,16 +784,7 @@ paths:
       - Auth
   /revoke:
     post:
-      consumes:
-      - application/json
       description: Kullanıcının refresh token'ını iptal ederek oturumunu kapatır (Logout)
-      parameters:
-      - description: İptal Edilecek Refresh Token
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.refreshTokenRequest'
       produces:
       - application/json
       responses:

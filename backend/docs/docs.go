@@ -451,7 +451,7 @@ const docTemplate = `{
         },
         "/login": {
             "post": {
-                "description": "E-posta veya kullanıcı adı ve şifre ile giriş yapıp JWT token üretir",
+                "description": "E-posta veya kullanıcı adı ve şifreyle giriş yapar, tokenları çerez olarak döner",
                 "consumes": [
                     "application/json"
                 ],
@@ -464,7 +464,7 @@ const docTemplate = `{
                 "summary": "Kullanıcı Girişi",
                 "parameters": [
                     {
-                        "description": "Kullanıcı Giriş Bilgileri",
+                        "description": "Giriş Bilgileri",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -645,10 +645,7 @@ const docTemplate = `{
         },
         "/refresh": {
             "post": {
-                "description": "Süresi dolan access token yerine refresh token kullanarak yeni bir access token üretir",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "refresh_token çerezini kullanarak yeni tokenları çerez olarak döner",
                 "produces": [
                     "application/json"
                 ],
@@ -656,22 +653,14 @@ const docTemplate = `{
                     "Auth"
                 ],
                 "summary": "Access Token Yenile (Refresh)",
-                "parameters": [
-                    {
-                        "description": "Refresh Token Bilgisi",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.refreshTokenRequest"
-                        }
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.refreshTokenResponse"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "401": {
@@ -732,9 +721,6 @@ const docTemplate = `{
         "/revoke": {
             "post": {
                 "description": "Kullanıcının refresh token'ını iptal ederek oturumunu kapatır (Logout)",
-                "consumes": [
-                    "application/json"
-                ],
                 "produces": [
                     "application/json"
                 ],
@@ -742,17 +728,6 @@ const docTemplate = `{
                     "Auth"
                 ],
                 "summary": "Oturumu Kapat / Token İptal Et (Revoke)",
-                "parameters": [
-                    {
-                        "description": "İptal Edilecek Refresh Token",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.refreshTokenRequest"
-                        }
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1249,9 +1224,18 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 1
                 },
+                "is_net": {
+                    "type": "boolean",
+                    "example": false
+                },
                 "payment_date": {
                     "type": "string",
                     "example": "2026-08-21T12:00:00Z"
+                },
+                "tax_rate": {
+                    "description": "Stopaj oranı (0.15 ya da 15). Boşsa yeni kayıtta %15, güncellemede kaydın mevcut oranı kullanılır.",
+                    "type": "string",
+                    "example": "0.15"
                 }
             }
         },
@@ -1315,7 +1299,6 @@ const docTemplate = `{
                     "example": "HISSE"
                 },
                 "commission": {
-                    "description": "👈 YENİ",
                     "type": "string",
                     "example": "15.50"
                 },
@@ -1344,12 +1327,6 @@ const docTemplate = `{
         "handlers.loginResponse": {
             "type": "object",
             "properties": {
-                "refresh_token": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
-                },
                 "user": {
                     "$ref": "#/definitions/handlers.userResponse"
                 }
@@ -1402,26 +1379,6 @@ const docTemplate = `{
                 },
                 "usd_rate": {
                     "type": "number"
-                }
-            }
-        },
-        "handlers.refreshTokenRequest": {
-            "type": "object",
-            "properties": {
-                "refresh_token": {
-                    "type": "string",
-                    "example": "e4d909c290d0fb1ca068ffaddf22cbd0adddef5b81a8b5e52a65492d5257e841"
-                }
-            }
-        },
-        "handlers.refreshTokenResponse": {
-            "type": "object",
-            "properties": {
-                "refresh_token": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
                 }
             }
         },

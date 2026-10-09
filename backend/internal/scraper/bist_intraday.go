@@ -16,7 +16,7 @@ func StartBistIntradayWorker(ctx context.Context, db *database.Queries, wg *sync
 	go func() {
 		defer wg.Done()
 		slog.Info("BIST Intraday worker başlatıldı")
-		
+
 		// Sunucu ilk açıldığında hemen bir kez çalıştır
 		func() {
 			defer func() {
@@ -72,7 +72,7 @@ func StartBistIntradayWorker(ctx context.Context, db *database.Queries, wg *sync
 }
 
 func runBistCycle(ctx context.Context, db *database.Queries) {
-	slog.Info("BIST Intraday canlı fiyat taraması başlatılıyor...")
+	slog.Info("BIST fiyat taraması başlatılıyor")
 	assets, err := db.GetActiveAssets(ctx)
 	if err != nil {
 		slog.Error("Aktif hisseler çekilemedi", "error", err)
@@ -81,7 +81,7 @@ func runBistCycle(ctx context.Context, db *database.Queries) {
 
 	for _, asset := range assets {
 		if asset.AssetType == "FON" {
-			continue // Handled by TEFAS daily worker
+			continue // Fon fiyatları TEFAS günlük döngüsünde güncellenir
 		}
 
 		newPrice, fetchErr := FetchBISTPrice(asset.Symbol)
@@ -112,7 +112,7 @@ func runBistCycle(ctx context.Context, db *database.Queries) {
 				slog.Info("BIST fiyat başarıyla güncellendi", "symbol", asset.Symbol, "price", priceStr)
 			}
 		}
-		
+
 		checkAndTriggerAlerts(ctx, db, asset, newPrice, priceStr)
 	}
 	slog.Info("BIST Intraday taraması tamamlandı")

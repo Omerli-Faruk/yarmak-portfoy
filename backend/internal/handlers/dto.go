@@ -17,24 +17,19 @@ type userResponse struct {
 	Role      string    `json:"role"`
 }
 
+// loginResponse, giriş yanıtı. Tokenlar yalnızca HttpOnly çerezle gönderilir, gövdeye yazılmaz.
 type loginResponse struct {
-	Token        string       `json:"token"`
-	RefreshToken string       `json:"refresh_token"`
-	User         userResponse `json:"user"`
-}
-type refreshTokenResponse struct {
-	Token        string `json:"token"`
-	RefreshToken string `json:"refresh_token"`
+	User userResponse `json:"user"`
 }
 
-// assets
+// Varlıklar
 type createAssetRequest struct {
 	Symbol    string `json:"symbol" example:"THYAO"`
 	Name      string `json:"name" example:"Türk Hava Yolları"`
 	AssetType string `json:"asset_type" example:"HISSE" enums:"HISSE,FON,ALTIN,DOVIZ"`
 }
 
-// transactions & portfolio
+// İşlemler ve portföy
 type createTransactionRequest struct {
 	AssetID         int64     `json:"asset_id" example:"1"`
 	Type            string    `json:"type" example:"BUY" enums:"BUY,SELL"`
@@ -91,7 +86,7 @@ type createDividendRequest struct {
 	PaymentDate    time.Time `json:"payment_date" example:"2026-08-21T12:00:00Z"`
 	AmountPerShare string    `json:"amount_per_share" example:"5.0"`
 	IsNet          bool      `json:"is_net,omitempty" example:"false"`
-	TaxRate        string    `json:"tax_rate,omitempty" example:"0.10"`
+	TaxRate        string    `json:"tax_rate,omitempty" example:"0.15"` // Stopaj oranı (0.15 ya da 15). Boşsa yeni kayıtta %15, güncellemede kaydın mevcut oranı kullanılır.
 }
 
 // Bölünme

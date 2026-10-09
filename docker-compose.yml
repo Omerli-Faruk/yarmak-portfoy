@@ -1,6 +1,6 @@
 services:
   # ---------------------------------------------------------------------------
-  # 1. PostgreSQL 16 VeritabanÄ± Servisi
+  # 1. PostgreSQL 16 Veritabanı Servisi
   # ---------------------------------------------------------------------------
   db:
     image: postgres:16-alpine
@@ -63,7 +63,7 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # 4. BaÅŸlangÄ±Ã§ VarlÄ±klarÄ± YÃ¼kleyici (Seed Profile - Ä°steÄŸe BaÄŸlÄ±)
+  # 4. Başlangıç Varlıkları Yükleyici (Seed Profile - İsteğe Bağlı)
   # ---------------------------------------------------------------------------
   seed:
     build:

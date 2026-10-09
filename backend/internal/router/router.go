@@ -1,8 +1,10 @@
 package router
 
 import (
+	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"strings"
 	"time"
@@ -15,8 +17,73 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
-// keyByClientIP — Rate limiter için istemci IP'sini çıkarır.
-// Proxy arkasındaysa X-Forwarded-For'u, değilse doğrudan RemoteAddr kullanır.
+// TRUSTED_PROXIES boşsa yalnızca aynı makineden gelen bağlantılara (Next.js sunucusu) güveniyoruz.
+const defaultTrustedProxies = "127.0.0.1/32,::1/128"
+
+// parseTrustedProxies, virgülle ayrılmış CIDR listesini çözer. Tek IP de yazılabilir.
+// Hatalı girişleri loglayıp atlar.
+func parseTrustedProxies(raw string) []netip.Prefix {
+	if strings.TrimSpace(raw) == "" {
+		raw = defaultTrustedProxies
+	}
+	var prefixes []netip.Prefix
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if prefix, err := netip.ParsePrefix(part); err == nil {
+			prefixes = append(prefixes, prefix.Masked())
+			continue
+		}
+		if addr, err := netip.ParseAddr(part); err == nil {
+			addr = addr.Unmap()
+			prefixes = append(prefixes, netip.PrefixFrom(addr, addr.BitLen()))
+			continue
+		}
+		slog.Warn("TRUSTED_PROXIES içinde geçersiz adres atlandı", "value", part)
+	}
+	return prefixes
+}
+
+// isTrustedPeer, bağlantının güvendiğimiz bir adresten gelip gelmediğine bakar.
+func isTrustedPeer(remoteAddr string, trusted []netip.Prefix) bool {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		host = remoteAddr
+	}
+	ip, err := netip.ParseAddr(host)
+	if err != nil {
+		return false
+	}
+	ip = ip.Unmap().WithZone("")
+	for _, prefix := range trusted {
+		if prefix.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// clientIPMiddleware, rate limiter'ların kullandığı istemci IP'sini context'e yazar.
+// X-Real-IP başlığına yalnızca bağlantı güvenilen bir adresten geliyorsa bakılır; başlık yoksa
+// ya da geçersizse bağlantının kendi adresi kalır. Diğer herkes için başlık yok sayılır.
+func clientIPMiddleware(trusted []netip.Prefix) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		fromHeader := middleware.ClientIPFromRemoteAddr(middleware.ClientIPFromHeader("X-Real-IP")(next))
+		fromRemote := middleware.ClientIPFromRemoteAddr(next)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if isTrustedPeer(r.RemoteAddr, trusted) {
+				fromHeader.ServeHTTP(w, r)
+				return
+			}
+			fromRemote.ServeHTTP(w, r)
+		})
+	}
+}
+
+// keyByClientIP — Rate limiter anahtarı. clientIPMiddleware'in belirlediği IP'yi kullanır;
+// o çalışmamışsa bağlantının adresine düşer.
 func keyByClientIP(r *http.Request) (string, error) {
 	ip := middleware.GetClientIP(r.Context())
 	if ip == "" {
@@ -36,10 +103,11 @@ func SetupRouter(apiCFG *handlers.ApiConfig) chi.Router {
 	v1Router := chi.NewRouter()
 
 	v1Router.Use(middleware.RequestID)
+	v1Router.Use(clientIPMiddleware(parseTrustedProxies(os.Getenv("TRUSTED_PROXIES"))))
 	v1Router.Use(middleware.Logger)
 	v1Router.Use(middleware.Recoverer)
 
-	// Rate Limiter (Geliştirme ve hızlı UI gezinmeleri için cömert limit)
+	// Genel istek sınırı; arayüzde hızlı gezinmeyi engellemeyecek kadar geniş tutuldu.
 	v1Router.Use(httprate.NewRateLimiter(1000, 1*time.Minute, httprate.WithKeyFuncs(keyByClientIP)).Handler)
 
 	allowedOriginsStr := os.Getenv("ALLOWED_ORIGINS")
@@ -78,7 +146,7 @@ func SetupRouter(apiCFG *handlers.ApiConfig) chi.Router {
 	// Sağlık Kontrolü
 	v1Router.Get("/healthz", handlers.HandlerReadiness)
 
-	// Kullanıcı Rotaları (Özel Brute-Force Korumalı Rate Limiter: 5 istek / dakika)
+	// Kullanıcı rotaları. Kayıt ve girişte deneme yanılmaya karşı dakikada 5 istek sınırı var.
 	authRateLimiter := httprate.NewRateLimiter(5, 1*time.Minute, httprate.WithKeyFuncs(keyByClientIP)).Handler
 	refreshRateLimiter := httprate.NewRateLimiter(60, 1*time.Minute, httprate.WithKeyFuncs(keyByClientIP)).Handler
 	lookupRateLimiter := httprate.NewRateLimiter(10, 1*time.Minute, httprate.WithKeyFuncs(keyByClientIP)).Handler
@@ -96,7 +164,7 @@ func SetupRouter(apiCFG *handlers.ApiConfig) chi.Router {
 	v1Router.Post("/splits", apiCFG.MiddleWareAuth(apiCFG.MiddleWareAdmin(apiCFG.HandlerCreateSplit)))
 	v1Router.Get("/assets/{id}/splits", apiCFG.MiddleWareAuth(apiCFG.HandlerListSplitsByAsset))
 
-	// İşlem ve Portföy Rotaları (JWT Korumalı!)
+	// İşlem ve portföy rotaları (giriş gerektirir)
 	v1Router.Post("/transactions", apiCFG.MiddleWareAuth(apiCFG.HandlerCreateTransaction))
 	v1Router.Get("/transactions", apiCFG.MiddleWareAuth(apiCFG.HandlerGetUserTransactions))
 	v1Router.Get("/portfolio/holdings", apiCFG.MiddleWareAuth(apiCFG.HandlerGetUserHoldings))

@@ -4,10 +4,14 @@ values ($1, $2, $3, $4, $5) RETURNING *;
 
 -- name: GetUserPortfolioHistory :many
 SELECT *
-FROM portfolio_snapshots
-WHERE user_id = $1
-ORDER BY recorded_at ASC
-    LIMIT 365;
+FROM (
+    SELECT *
+    FROM portfolio_snapshots
+    WHERE user_id = $1
+    ORDER BY recorded_at DESC
+    LIMIT 365
+) AS recent
+ORDER BY recorded_at ASC;
 
 -- name: GetLatestPortfolioSnapshot :one
 SELECT *

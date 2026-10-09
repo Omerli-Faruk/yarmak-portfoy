@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -11,9 +13,97 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// Bireysel yatırımcıya ödenen kâr payında stopaj 22.12.2024'ten beri %15 (9286 sayılı Cumhurbaşkanı Kararı).
+// Şirkete göre etkin oran farklı olabildiği için istekte tax_rate gelirse o kullanılır.
+const defaultDividendTaxRate = 0.15
+
+// parseTaxRate, "0.15" ya da "15" biçiminde gelen oranı 0-1 aralığına çevirir. Geçersizse false döner.
+func parseTaxRate(raw string) (float64, bool) {
+	tr, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, false
+	}
+	if tr > 1 {
+		tr = tr / 100
+	}
+	if tr >= 0 && tr < 1 {
+		return tr, true
+	}
+	return 0, false
+}
+
+// storedTaxRate, kayıttaki brüt ve stopaj tutarından oranı geri hesaplar.
+func storedTaxRate(d database.Dividend) float64 {
+	gross, _ := strconv.ParseFloat(d.GrossAmount, 64)
+	tax, _ := strconv.ParseFloat(d.TaxAmount, 64)
+	if gross > 0 {
+		if rate := tax / gross; rate >= 0 && rate < 1 {
+			return rate
+		}
+	}
+	return defaultDividendTaxRate
+}
+
+// splitDividend, tutarı brüt, stopaj ve net olarak ayırır. isNet true ise tutar hesaba geçen net tutardır.
+func splitDividend(amount, taxRate float64, isNet bool) (gross, tax, net float64) {
+	if isNet {
+		net = amount
+		if taxRate > 0 && taxRate < 1 {
+			gross = net / (1.0 - taxRate)
+			tax = gross - net
+		} else {
+			gross = net
+		}
+		return gross, tax, net
+	}
+	gross = amount
+	tax = gross * taxRate
+	net = gross - tax
+	return gross, tax, net
+}
+
+// amountFromPerShare, hisse başı temettüyü ödeme tarihindeki lot sayısıyla çarpıp params.Amount'a yazar.
+// Sorun olursa hata yanıtını kendisi yazar ve false döner.
+func (cfg *ApiConfig) amountFromPerShare(w http.ResponseWriter, r *http.Request, userID int64, params *createDividendRequest) bool {
+	userTxs, err := cfg.DB.GetUserTransactionsForAsset(r.Context(), database.GetUserTransactionsForAssetParams{
+		UserID:  userID,
+		AssetID: params.AssetID,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "İşlem geçmişi alınamadı", err)
+		return false
+	}
+
+	var historicalLot float64
+	for _, tx := range userTxs {
+		if !tx.TransactionDate.After(params.PaymentDate) {
+			amt, _ := strconv.ParseFloat(tx.Amount, 64)
+			if tx.Type == "BUY" {
+				historicalLot += amt
+			} else if tx.Type == "SELL" {
+				historicalLot -= amt
+			}
+		}
+	}
+
+	if historicalLot <= 0 {
+		respondWithError(w, http.StatusBadRequest, "Temettü tarihinde portföyünüzde bu hisseye ait lot bulunamadı", nil)
+		return false
+	}
+
+	perShare, err := strconv.ParseFloat(params.AmountPerShare, 64)
+	if err != nil || perShare <= 0 {
+		respondWithError(w, http.StatusBadRequest, "Geçersiz hisse başı temettü miktarı", err)
+		return false
+	}
+
+	params.Amount = fmt.Sprintf("%.6f", historicalLot*perShare)
+	return true
+}
+
 // HandlerCreateDividend — Kullanıcının portföyüne temettü geliri kaydeder.
-// Hisse başına tutar (amount_per_share) verilirse, kullanıcının o varlıktaki lot sayısıyla çarpılır.
-// Brüt, vergi (%10 stopaj) ve net tutarlar otomatik hesaplanır.
+// Hisse başına tutar (amount_per_share) verilirse ödeme tarihindeki lot sayısıyla çarpılır.
+// Brüt, stopaj ve net tutarı hesaplar; tax_rate gelmezse %15 kullanılır.
 // @Summary Temettü Geliri Kaydet
 // @Description Kullanıcının aldığı nakit temettü ödemesini kaydeder
 // @Tags Dividends
@@ -42,41 +132,8 @@ func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Reque
 		params.PaymentDate = time.Now().UTC()
 	}
 
-	if params.AmountPerShare != "" {
-		userTxs, err := cfg.DB.GetUserTransactionsForAsset(r.Context(), database.GetUserTransactionsForAssetParams{
-			UserID:  userID,
-			AssetID: params.AssetID,
-		})
-		if err != nil {
-			respondWithError(w, http.StatusBadRequest, "İşlem geçmişi alınamadı", err)
-			return
-		}
-
-		var historicalLot float64
-		for _, tx := range userTxs {
-			if !tx.TransactionDate.After(params.PaymentDate) {
-				amt, _ := strconv.ParseFloat(tx.Amount, 64)
-				if tx.Type == "BUY" {
-					historicalLot += amt
-				} else if tx.Type == "SELL" {
-					historicalLot -= amt
-				}
-			}
-		}
-
-		if historicalLot <= 0 {
-			respondWithError(w, http.StatusBadRequest, "Temettü tarihinde portföyünüzde bu hisseye ait lot bulunamadı", nil)
-			return
-		}
-
-		perShare, err := strconv.ParseFloat(params.AmountPerShare, 64)
-		if err != nil || perShare <= 0 {
-			respondWithError(w, http.StatusBadRequest, "Geçersiz hisse başı temettü miktarı", err)
-			return
-		}
-
-		totalAmount := historicalLot * perShare
-		params.Amount = fmt.Sprintf("%.6f", totalAmount)
+	if params.AmountPerShare != "" && !cfg.amountFromPerShare(w, r, userID, &params) {
+		return
 	}
 	amount, _ := strconv.ParseFloat(params.Amount, 64)
 	if amount <= 0 || params.AssetID <= 0 {
@@ -84,34 +141,14 @@ func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	taxRate := 0.10
+	taxRate := defaultDividendTaxRate
 	if params.TaxRate != "" {
-		tr, err := strconv.ParseFloat(params.TaxRate, 64)
-		if err == nil {
-			if tr > 1 {
-				tr = tr / 100
-			}
-			if tr >= 0 && tr < 1 {
-				taxRate = tr
-			}
+		if tr, ok := parseTaxRate(params.TaxRate); ok {
+			taxRate = tr
 		}
 	}
 
-	var grossAmount, netAmount, taxAmount float64
-	if params.IsNet {
-		netAmount = amount
-		if taxRate > 0 && taxRate < 1 {
-			grossAmount = netAmount / (1.0 - taxRate)
-			taxAmount = grossAmount - netAmount
-		} else {
-			grossAmount = netAmount
-			taxAmount = 0
-		}
-	} else {
-		grossAmount = amount
-		taxAmount = grossAmount * taxRate
-		netAmount = grossAmount - taxAmount
-	}
+	grossAmount, taxAmount, netAmount := splitDividend(amount, taxRate, params.IsNet)
 	cleanGross := fmt.Sprintf("%.6f", grossAmount)
 	cleanTax := fmt.Sprintf("%.6f", taxAmount)
 	cleanNet := fmt.Sprintf("%.6f", netAmount)
@@ -159,6 +196,7 @@ func (cfg *ApiConfig) HandlerGetUserDividends(w http.ResponseWriter, r *http.Req
 }
 
 // HandlerUpdateDividend — Mevcut bir temettü kaydını günceller.
+// tax_rate gönderilmezse kaydın mevcut stopaj oranı korunur.
 // @Summary Temettü Kaydını Güncelle
 // @Description Kullanıcının kaydettiği bir temettü gelirini günceller
 // @Tags Dividends
@@ -166,10 +204,11 @@ func (cfg *ApiConfig) HandlerGetUserDividends(w http.ResponseWriter, r *http.Req
 // @Accept json
 // @Produce json
 // @Param id path int true "Temettü ID"
-// @Param dividend body CreateDividendRequest true "Güncellenecek Temettü Bilgileri"
+// @Param dividend body createDividendRequest true "Güncellenecek Temettü Bilgileri"
 // @Success 200 {object} database.Dividend
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /dividends/{id} [put]
 func (cfg *ApiConfig) HandlerUpdateDividend(w http.ResponseWriter, r *http.Request) {
@@ -192,34 +231,26 @@ func (cfg *ApiConfig) HandlerUpdateDividend(w http.ResponseWriter, r *http.Reque
 		respondWithError(w, http.StatusBadRequest, "İstek gövdesi çözümlenemedi", err)
 		return
 	}
+
+	existing, err := cfg.DB.GetDividendByIDAndUser(r.Context(), database.GetDividendByIDAndUserParams{
+		ID:     dividendID,
+		UserID: userID,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			respondWithError(w, http.StatusNotFound, "Güncellenecek temettü kaydı bulunamadı", nil)
+		} else {
+			respondWithError(w, http.StatusInternalServerError, "Temettü kaydı alınamadı", err)
+		}
+		return
+	}
+
 	if params.PaymentDate.IsZero() {
 		params.PaymentDate = time.Now().UTC()
 	}
 
-	if params.AmountPerShare != "" {
-		userTxs, err := cfg.DB.GetUserTransactionsForAsset(r.Context(), database.GetUserTransactionsForAssetParams{
-			UserID:  userID,
-			AssetID: params.AssetID,
-		})
-		if err == nil {
-			var historicalLot float64
-			for _, tx := range userTxs {
-				if !tx.TransactionDate.After(params.PaymentDate) {
-					amt, _ := strconv.ParseFloat(tx.Amount, 64)
-					if tx.Type == "BUY" {
-						historicalLot += amt
-					} else if tx.Type == "SELL" {
-						historicalLot -= amt
-					}
-				}
-			}
-			if historicalLot > 0 {
-				perShare, _ := strconv.ParseFloat(params.AmountPerShare, 64)
-				if perShare > 0 {
-					params.Amount = fmt.Sprintf("%.6f", historicalLot*perShare)
-				}
-			}
-		}
+	if params.AmountPerShare != "" && !cfg.amountFromPerShare(w, r, userID, &params) {
+		return
 	}
 
 	amount, _ := strconv.ParseFloat(params.Amount, 64)
@@ -228,35 +259,14 @@ func (cfg *ApiConfig) HandlerUpdateDividend(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	taxRate := 0.0
+	taxRate := storedTaxRate(existing)
 	if params.TaxRate != "" {
-		tr, err := strconv.ParseFloat(params.TaxRate, 64)
-		if err == nil {
-			if tr > 1 {
-				tr = tr / 100
-			}
-			if tr >= 0 && tr < 1 {
-				taxRate = tr
-			}
+		if tr, ok := parseTaxRate(params.TaxRate); ok {
+			taxRate = tr
 		}
 	}
 
-	var grossAmount, netAmount, taxAmount float64
-	if params.IsNet {
-		netAmount = amount
-		if taxRate > 0 && taxRate < 1 {
-			grossAmount = netAmount / (1.0 - taxRate)
-			taxAmount = grossAmount - netAmount
-		} else {
-			grossAmount = netAmount
-			taxAmount = 0
-		}
-	} else {
-		grossAmount = amount
-		taxAmount = grossAmount * taxRate
-		netAmount = grossAmount - taxAmount
-	}
-
+	grossAmount, taxAmount, netAmount := splitDividend(amount, taxRate, params.IsNet)
 	cleanGross := fmt.Sprintf("%.6f", grossAmount)
 	cleanTax := fmt.Sprintf("%.6f", taxAmount)
 	cleanNet := fmt.Sprintf("%.6f", netAmount)

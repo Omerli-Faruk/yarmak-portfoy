@@ -89,7 +89,7 @@ func getSpotGramGoldPrice() (float64, error) {
 	return (goldUSD * usdTRY) / 31.1034768, nil
 }
 
-// 🪙 Altın türlerinin gram bazlı has ağırlık çarpanları
+// Altın türlerinin gram bazlı has ağırlık çarpanları
 var goldMultipliers = map[string]float64{
 	"GRAMALTIN": 1.0, "GRAM": 1.0, "ALTIN": 1.0, "XAUTRY": 1.0,
 	"ALTINS1": 0.01, "ALTIN.S1": 0.01, "ALTIN_S1": 0.01, // 0.01 gr
@@ -99,7 +99,7 @@ var goldMultipliers = map[string]float64{
 	"CUMHURIYET": 6.6146, "ATA": 6.6146, "ATAALTIN": 6.6146, "CUMHURIYETALTIN": 6.6146,
 }
 
-// 💱 Özel sembollerin Yahoo Finance karşılıkları
+// Özel sembollerin Yahoo Finance karşılıkları
 var customTickers = map[string]string{
 	"GLDTR":  "GLDTR.IS",
 	"USDTRY": "USDTRY=X", "USD": "USDTRY=X", "DOLAR": "USDTRY=X",
@@ -232,10 +232,12 @@ func FetchGoldHistory(rangeStr string) (float64, []StockHistoricalRecord, error)
 		return 0, nil, fmt.Errorf("dolar/TL verisi alınamadı: %w", err)
 	}
 
-	// Anlık gram altın fiyatı (Öncelikli olarak Kapalıçarşı spot, fallback Ons * USDTRY / 31.1034768)
+	// Güncel gram altın: önce serbest piyasa satış fiyatı (truncgil), olmazsa ons × USD/TRY / 31,1035
 	currentGram := (goldPrice * usdPrice) / 31.1034768
+	spotGram := 0.0
 	if spot, sErr := getSpotGramGoldPrice(); sErr == nil && spot > 0 {
 		currentGram = spot
+		spotGram = spot
 	}
 
 	if len(goldHist) == 0 {
@@ -300,10 +302,23 @@ func FetchGoldHistory(rangeStr string) (float64, []StockHistoricalRecord, error)
 		return combined[i].Date.Before(combined[j].Date)
 	})
 
+	// GC=F vadeli kontrat olduğu için spot altından genelde biraz pahalıdır (bugün ~%0,6).
+	// Geçmişi spot fiyatla aynı seviyeye çekiyoruz; yoksa grafiğin son noktası spot fiyata
+	// düşerken uçurum oluşuyor. Yüzde değişimler bu ölçeklemeden etkilenmez.
+	// Oran makul aralıkta değilse kaynaklardan biri hatalı demektir, dokunmuyoruz.
+	if n := len(combined); n > 0 && spotGram > 0 && combined[n-1].Price > 0 {
+		ratio := spotGram / combined[n-1].Price
+		if ratio > 0.95 && ratio < 1.05 {
+			for i := range combined {
+				combined[i].Price = math.Round(combined[i].Price*ratio*100) / 100
+			}
+		}
+	}
+
 	return currentGram, combined, nil
 }
 
-// FetchBISTHistory fetches the full daily price history and current price for a BIST stock
+// FetchBISTHistory, BIST hissesinin güncel fiyatını ve verilen aralıktaki günlük fiyat geçmişini çeker.
 func FetchBISTHistory(symbol string, rangeStr string) (currentPrice float64, history []StockHistoricalRecord, err error) {
 	ticker := strings.ToUpper(strings.TrimSpace(symbol))
 	if ticker == "ALTIN" || ticker == "GRAMALTIN" || ticker == "GRAM" || ticker == "XAUTRY" {

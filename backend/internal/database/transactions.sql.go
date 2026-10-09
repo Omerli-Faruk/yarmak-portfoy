@@ -72,6 +72,22 @@ func (q *Queries) DeleteTransaction(ctx context.Context, arg DeleteTransactionPa
 	return err
 }
 
+const deleteUserAssetTransactions = `-- name: DeleteUserAssetTransactions :exec
+UPDATE transactions
+SET deleted_at = NOW()
+WHERE user_id = $1 AND asset_id = $2 AND deleted_at IS NULL
+`
+
+type DeleteUserAssetTransactionsParams struct {
+	UserID  int64
+	AssetID int64
+}
+
+func (q *Queries) DeleteUserAssetTransactions(ctx context.Context, arg DeleteUserAssetTransactionsParams) error {
+	_, err := q.db.ExecContext(ctx, deleteUserAssetTransactions, arg.UserID, arg.AssetID)
+	return err
+}
+
 const getAllUserTransactions = `-- name: GetAllUserTransactions :many
 SELECT id, user_id, asset_id, type, amount, price, transaction_date, created_at, deleted_at, realized_pnl, commission FROM transactions
 WHERE user_id = $1 AND deleted_at IS NULL

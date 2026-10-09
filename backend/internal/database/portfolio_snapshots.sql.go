@@ -137,10 +137,14 @@ func (q *Queries) GetPortfolioPeriodValues(ctx context.Context, userID int64) (G
 
 const getUserPortfolioHistory = `-- name: GetUserPortfolioHistory :many
 SELECT id, user_id, total_value, total_cost, profit_loss, recorded_at
-FROM portfolio_snapshots
-WHERE user_id = $1
-ORDER BY recorded_at ASC
+FROM (
+    SELECT id, user_id, total_value, total_cost, profit_loss, recorded_at
+    FROM portfolio_snapshots
+    WHERE user_id = $1
+    ORDER BY recorded_at DESC
     LIMIT 365
+) AS recent
+ORDER BY recorded_at ASC
 `
 
 func (q *Queries) GetUserPortfolioHistory(ctx context.Context, userID int64) ([]PortfolioSnapshot, error) {

@@ -23,7 +23,6 @@ import (
 	_ "github.com/lib/pq"
 )
 
-
 // main — Uygulamanın giriş noktası. DB bağlantısı, router kurulumu,
 // scraper worker'ları ve HTTP sunucusunu başlatır. Graceful shutdown destekler.
 // @title Yarmak Borsa & Portföy Takip API
