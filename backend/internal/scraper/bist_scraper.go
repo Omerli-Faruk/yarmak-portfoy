@@ -16,36 +16,51 @@ import (
 var client = &http.Client{Timeout: 10 * time.Second}
 
 func fetchYahooPrice(ticker string) (float64, error) {
-	req, err := http.NewRequest("GET", "https://query1.finance.yahoo.com/v8/finance/chart/"+ticker, nil)
-	if err != nil {
-		return 0, fmt.Errorf("istek oluşturulamadı: %w", err)
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	for attempt := 0; attempt < 2; attempt++ {
+		req, err := http.NewRequest("GET", "https://query1.finance.yahoo.com/v8/finance/chart/"+ticker, nil)
+		if err != nil {
+			return 0, fmt.Errorf("istek oluşturulamadı: %w", err)
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, fmt.Errorf("bilgileri çekerken hata oluştu: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
+		resp, err := client.Do(req)
+		if err != nil {
+			return 0, fmt.Errorf("bilgileri çekerken hata oluştu: %w", err)
+		}
 
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("Yahoo Finance yanıt vermedi (HTTP %d)", resp.StatusCode)
-	}
+		// Rate limit koruması (HTTP 429 Too Many Requests durumunda 350ms bekle ve tekrar dene)
+		if resp.StatusCode == http.StatusTooManyRequests {
+			_ = resp.Body.Close()
+			if attempt == 0 {
+				time.Sleep(350 * time.Millisecond)
+				continue
+			}
+			return 0, fmt.Errorf("Yahoo Finance rate limit aşıldı (HTTP 429)")
+		}
 
-	var data struct {
-		Chart struct {
-			Result []struct {
-				Meta struct {
-					RegularMarketPrice float64 `json:"regularMarketPrice"`
-				} `json:"meta"`
-			} `json:"result"`
-		} `json:"chart"`
-	}
+		if resp.StatusCode != http.StatusOK {
+			_ = resp.Body.Close()
+			return 0, fmt.Errorf("Yahoo Finance yanıt vermedi (HTTP %d)", resp.StatusCode)
+		}
 
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil || len(data.Chart.Result) == 0 {
-		return 0, fmt.Errorf("veri bulunamadı: %s", ticker)
+		var data struct {
+			Chart struct {
+				Result []struct {
+					Meta struct {
+						RegularMarketPrice float64 `json:"regularMarketPrice"`
+					} `json:"meta"`
+				} `json:"result"`
+			} `json:"chart"`
+		}
+
+		decodeErr := json.NewDecoder(resp.Body).Decode(&data)
+		_ = resp.Body.Close()
+		if decodeErr != nil || len(data.Chart.Result) == 0 {
+			return 0, fmt.Errorf("veri bulunamadı: %s", ticker)
+		}
+		return data.Chart.Result[0].Meta.RegularMarketPrice, nil
 	}
-	return data.Chart.Result[0].Meta.RegularMarketPrice, nil
+	return 0, fmt.Errorf("veri alınamadı: %s", ticker)
 }
 
 func getSpotGramGoldPrice() (float64, error) {

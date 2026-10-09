@@ -19,3 +19,15 @@ WHERE token = $1;
 -- name: DeleteExpiredRefreshTokens :exec
 DELETE FROM refresh_tokens
 WHERE expires_at < NOW() OR revoked_at IS NOT NULL;
+
+-- name: RevokeValidRefreshToken :execrows
+UPDATE refresh_tokens 
+SET revoked_at = NOW(), updated_at = NOW() 
+WHERE token = $1 AND revoked_at IS NULL AND expires_at > NOW();
+
+-- name: GetUserFromRecentlyRevokedToken :one
+SELECT user_id FROM refresh_tokens 
+WHERE token = $1 AND revoked_at > NOW() - INTERVAL '30 seconds' AND expires_at > NOW();
+
+-- name: GetUserIDFromRefreshToken :one
+SELECT user_id FROM refresh_tokens WHERE token = $1;

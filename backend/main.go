@@ -97,8 +97,11 @@ func main() {
 	var scraperWg sync.WaitGroup
 	scraper.StartScraperWorker(serverCtx, queries, 1*time.Minute, &scraperWg)
 	srv := &http.Server{
-		Handler: r,
-		Addr:    ":" + port,
+		Handler:      r,
+		Addr:         ":" + port,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 	slog.Info("Server Başlatılıyor...", "port", port)
 	go func() {

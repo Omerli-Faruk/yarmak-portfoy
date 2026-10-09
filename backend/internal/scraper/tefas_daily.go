@@ -101,6 +101,11 @@ func runTefasDailyCycle(ctx context.Context, db *database.Queries) {
 
 	updateCount := 0
 	for _, fund := range allFunds {
+		// Sıfır veya negatif fiyat koruması: TEFAS henüz fiyat açıklamamışsa veya veri eksikse mevcut fiyatı bozma
+		if fund.Price <= 0 {
+			continue
+		}
+
 		priceStr := fmt.Sprintf("%.6f", fund.Price)
 
 		// 1. Fonu her durumda upsert et; yeni fonlar sisteme girer, mevcutların güncel fiyatı yenilenir

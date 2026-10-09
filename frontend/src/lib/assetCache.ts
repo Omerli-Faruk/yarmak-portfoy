@@ -66,26 +66,26 @@ export async function fetchAssetSummariesBulk(
         return result;
     }
 
-    // Aynı anda en fazla 5 istek
-    const BATCH_SIZE = 5;
-    for (let i = 0; i < symbolsToFetch.length; i += BATCH_SIZE) {
-        const batch = symbolsToFetch.slice(i, i + BATCH_SIZE);
-        const settled = await Promise.allSettled(
-            batch.map(sym =>
-                fetch(`/api/assets/detail?symbol=${encodeURIComponent(sym)}&range=1D`)
-                    .then(res => (res.ok ? res.json() : null))
-                    .then(det => (det?.summary ? { symbol: sym, summary: det.summary } : null))
-                    .catch(() => null)
-            )
-        );
+    // Eksik sembollerin özetleri tek istekte toplu endpoint'ten alınır
+    try {
+        const res = await fetch('/api/assets/batch-summary', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symbols: symbolsToFetch }),
+        });
 
-        for (const item of settled) {
-            if (item.status === 'fulfilled' && item.value) {
-                const { symbol, summary } = item.value;
-                setCachedAssetSummary(symbol, summary);
-                result[symbol] = summary;
+        if (res.ok) {
+            const data = await res.json();
+            const batchSummaries: Record<string, Record<string, number>> = data.summaries || data;
+            for (const sym of symbolsToFetch) {
+                if (batchSummaries && batchSummaries[sym]) {
+                    setCachedAssetSummary(sym, batchSummaries[sym]);
+                    result[sym] = batchSummaries[sym];
+                }
             }
         }
+    } catch (err) {
+        console.warn('Batch summary fetch hatası:', err);
     }
 
     return result;

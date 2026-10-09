@@ -55,34 +55,28 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	qtx := cfg.DB.WithTx(tx)
 	hashedToken := auth.HashToken(refreshTokenValue)
-	res, err := tx.ExecContext(r.Context(), `
- 	UPDATE refresh_tokens 
- 	SET revoked_at = NOW(), updated_at = NOW() 
- 	WHERE token = $1 AND revoked_at IS NULL AND expires_at > NOW()
- `, hashedToken)
+
+	rows, err := qtx.RevokeValidRefreshToken(r.Context(), hashedToken)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Token yenilenirken hata oluştu", err)
 		return
 	}
 
-	rows, _ := res.RowsAffected()
 	var userID int64
 	if rows == 0 {
 		// Grace period (30 sn): Eşzamanlı paralel isteklerde token henüz yenilendiyse oturumu düşürme.
 		// Bu sayede, aynı anda gelen isteklerde sadece ilk istek token'ı yeniler, diğerleri 30 saniye içinde
 		// bu tolerans aralığından yararlanır.
-		errGrace := tx.QueryRowContext(r.Context(), `
-			SELECT user_id FROM refresh_tokens 
-			WHERE token = $1 AND revoked_at > NOW() - INTERVAL '30 seconds' AND expires_at > NOW()
-		`, hashedToken).Scan(&userID)
-		if errGrace != nil {
+		userID, err = qtx.GetUserFromRecentlyRevokedToken(r.Context(), hashedToken)
+		if err != nil {
 			clearAuthCookies(w)
 			respondWithError(w, http.StatusUnauthorized, "Geçersiz, süresi dolmuş veya daha önce kullanılmış token", nil)
 			return
 		}
 	} else {
-		err = tx.QueryRowContext(r.Context(), `SELECT user_id FROM refresh_tokens WHERE token = $1`, hashedToken).Scan(&userID)
+		userID, err = qtx.GetUserIDFromRefreshToken(r.Context(), hashedToken)
 		if err != nil {
 			clearAuthCookies(w)
 			respondWithError(w, http.StatusUnauthorized, "Kullanıcı bulunamadı", err)
@@ -102,7 +96,6 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	qtx := cfg.DB.WithTx(tx)
 	_, err = qtx.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
 		Token:     auth.HashToken(newRefreshToken),
 		UserID:    userID,

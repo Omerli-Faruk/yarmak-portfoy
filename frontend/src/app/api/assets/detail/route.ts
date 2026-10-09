@@ -69,6 +69,14 @@ interface YahooQuoteSummaryData {
 // Sembol -> varlık id'si; periyot her değiştiğinde lookup isteği tekrarlanmasın
 const assetCache = new Map<string, { id: number; isTefas: boolean; asset?: BackendAsset }>();
 
+// 2 dakikalık (120 sn) tam yanıt bellek önbelleği
+interface DetailCacheEntry {
+    data: unknown;
+    timestamp: number;
+}
+const detailResponseCache = new Map<string, DetailCacheEntry>();
+const DETAIL_CACHE_TTL = 2 * 60 * 1000;
+
 function getYahooTicker(symbol: string): string {
     const s = symbol.toUpperCase().trim();
     if (s === 'USDTRY' || s === 'USD/TRY') return 'USDTRY=X';
@@ -358,6 +366,15 @@ export async function GET(request: Request) {
 
     const backendHeaders = clientIpHeader(request);
     const encodedSymbol = encodeURIComponent(rawSymbol);
+
+    // Aynı sembol ve aralık için 2 dakika boyunca hazır yanıt döner
+    const cacheKey = `${rawSymbol.toUpperCase().trim()}_${range}`;
+    const cachedResponse = detailResponseCache.get(cacheKey);
+    if (cachedResponse && Date.now() - cachedResponse.timestamp < DETAIL_CACHE_TTL) {
+        return NextResponse.json(cachedResponse.data, {
+            headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' },
+        });
+    }
 
     try {
         // 1) Varlığın id'si: önce bellekten, yoksa backend'den
@@ -742,9 +759,15 @@ export async function GET(request: Request) {
             positive: latestPositive,
         } : null;
 
+        const responseData = { asset: assetInfo, chart: cleanChartData, fundamentals, summary: summaryData, previousClose };
+        detailResponseCache.set(cacheKey, {
+            data: responseData,
+            timestamp: Date.now(),
+        });
+
         return NextResponse.json(
-            { asset: assetInfo, chart: cleanChartData, fundamentals, summary: summaryData, previousClose },
-            { headers: { 'Cache-Control': 'no-store, max-age=0' } }
+            responseData,
+            { headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' } }
         );
     } catch (error) {
         console.error('/api/assets/detail hatası:', error);
