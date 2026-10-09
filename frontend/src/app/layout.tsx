@@ -45,7 +45,7 @@ export default function RootLayout({children}: LayoutProps<"/">) {
         >
         <body className="min-h-full flex flex-col">
         <AuthProvider>
-            <div className="min-h-screen flex flex-col">
+            <div className="min-h-screen flex flex-col bg-ambient-spotlight">
                 <Navbar />
                 <main className="flex-1 flex flex-col">
                     {children}
