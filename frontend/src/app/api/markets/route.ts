@@ -216,6 +216,289 @@ const POPULAR_BIST_SYMBOLS = [
     'SISE', 'FROTO', 'SASA', 'ASTOR', 'EKGYO'
 ];
 
+// Seans saatlerine duyarlı TTL hesaplayıcı (TSİ / Europe/Istanbul)
+function getMarketCacheTTL(): number {
+    const now = new Date();
+    const trFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Europe/Istanbul',
+        hour: 'numeric',
+        minute: 'numeric',
+        hourCycle: 'h23',
+        weekday: 'short',
+    });
+    const parts = trFormatter.formatToParts(now);
+    let hour = 12;
+    let minute = 0;
+    let weekday = 'Wed';
+    for (const p of parts) {
+        if (p.type === 'hour') hour = parseInt(p.value, 10);
+        if (p.type === 'minute') minute = parseInt(p.value, 10);
+        if (p.type === 'weekday') weekday = p.value;
+    }
+
+    const isWeekend = weekday === 'Sat' || weekday === 'Sun';
+    const totalMinutes = hour * 60 + minute;
+    // Borsa İstanbul Seans Saatleri: Hafta içi 10:00 (600 dk) - 18:15 (1095 dk)
+    const isTradingHours = !isWeekend && totalMinutes >= 600 && totalMinutes <= 1095;
+
+    if (isTradingHours) {
+        return 60 * 1000; // Seans içi: 60 saniye
+    }
+    return 15 * 60 * 1000; // Seans dışı ve hafta sonu: 15 dakika
+}
+
+let isRefreshingMarkets = false;
+
+async function fetchFreshMarketData(backendBase: string): Promise<MarketData> {
+    const [
+        spotGold,
+        xu100,
+        xu030,
+        usdTry,
+        eurTry,
+        backendAssetsRes,
+        dailyChangesRes
+    ] = await Promise.all([
+        fetchSpotGold(),
+        fetchYahooQuote('XU100.IS', 'BIST 100'),
+        fetchYahooQuote('XU030.IS', 'BIST 30'),
+        fetchYahooQuote('USDTRY=X', 'Dolar / TL'),
+        fetchYahooQuote('EURTRY=X', 'Euro / TL'),
+        fetch(`${backendBase}/assets`, { cache: 'no-store' }).catch(() => null),
+        fetch(`${backendBase}/assets/daily-changes`, { cache: 'no-store' }).catch(() => null),
+    ]);
+
+    const rawAssets: BackendAsset[] = (backendAssetsRes?.ok && await backendAssetsRes.json().catch(() => [])) || [];
+    const dailyChangesMap: Record<string, number> = (dailyChangesRes?.ok && await dailyChangesRes.json().catch(() => ({}))) || {};
+
+    // BIST hisse sembollerini topla ve Yahoo Finance'den toplu canlı fiyatları çek
+    const bistSymbols = rawAssets
+        .filter(item => {
+            const at = String(item.AssetType ?? item.asset_type ?? 'HISSE').toUpperCase();
+            return at === 'HISSE';
+        })
+        .map(item => String(item.Symbol ?? item.symbol ?? '').toUpperCase().trim())
+        .filter(Boolean);
+
+    const liveBistQuotes = await fetchBistLiveQuotes(bistSymbols);
+
+    // Endeks Kartları
+    const indices: MarketIndexItem[] = [
+        {
+            symbol: 'XU100',
+            name: 'BIST 100',
+            price: xu100?.price || 0,
+            change: xu100?.change || '0.00',
+            positive: xu100 ? xu100.positive : true,
+        },
+        {
+            symbol: 'XU030',
+            name: 'BIST 30',
+            price: xu030?.price || 0,
+            change: xu030?.change || '0.00',
+            positive: xu030 ? xu030.positive : true,
+        },
+        {
+            symbol: 'ALTIN',
+            name: 'Gram Altın',
+            price: spotGold?.price || 0,
+            change: spotGold?.change || '0.00',
+            positive: spotGold ? spotGold.positive : true,
+        },
+        {
+            symbol: 'USDTRY',
+            name: 'Dolar / TL',
+            price: usdTry?.price || 0,
+            change: usdTry?.change || '0.00',
+            positive: usdTry ? usdTry.positive : true,
+        },
+        {
+            symbol: 'EURTRY',
+            name: 'Euro / TL',
+            price: eurTry?.price || 0,
+            change: eurTry?.change || '0.00',
+            positive: eurTry ? eurTry.positive : true,
+        }
+    ];
+
+    // Varlıkları normalize et (Tekilleştirilmiş Map kullanarak tekrarları tamamen engelle)
+    const itemsMap = new Map<string, MarketAssetItem>();
+
+    // BIST, TEFAS, Altın ve Döviz varlıklarını backend kayıtları ile harmanla
+    for (const item of rawAssets) {
+        const id = Number(item.ID ?? item.id ?? 0);
+        const symbol = String(item.Symbol ?? item.symbol ?? '').trim().toUpperCase();
+        let name = String(item.Name ?? item.name ?? symbol).trim();
+        let assetType = String(item.AssetType ?? item.asset_type ?? 'HISSE').trim().toUpperCase();
+        
+        let price = parseFloat(item.CurrentPrice ?? item.current_price ?? '0') || 0;
+        let changeVal = 0;
+        let volumeStr: string | undefined = undefined;
+
+        if (itemsMap.has(symbol)) continue;
+
+        if (symbol === 'ALTIN' || assetType === 'ALTIN') {
+            assetType = 'ALTIN';
+            name = 'Gram Altın';
+            if (spotGold && spotGold.price > 0) {
+                price = spotGold.price;
+                changeVal = parseFloat(spotGold.change) || 0;
+            }
+        } else if (symbol === 'USDTRY' || symbol === 'USD/TRY') {
+            assetType = 'DOVIZ';
+            name = 'Amerikan Doları';
+            if (usdTry && usdTry.price > 0) {
+                price = usdTry.price;
+                changeVal = parseFloat(usdTry.change) || 0;
+            }
+        } else if (symbol === 'EURTRY' || symbol === 'EUR/TRY') {
+            assetType = 'DOVIZ';
+            name = 'Euro';
+            if (eurTry && eurTry.price > 0) {
+                price = eurTry.price;
+                changeVal = parseFloat(eurTry.change) || 0;
+            }
+        } else if (assetType === 'HISSE') {
+            const liveQuote = liveBistQuotes.get(symbol);
+            if (liveQuote && liveQuote.price > 0) {
+                price = liveQuote.price;
+                changeVal = Math.round(liveQuote.changePercent * 100) / 100;
+                if (liveQuote.volume) {
+                    volumeStr = formatVolume(liveQuote.volume);
+                }
+                if (liveQuote.name) {
+                    name = liveQuote.name;
+                }
+            } else {
+                const idStr = String(id);
+                if (dailyChangesMap[idStr] !== undefined) {
+                    changeVal = dailyChangesMap[idStr];
+                } else if (item.Change !== undefined && item.Change !== '') {
+                    changeVal = parseFloat(String(item.Change).replace('+', '')) || 0;
+                }
+            }
+        } else if (assetType === 'FON') {
+            const idStr = String(id);
+            if (dailyChangesMap[idStr] !== undefined) {
+                changeVal = dailyChangesMap[idStr];
+            } else if (item.Change !== undefined && item.Change !== '') {
+                changeVal = parseFloat(String(item.Change).replace('+', '')) || 0;
+            }
+            // TEFAS fonlarında bölünme veya scraping anomalisini filtrele (+-25% üzeri anomali)
+            if (Math.abs(changeVal) > 25) {
+                changeVal = 0;
+            }
+        }
+
+        if (price <= 0 || !symbol) continue;
+
+        const isPos = changeVal >= 0;
+        const changeStr = `${isPos ? '+' : ''}${changeVal.toFixed(2)}%`;
+
+        itemsMap.set(symbol, {
+            id,
+            symbol,
+            name,
+            asset_type: assetType,
+            price,
+            change: changeStr,
+            change_value: changeVal,
+            positive: isPos,
+            volume: volumeStr,
+        });
+    }
+
+    // Eğer backend'de ALTIN, USDTRY veya EURTRY tanımlı değilse canlı verilerden tamamla
+    if (!itemsMap.has('ALTIN') && spotGold && spotGold.price > 0) {
+        itemsMap.set('ALTIN', {
+            id: -1,
+            symbol: 'ALTIN',
+            name: 'Gram Altın',
+            asset_type: 'ALTIN',
+            price: spotGold.price,
+            change: spotGold.change,
+            change_value: parseFloat(spotGold.change) || 0,
+            positive: spotGold.positive,
+        });
+    }
+    if (!itemsMap.has('USDTRY') && usdTry && usdTry.price > 0) {
+        itemsMap.set('USDTRY', {
+            id: -2,
+            symbol: 'USDTRY',
+            name: 'Amerikan Doları',
+            asset_type: 'DOVIZ',
+            price: usdTry.price,
+            change: usdTry.change,
+            change_value: parseFloat(usdTry.change) || 0,
+            positive: usdTry.positive,
+        });
+    }
+    if (!itemsMap.has('EURTRY') && eurTry && eurTry.price > 0) {
+        itemsMap.set('EURTRY', {
+            id: -3,
+            symbol: 'EURTRY',
+            name: 'Euro',
+            asset_type: 'DOVIZ',
+            price: eurTry.price,
+            change: eurTry.change,
+            change_value: parseFloat(eurTry.change) || 0,
+            positive: eurTry.positive,
+        });
+    }
+
+    const allItems = Array.from(itemsMap.values());
+
+    // =====================================================================
+    // KRİTİK KURAL: GÜNÜN YÜKSELENLERİ, DÜŞENLERİ VE POPÜLERLERİ
+    // KESİNLİKLE VE SADECE BIST HİSSELERİNDEN OLUŞMALIDIR (FON YOK!)
+    // =====================================================================
+    const stocksOnly = allItems.filter(
+        x => x.asset_type === 'HISSE' && x.price > 0 && Math.abs(x.change_value) <= 10.5
+    );
+
+    // Top Gainers (En çok yükselen BIST hisseleri - SADECE HİSSE)
+    const topGainers = [...stocksOnly]
+        .filter(x => x.change_value > 0)
+        .sort((a, b) => b.change_value - a.change_value)
+        .slice(0, 5);
+
+    // Top Losers (En çok düşen BIST hisseleri - SADECE HİSSE)
+    const topLosers = [...stocksOnly]
+        .filter(x => x.change_value < 0)
+        .sort((a, b) => a.change_value - b.change_value)
+        .slice(0, 5);
+
+    // Most Popular (Günün Popüler BIST hisseleri - SADECE HİSSE)
+    const mostActive = [...stocksOnly]
+        .filter(x => POPULAR_BIST_SYMBOLS.includes(x.symbol))
+        .sort((a, b) => POPULAR_BIST_SYMBOLS.indexOf(a.symbol) - POPULAR_BIST_SYMBOLS.indexOf(b.symbol))
+        .slice(0, 5);
+
+    return {
+        indices,
+        topGainers,
+        topLosers,
+        mostActive,
+        allItems,
+    };
+}
+
+async function refreshMarketsInBackground(backendBase: string) {
+    if (isRefreshingMarkets) return;
+    isRefreshingMarkets = true;
+    try {
+        const fresh = await fetchFreshMarketData(backendBase);
+        marketCache = {
+            data: fresh,
+            timestamp: Date.now(),
+        };
+    } catch (err) {
+        console.error('Arka plan piyasa yenileme hatası:', err);
+    } finally {
+        isRefreshingMarkets = false;
+    }
+}
+
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
@@ -226,245 +509,20 @@ export async function GET(request: Request) {
 
         const now = Date.now();
         const backendBase = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080/v1';
+        const ttl = getMarketCacheTTL();
 
-        // 1. Önbellek geçerli ise doğrudan kullan (30 saniye boyunca sıfır gecikme ile filtrele)
-        if (marketCache && (now - marketCache.timestamp < 30 * 1000)) {
+        // 1. Stale-While-Revalidate Önbellek Akışı
+        if (marketCache) {
+            const isStale = (now - marketCache.timestamp) >= ttl;
+            if (isStale) {
+                // Arka planda sessizce taze veriyi çek, mevcut önbelleği 0ms ile anında dön
+                void refreshMarketsInBackground(backendBase);
+            }
             return formatResponse(marketCache.data, category, sort, period, search);
         }
 
-        // 2. Canlı Makro Endeksler ve Backend Verilerini Paralel Çek
-        const [
-            spotGold,
-            xu100,
-            xu030,
-            usdTry,
-            eurTry,
-            backendAssetsRes,
-            dailyChangesRes
-        ] = await Promise.all([
-            fetchSpotGold(),
-            fetchYahooQuote('XU100.IS', 'BIST 100'),
-            fetchYahooQuote('XU030.IS', 'BIST 30'),
-            fetchYahooQuote('USDTRY=X', 'Dolar / TL'),
-            fetchYahooQuote('EURTRY=X', 'Euro / TL'),
-            fetch(`${backendBase}/assets`, { cache: 'no-store' }).catch(() => null),
-            fetch(`${backendBase}/assets/daily-changes`, { cache: 'no-store' }).catch(() => null),
-        ]);
-
-        const rawAssets: BackendAsset[] = (backendAssetsRes?.ok && await backendAssetsRes.json().catch(() => [])) || [];
-        const dailyChangesMap: Record<string, number> = (dailyChangesRes?.ok && await dailyChangesRes.json().catch(() => ({}))) || {};
-
-        // BIST hisse sembollerini topla ve Yahoo Finance'den toplu canlı fiyatları çek
-        const bistSymbols = rawAssets
-            .filter(item => {
-                const at = String(item.AssetType ?? item.asset_type ?? 'HISSE').toUpperCase();
-                return at === 'HISSE';
-            })
-            .map(item => String(item.Symbol ?? item.symbol ?? '').toUpperCase().trim())
-            .filter(Boolean);
-
-        const liveBistQuotes = await fetchBistLiveQuotes(bistSymbols);
-
-        // Endeks Kartları
-        const indices: MarketIndexItem[] = [
-            {
-                symbol: 'XU100',
-                name: 'BIST 100',
-                price: xu100?.price || 0,
-                change: xu100?.change || '0.00',
-                positive: xu100 ? xu100.positive : true,
-            },
-            {
-                symbol: 'XU030',
-                name: 'BIST 30',
-                price: xu030?.price || 0,
-                change: xu030?.change || '0.00',
-                positive: xu030 ? xu030.positive : true,
-            },
-            {
-                symbol: 'ALTIN',
-                name: 'Gram Altın',
-                price: spotGold?.price || 0,
-                change: spotGold?.change || '0.00',
-                positive: spotGold ? spotGold.positive : true,
-            },
-            {
-                symbol: 'USDTRY',
-                name: 'Dolar / TL',
-                price: usdTry?.price || 0,
-                change: usdTry?.change || '0.00',
-                positive: usdTry ? usdTry.positive : true,
-            },
-            {
-                symbol: 'EURTRY',
-                name: 'Euro / TL',
-                price: eurTry?.price || 0,
-                change: eurTry?.change || '0.00',
-                positive: eurTry ? eurTry.positive : true,
-            }
-        ];
-
-        // Varlıkları normalize et (Tekilleştirilmiş Map kullanarak tekrarları tamamen engelle)
-        const itemsMap = new Map<string, MarketAssetItem>();
-
-        // BIST, TEFAS, Altın ve Döviz varlıklarını backend kayıtları ile harmanla
-        for (const item of rawAssets) {
-            const id = Number(item.ID ?? item.id ?? 0);
-            const symbol = String(item.Symbol ?? item.symbol ?? '').trim().toUpperCase();
-            let name = String(item.Name ?? item.name ?? symbol).trim();
-            let assetType = String(item.AssetType ?? item.asset_type ?? 'HISSE').trim().toUpperCase();
-            
-            let price = parseFloat(item.CurrentPrice ?? item.current_price ?? '0') || 0;
-            let changeVal = 0;
-            let volumeStr: string | undefined = undefined;
-
-            if (itemsMap.has(symbol)) continue;
-
-            if (symbol === 'ALTIN' || assetType === 'ALTIN') {
-                assetType = 'ALTIN';
-                name = 'Gram Altın';
-                if (spotGold && spotGold.price > 0) {
-                    price = spotGold.price;
-                    changeVal = parseFloat(spotGold.change) || 0;
-                }
-            } else if (symbol === 'USDTRY' || symbol === 'USD/TRY') {
-                assetType = 'DOVIZ';
-                name = 'Amerikan Doları';
-                if (usdTry && usdTry.price > 0) {
-                    price = usdTry.price;
-                    changeVal = parseFloat(usdTry.change) || 0;
-                }
-            } else if (symbol === 'EURTRY' || symbol === 'EUR/TRY') {
-                assetType = 'DOVIZ';
-                name = 'Euro';
-                if (eurTry && eurTry.price > 0) {
-                    price = eurTry.price;
-                    changeVal = parseFloat(eurTry.change) || 0;
-                }
-            } else if (assetType === 'HISSE') {
-                const liveQuote = liveBistQuotes.get(symbol);
-                if (liveQuote && liveQuote.price > 0) {
-                    price = liveQuote.price;
-                    changeVal = Math.round(liveQuote.changePercent * 100) / 100;
-                    if (liveQuote.volume) {
-                        volumeStr = formatVolume(liveQuote.volume);
-                    }
-                    if (liveQuote.name) {
-                        name = liveQuote.name;
-                    }
-                } else {
-                    const idStr = String(id);
-                    if (dailyChangesMap[idStr] !== undefined) {
-                        changeVal = dailyChangesMap[idStr];
-                    } else if (item.Change !== undefined && item.Change !== '') {
-                        changeVal = parseFloat(String(item.Change).replace('+', '')) || 0;
-                    }
-                }
-            } else if (assetType === 'FON') {
-                const idStr = String(id);
-                if (dailyChangesMap[idStr] !== undefined) {
-                    changeVal = dailyChangesMap[idStr];
-                } else if (item.Change !== undefined && item.Change !== '') {
-                    changeVal = parseFloat(String(item.Change).replace('+', '')) || 0;
-                }
-                // TEFAS fonlarında bölünme veya scraping anomalisini filtrele (+-25% üzeri anomali)
-                if (Math.abs(changeVal) > 25) {
-                    changeVal = 0;
-                }
-            }
-
-            if (price <= 0 || !symbol) continue;
-
-            const isPos = changeVal >= 0;
-            const changeStr = `${isPos ? '+' : ''}${changeVal.toFixed(2)}%`;
-
-            itemsMap.set(symbol, {
-                id,
-                symbol,
-                name,
-                asset_type: assetType,
-                price,
-                change: changeStr,
-                change_value: changeVal,
-                positive: isPos,
-                volume: volumeStr,
-            });
-        }
-
-        // Eğer backend'de ALTIN, USDTRY veya EURTRY tanımlı değilse canlı verilerden tamamla
-        if (!itemsMap.has('ALTIN') && spotGold && spotGold.price > 0) {
-            itemsMap.set('ALTIN', {
-                id: -1,
-                symbol: 'ALTIN',
-                name: 'Gram Altın',
-                asset_type: 'ALTIN',
-                price: spotGold.price,
-                change: spotGold.change,
-                change_value: parseFloat(spotGold.change) || 0,
-                positive: spotGold.positive,
-            });
-        }
-        if (!itemsMap.has('USDTRY') && usdTry && usdTry.price > 0) {
-            itemsMap.set('USDTRY', {
-                id: -2,
-                symbol: 'USDTRY',
-                name: 'Amerikan Doları',
-                asset_type: 'DOVIZ',
-                price: usdTry.price,
-                change: usdTry.change,
-                change_value: parseFloat(usdTry.change) || 0,
-                positive: usdTry.positive,
-            });
-        }
-        if (!itemsMap.has('EURTRY') && eurTry && eurTry.price > 0) {
-            itemsMap.set('EURTRY', {
-                id: -3,
-                symbol: 'EURTRY',
-                name: 'Euro',
-                asset_type: 'DOVIZ',
-                price: eurTry.price,
-                change: eurTry.change,
-                change_value: parseFloat(eurTry.change) || 0,
-                positive: eurTry.positive,
-            });
-        }
-
-        const allItems = Array.from(itemsMap.values());
-
-        // =====================================================================
-        // KRİTİK KURAL: GÜNÜN YÜKSELENLERİ, DÜŞENLERİ VE POPÜLERLERİ
-        // KESİNLİKLE VE SADECE BIST HİSSELERİNDEN OLUŞMALIDIR (FON YOK!)
-        // =====================================================================
-        const stocksOnly = allItems.filter(
-            x => x.asset_type === 'HISSE' && x.price > 0 && Math.abs(x.change_value) <= 10.5
-        );
-
-        // Top Gainers (En çok yükselen BIST hisseleri - SADECE HİSSE)
-        const topGainers = [...stocksOnly]
-            .filter(x => x.change_value > 0)
-            .sort((a, b) => b.change_value - a.change_value)
-            .slice(0, 5);
-
-        // Top Losers (En çok düşen BIST hisseleri - SADECE HİSSE)
-        const topLosers = [...stocksOnly]
-            .filter(x => x.change_value < 0)
-            .sort((a, b) => a.change_value - b.change_value)
-            .slice(0, 5);
-
-        // Most Popular (Günün Popüler BIST hisseleri - SADECE HİSSE)
-        const mostActive = [...stocksOnly]
-            .filter(x => POPULAR_BIST_SYMBOLS.includes(x.symbol))
-            .sort((a, b) => POPULAR_BIST_SYMBOLS.indexOf(a.symbol) - POPULAR_BIST_SYMBOLS.indexOf(b.symbol))
-            .slice(0, 5);
-
-        const fullData = {
-            indices,
-            topGainers,
-            topLosers,
-            mostActive,
-            allItems,
-        };
-
+        // 2. İlk Soğuk Başlangıç (Cold Start): Senkron çek ve önbelleğe yaz
+        const fullData = await fetchFreshMarketData(backendBase);
         marketCache = {
             data: fullData,
             timestamp: now,

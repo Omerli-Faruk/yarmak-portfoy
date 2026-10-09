@@ -85,7 +85,7 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 
 	// Varlık fiyatı 15 dakikadan eskiyse arka planda piyasa verisini otomatik güncelle
 	go func(assetID int64) {
-		assetObj, err := cfg.DB.GetAssetByID(context.Background(), assetID)
+		assetObj, err := cfg.Services.Asset.GetAssetByIDWithCache(context.Background(), assetID)
 		if err == nil && time.Since(assetObj.UpdatedAt) > 15*time.Minute {
 			_ = scraper.QuickSyncAsset(context.Background(), cfg.DB, assetObj)
 		}
@@ -370,7 +370,7 @@ func (cfg *ApiConfig) HandlerDeleteUserAssetHoldings(w http.ResponseWriter, r *h
 func (cfg *ApiConfig) resolveAssetID(ctx context.Context, params *createTransactionRequest) error {
 	if params.AssetID > 0 {
 		if cfg.DB != nil {
-			_, err := cfg.DB.GetAssetByID(ctx, params.AssetID)
+			_, err := cfg.Services.Asset.GetAssetByIDWithCache(ctx, params.AssetID)
 			if err == nil {
 				return nil
 			}

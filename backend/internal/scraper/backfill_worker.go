@@ -1,4 +1,4 @@
-﻿package scraper
+package scraper
 
 import (
 	"context"
@@ -149,17 +149,24 @@ func QuickSyncAsset(ctx context.Context, db *database.Queries, asset database.As
         recentHistory, err := FetchTEFASFundHistory(asset.Symbol, oneMonthAgo, today)
         if err != nil { return err }
         for _, h := range recentHistory {
+            if h.Price <= 0 {
+                continue
+            }
             _ = db.UpsertPriceHistory(ctx, database.UpsertPriceHistoryParams{
                 AssetID: asset.ID,
                 Price: fmt.Sprintf("%.6f", h.Price),
                 RecordedAt: h.Date.UTC(),
             })
         }
-        if len(recentHistory) > 0 {
-            _, _ = db.UpdateAssetPrice(ctx, database.UpdateAssetPriceParams{
-                ID: asset.ID,
-                CurrentPrice: fmt.Sprintf("%.6f", recentHistory[len(recentHistory)-1].Price),
-            })
+        // En güncel geçerli pozitif fiyatı bul ve asset'in current_price'ını güncelle
+        for i := len(recentHistory) - 1; i >= 0; i-- {
+            if recentHistory[i].Price > 0 {
+                _, _ = db.UpdateAssetPrice(ctx, database.UpdateAssetPriceParams{
+                    ID: asset.ID,
+                    CurrentPrice: fmt.Sprintf("%.6f", recentHistory[i].Price),
+                })
+                break
+            }
         }
         return nil
     } else {

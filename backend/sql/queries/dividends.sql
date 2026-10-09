@@ -18,3 +18,14 @@ WHERE user_id = $1 AND deleted_at IS NULL;
 UPDATE dividends
 SET deleted_at = NOW()
 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL;
+
+-- name: UpdateDividend :one
+UPDATE dividends
+SET asset_id = $3,
+    amount = $4,
+    payment_date = $5,
+    gross_amount = $6,
+    tax_amount = $7,
+    net_amount = $8
+WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+RETURNING *;

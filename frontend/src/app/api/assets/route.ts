@@ -91,50 +91,80 @@ async function fetchYahooChart(ticker: string): Promise<ChartQuote | null> {
     }
 }
 
-// 2. TEFAS Fon Kataloğu (30 dk Önbellek)
+// 2. TEFAS Fon Kataloğu (60 dk Önbellek, YAT + EMK desteği, Hafta Sonu & Tatil Koruması)
 let tefasCatalogCache: TefasFundItem[] = [];
 let lastTefasFetchTime = 0;
 
-async function getTefasCatalog(): Promise<TefasFundItem[]> {
-    const now = Date.now();
-    if (tefasCatalogCache.length > 0 && now - lastTefasFetchTime < 30 * 60 * 1000) {
-        return tefasCatalogCache;
-    }
-
+async function fetchTefasType(fonTipi: 'YAT' | 'EMK', bas: string, bit: string): Promise<TefasFundItem[]> {
     try {
-        const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
         const res = await fetch('https://www.tefas.gov.tr/api/funds/fonGnlBlgSiraliGetir', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Origin': 'https://www.tefas.gov.tr',
                 'Referer': 'https://www.tefas.gov.tr/tr/fon-verileri',
-                'User-Agent': 'Mozilla/5.0',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             },
             body: JSON.stringify({
-                fonTipi: 'YAT',
-                basTarih: today,
-                bitTarih: today,
+                fonTipi,
+                basTarih: bas,
+                bitTarih: bit,
                 basSira: 1,
                 bitSira: 5000,
                 dil: 'TR',
             }),
-            signal: AbortSignal.timeout(5000),
+            signal: AbortSignal.timeout(6000),
         });
 
-        if (res.ok) {
-            const data = await res.json();
-            if (Array.isArray(data?.resultList) && data.resultList.length > 0) {
-                tefasCatalogCache = data.resultList.map((item: RawTefasItem) => ({
-                    symbol: String(item.fonKodu || '').toUpperCase(),
-                    name: String(item.fonUnvan || ''),
-                    price: Number(item.fiyat || 0),
-                }));
-                lastTefasFetchTime = now;
+        if (!res.ok) return [];
+        const data = await res.json();
+        if (!Array.isArray(data?.resultList)) return [];
+        return data.resultList
+            .map((item: RawTefasItem) => ({
+                symbol: String(item.fonKodu || '').toUpperCase(),
+                name: String(item.fonUnvan || ''),
+                price: Number(item.fiyat || 0),
+            }))
+            .filter((x: TefasFundItem) => x.symbol.length > 0);
+    } catch {
+        return [];
+    }
+}
+
+async function getTefasCatalog(): Promise<TefasFundItem[]> {
+    const now = Date.now();
+    // 60 dakikalık önbellek geçerliyse doğrudan dön
+    if (tefasCatalogCache.length > 0 && now - lastTefasFetchTime < 60 * 60 * 1000) {
+        return tefasCatalogCache;
+    }
+
+    try {
+        // Hafta sonları ve resmi tatillerde TEFAS aynı güne boş liste döndüğü için
+        // basTarih son 7 günü kapsayacak şekilde dinamik hesaplanır
+        const nowObj = new Date();
+        const bitTarih = nowObj.toISOString().slice(0, 10).replace(/-/g, '');
+        const pastDate = new Date(nowObj.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const basTarih = pastDate.toISOString().slice(0, 10).replace(/-/g, '');
+
+        // Hem Yatırım Fonları (YAT) hem de Emeklilik Fonları (EMK) paralel taranır
+        const [yatList, emkList] = await Promise.all([
+            fetchTefasType('YAT', basTarih, bitTarih),
+            fetchTefasType('EMK', basTarih, bitTarih),
+        ]);
+
+        const combinedMap = new Map<string, TefasFundItem>();
+        for (const item of [...yatList, ...emkList]) {
+            if (item.symbol && !combinedMap.has(item.symbol)) {
+                combinedMap.set(item.symbol, item);
             }
         }
+
+        if (combinedMap.size > 0) {
+            tefasCatalogCache = Array.from(combinedMap.values());
+            lastTefasFetchTime = now;
+        }
     } catch (err) {
-        console.warn('TEFAS katalog uyarısı:', err);
+        console.warn('TEFAS katalog çekim uyarısı:', err);
     }
     return tefasCatalogCache;
 }

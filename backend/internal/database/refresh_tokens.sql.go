@@ -46,6 +46,18 @@ func (q *Queries) DeleteExpiredRefreshTokens(ctx context.Context) error {
 	return err
 }
 
+const getUserFromRecentlyRevokedToken = `-- name: GetUserFromRecentlyRevokedToken :one
+SELECT user_id FROM refresh_tokens 
+WHERE token = $1 AND revoked_at > NOW() - INTERVAL '30 seconds' AND expires_at > NOW()
+`
+
+func (q *Queries) GetUserFromRecentlyRevokedToken(ctx context.Context, token string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getUserFromRecentlyRevokedToken, token)
+	var user_id int64
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
 const getUserFromRefreshToken = `-- name: GetUserFromRefreshToken :one
 SELECT u.id, u.email, u.password_hash, u.created_at, u.role, u.username
 FROM users u
@@ -69,6 +81,17 @@ func (q *Queries) GetUserFromRefreshToken(ctx context.Context, token string) (Us
 	return i, err
 }
 
+const getUserIDFromRefreshToken = `-- name: GetUserIDFromRefreshToken :one
+SELECT user_id FROM refresh_tokens WHERE token = $1
+`
+
+func (q *Queries) GetUserIDFromRefreshToken(ctx context.Context, token string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getUserIDFromRefreshToken, token)
+	var user_id int64
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
 const revokeRefreshToken = `-- name: RevokeRefreshToken :exec
 UPDATE refresh_tokens
 SET revoked_at = NOW(), updated_at = NOW()
@@ -78,4 +101,18 @@ WHERE token = $1
 func (q *Queries) RevokeRefreshToken(ctx context.Context, token string) error {
 	_, err := q.db.ExecContext(ctx, revokeRefreshToken, token)
 	return err
+}
+
+const revokeValidRefreshToken = `-- name: RevokeValidRefreshToken :execrows
+UPDATE refresh_tokens 
+SET revoked_at = NOW(), updated_at = NOW() 
+WHERE token = $1 AND revoked_at IS NULL AND expires_at > NOW()
+`
+
+func (q *Queries) RevokeValidRefreshToken(ctx context.Context, token string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, revokeValidRefreshToken, token)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

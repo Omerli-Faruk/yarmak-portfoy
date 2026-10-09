@@ -97,7 +97,7 @@ func (cfg *ApiConfig) HandlerGetAssetPriceHistory(w http.ResponseWriter, r *http
 	rangeParam := r.URL.Query().Get("range")
 
 	// Eğer HISSE, DOVIZ veya ALTIN ise öncelikli olarak anlık Yahoo Finance verisi çekilir
-	assetObj, err := cfg.DB.GetAssetByID(r.Context(), assetID)
+	assetObj, err := cfg.Services.Asset.GetAssetByIDWithCache(r.Context(), assetID)
 	if err == nil && (assetObj.AssetType == "HISSE" || assetObj.AssetType == "DOVIZ" || assetObj.AssetType == "ALTIN" || assetObj.Symbol == "ALTIN") {
 		yhRange := mapRangeToYahooFinance(rangeParam)
 		_, history, fetchErr := scraper.FetchBISTHistory(assetObj.Symbol, yhRange)
@@ -147,7 +147,7 @@ func (cfg *ApiConfig) HandlerTriggerBackfill(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	assetObj, err := cfg.DB.GetAssetByID(r.Context(), assetID)
+	assetObj, err := cfg.Services.Asset.GetAssetByIDWithCache(r.Context(), assetID)
 	if err == nil {
 		go func() {
 			if syncErr := scraper.QuickSyncAsset(context.Background(), cfg.DB, assetObj); syncErr != nil {

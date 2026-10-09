@@ -68,56 +68,6 @@ func (q *Queries) DeleteDividend(ctx context.Context, arg DeleteDividendParams) 
 	return err
 }
 
-const updateDividend = `-- name: UpdateDividend :one
-UPDATE dividends
-SET asset_id = $3,
-    amount = $4,
-    payment_date = $5,
-    gross_amount = $6,
-    tax_amount = $7,
-    net_amount = $8
-WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
-RETURNING id, user_id, asset_id, amount, payment_date, created_at, deleted_at, gross_amount, tax_amount, net_amount
-`
-
-type UpdateDividendParams struct {
-	ID          int64
-	UserID      int64
-	AssetID     int64
-	Amount      string
-	PaymentDate time.Time
-	GrossAmount string
-	TaxAmount   string
-	NetAmount   string
-}
-
-func (q *Queries) UpdateDividend(ctx context.Context, arg UpdateDividendParams) (Dividend, error) {
-	row := q.db.QueryRowContext(ctx, updateDividend,
-		arg.ID,
-		arg.UserID,
-		arg.AssetID,
-		arg.Amount,
-		arg.PaymentDate,
-		arg.GrossAmount,
-		arg.TaxAmount,
-		arg.NetAmount,
-	)
-	var i Dividend
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.AssetID,
-		&i.Amount,
-		&i.PaymentDate,
-		&i.CreatedAt,
-		&i.DeletedAt,
-		&i.GrossAmount,
-		&i.TaxAmount,
-		&i.NetAmount,
-	)
-	return i, err
-}
-
 const getTotalDividendsSummary = `-- name: GetTotalDividendsSummary :one
 SELECT COALESCE(SUM(net_amount), 0)::text as total_dividends
 FROM dividends
@@ -188,4 +138,54 @@ func (q *Queries) GetUserDividends(ctx context.Context, userID int64) ([]GetUser
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateDividend = `-- name: UpdateDividend :one
+UPDATE dividends
+SET asset_id = $3,
+    amount = $4,
+    payment_date = $5,
+    gross_amount = $6,
+    tax_amount = $7,
+    net_amount = $8
+WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+RETURNING id, user_id, asset_id, amount, payment_date, created_at, deleted_at, gross_amount, tax_amount, net_amount
+`
+
+type UpdateDividendParams struct {
+	ID          int64
+	UserID      int64
+	AssetID     int64
+	Amount      string
+	PaymentDate time.Time
+	GrossAmount string
+	TaxAmount   string
+	NetAmount   string
+}
+
+func (q *Queries) UpdateDividend(ctx context.Context, arg UpdateDividendParams) (Dividend, error) {
+	row := q.db.QueryRowContext(ctx, updateDividend,
+		arg.ID,
+		arg.UserID,
+		arg.AssetID,
+		arg.Amount,
+		arg.PaymentDate,
+		arg.GrossAmount,
+		arg.TaxAmount,
+		arg.NetAmount,
+	)
+	var i Dividend
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.AssetID,
+		&i.Amount,
+		&i.PaymentDate,
+		&i.CreatedAt,
+		&i.DeletedAt,
+		&i.GrossAmount,
+		&i.TaxAmount,
+		&i.NetAmount,
+	)
+	return i, err
 }

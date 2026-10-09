@@ -20,7 +20,7 @@ var (
 	fundTypeCache   sync.Map
 )
 
-// SetFundType caches the known fund type for a fund symbol
+// SetFundType, fon sembolünün kategorisini (YAT, EMK vb.) hafızaya yazar; böylece sonraki sorgularda TEFAS'a gereksiz HTTP istekleri atılmaz.
 func SetFundType(symbol, fType string) {
 	fundTypeCache.Store(strings.ToUpper(strings.TrimSpace(symbol)), strings.ToUpper(strings.TrimSpace(fType)))
 }
@@ -75,7 +75,7 @@ func detectFundType(symbol string) string {
 			if err == nil {
 				var res tefasResponse
 				if err := json.Unmarshal(b, &res); err == nil && len(res.ResultList) > 0 {
-					fundTypeCache.Store(symbol, fType)
+					SetFundType(symbol, fType)
 					return fType
 				}
 			}
@@ -251,11 +251,9 @@ func GetLastTradingDay() time.Time {
 // FetchAllTEFASFunds fetches all funds for the latest available trading day
 func FetchAllTEFASFunds(tarih time.Time, fonTipi string) ([]TEFASFundData, error) {
 	if tarih.IsZero() {
-		// Önce bugünün tarihini dene (TEFAS 18:00'den sonra yeni fiyatları yayınlamaya başlar)
-		tarih = time.Now()
-		for tarih.Weekday() == time.Saturday || tarih.Weekday() == time.Sunday {
-			tarih = tarih.AddDate(0, 0, -1)
-		}
+		// TEFAS fon kapanış fiyatları iş günlerinde 19:00 - 20:30 civarında kesinleşir.
+		// Eğer saat 19:00'dan önceyse, bir önceki iş gününün kesinleşmiş fiyatlarını baz al.
+		tarih = GetLastTradingDay()
 	}
 
 	for attempt := 0; attempt < 4; attempt++ {
@@ -317,13 +315,19 @@ func FetchAllTEFASFunds(tarih time.Time, fonTipi string) ([]TEFASFundData, error
 							parsedDate = tarih
 						}
 
+						// Fon tipi bilgisini önbelleğe al (fiyatı henüz 0 olsa dahi kategorisi bellidir)
+						SetFundType(item.FonKodu, fonTipi)
+
+						if item.Fiyat <= 0 {
+							continue // Fiyatı henüz açıklanmamış veya 0 olan kayıtları atla
+						}
+
 						results = append(results, TEFASFundData{
 							Symbol: item.FonKodu,
 							Name:   item.FonUnvan,
 							Date:   parsedDate,
 							Price:  item.Fiyat,
 						})
-						fundTypeCache.Store(item.FonKodu, fonTipi)
 					}
 					return results, nil
 				}
@@ -413,6 +417,10 @@ func FetchTEFASFundHistory(symbol string, startDate, endDate time.Time) ([]TEFAS
 							} else {
 								parsedDate = currentStart
 							}
+							if item.Fiyat <= 0 {
+								continue // Sıfır veya geçersiz fiyatları geçmiş listesine alma
+							}
+
 							allResults = append(allResults, TEFASFundData{
 								Symbol: item.FonKodu,
 								Name:   item.FonUnvan,

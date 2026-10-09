@@ -71,6 +71,14 @@ const BACKEND_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_
 // Bellek içi sembol önbelleği (her buton tıklamasında gereksiz lookup isteği atılmasını engeller)
 const assetCache = new Map<string, { id: number; isTefas: boolean; asset?: BackendAsset }>();
 
+// 2 dakikalık (120 sn) tam yanıt bellek önbelleği
+interface DetailCacheEntry {
+    data: unknown;
+    timestamp: number;
+}
+const detailResponseCache = new Map<string, DetailCacheEntry>();
+const DETAIL_CACHE_TTL = 2 * 60 * 1000;
+
 function getYahooTicker(symbol: string): string {
     const s = symbol.toUpperCase().trim();
     if (s === 'USDTRY' || s === 'USD/TRY') return 'USDTRY=X';
@@ -396,6 +404,14 @@ export async function GET(request: Request) {
 
     if (!rawSymbol) {
         return NextResponse.json({ error: 'Symbol is required' }, { status: 400 });
+    }
+
+    const cacheKey = `${rawSymbol.toUpperCase().trim()}_${range}_${startDateParam || ''}_${endDateParam || ''}`;
+    const cached = detailResponseCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < DETAIL_CACHE_TTL)) {
+        return NextResponse.json(cached.data, {
+            headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' }
+        });
     }
 
     const backendRange = range;
@@ -788,9 +804,15 @@ export async function GET(request: Request) {
             positive: latestPositive,
         } : null;
 
+        const responseData = { asset: assetInfo, chart: cleanChartData, fundamentals, summary: summaryData, previousClose };
+        detailResponseCache.set(cacheKey, {
+            data: responseData,
+            timestamp: Date.now(),
+        });
+
         return NextResponse.json(
-            { asset: assetInfo, chart: cleanChartData, fundamentals, summary: summaryData, previousClose },
-            { headers: { 'Cache-Control': 'no-store, max-age=0' } }
+            responseData,
+            { headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' } }
         );
     } catch (error) {
         console.error("Route error:", error);
