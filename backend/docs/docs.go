@@ -643,6 +643,77 @@ const docTemplate = `{
                 }
             }
         },
+        "/portfolio/value-history": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Seçilen aralıkta portföy değeri, maliyeti ve toplam kâr/zararının (gerçekleşen kâr ve temettü dahil) zaman serisini döner. Aralık portföyden uzunsa seri ilk işlemden başlar.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Portfolio"
+                ],
+                "summary": "Portföy Değer Geçmişi",
+                "parameters": [
+                    {
+                        "enum": [
+                            "1D",
+                            "1W",
+                            "1M",
+                            "3M",
+                            "6M",
+                            "YTD",
+                            "1Y",
+                            "3Y",
+                            "5Y"
+                        ],
+                        "type": "string",
+                        "description": "Aralık (varsayılan 1Y)",
+                        "name": "range",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.portfolioValueHistoryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/refresh": {
             "post": {
                 "description": "refresh_token çerezini kullanarak yeni tokenları çerez olarak döner",
@@ -1379,6 +1450,66 @@ const docTemplate = `{
                 },
                 "usd_rate": {
                     "type": "number"
+                }
+            }
+        },
+        "handlers.portfolioValueHistoryPoint": {
+            "type": "object",
+            "properties": {
+                "cost": {
+                    "type": "number",
+                    "example": 118000
+                },
+                "pnl": {
+                    "type": "number",
+                    "example": 7300.25
+                },
+                "t": {
+                    "type": "string",
+                    "example": "2026-10-09T07:00:00Z"
+                },
+                "value": {
+                    "type": "number",
+                    "example": 125000.5
+                }
+            }
+        },
+        "handlers.portfolioValueHistoryResponse": {
+            "type": "object",
+            "properties": {
+                "baseline": {
+                    "description": "Yalnızca 1D: önceki kapanıştaki portföy; pnl_change buna göre ölçülür, points'te yer almaz",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/handlers.portfolioValueHistoryPoint"
+                        }
+                    ]
+                },
+                "end": {
+                    "type": "string",
+                    "example": "2026-10-10T09:30:00Z"
+                },
+                "pnl_change": {
+                    "type": "number",
+                    "example": 2950.1
+                },
+                "pnl_change_pct": {
+                    "type": "number",
+                    "example": 2.51
+                },
+                "points": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.portfolioValueHistoryPoint"
+                    }
+                },
+                "range": {
+                    "type": "string",
+                    "example": "1Y"
+                },
+                "start": {
+                    "type": "string",
+                    "example": "2025-10-10T07:00:00Z"
                 }
             }
         },

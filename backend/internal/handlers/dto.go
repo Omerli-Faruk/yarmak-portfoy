@@ -73,6 +73,25 @@ type portfolioSummaryResponse struct {
 	PeriodValues                map[string]float64               `json:"period_values,omitempty"`
 }
 
+// Portföy değer geçmişi (Swagger için; asıl tip services.ValueHistoryResult)
+type portfolioValueHistoryPoint struct {
+	T     time.Time `json:"t" example:"2026-10-09T07:00:00Z"`
+	Value float64   `json:"value" example:"125000.50"`
+	Cost  float64   `json:"cost" example:"118000.00"`
+	PnL   float64   `json:"pnl" example:"7300.25"`
+}
+
+type portfolioValueHistoryResponse struct {
+	Range  string                       `json:"range" example:"1Y"`
+	Points []portfolioValueHistoryPoint `json:"points"`
+	// Yalnızca 1D: önceki kapanıştaki portföy; pnl_change buna göre ölçülür, points'te yer almaz
+	Baseline     *portfolioValueHistoryPoint `json:"baseline,omitempty"`
+	PnLChange    float64                     `json:"pnl_change" example:"2950.10"`
+	PnLChangePct float64                     `json:"pnl_change_pct" example:"2.51"`
+	Start        time.Time                   `json:"start" example:"2025-10-10T07:00:00Z"`
+	End          time.Time                   `json:"end" example:"2026-10-10T09:30:00Z"`
+}
+
 type AssetCategorySummary struct {
 	Value      float64 `json:"value"`
 	Cost       float64 `json:"cost"`

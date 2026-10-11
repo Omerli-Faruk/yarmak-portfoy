@@ -12,6 +12,8 @@ import (
 
 type PortfolioService struct {
 	DB *database.Queries
+	// historyCache, /portfolio/value-history sonuçlarını kısa süre tutar.
+	historyCache valueHistoryCache
 }
 
 func NewPortfolioService(db *database.Queries) *PortfolioService {

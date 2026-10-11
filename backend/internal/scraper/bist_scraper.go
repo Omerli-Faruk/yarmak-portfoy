@@ -237,12 +237,17 @@ type StockHistoricalRecord struct {
 // FetchGoldHistory — Gram Altın (TL) geçmiş fiyat verisini Ons Altın (GC=F) ve Dolar/TL (USDTRY=X)
 // kurlarını zaman damgalarına göre eşleştirip çarparak (Ons * Dolar / 31.1034768) dinamik üretir.
 func FetchGoldHistory(rangeStr string) (float64, []StockHistoricalRecord, error) {
-	goldPrice, goldHist, err := FetchBISTHistory("GC=F", rangeStr)
+	return FetchGoldHistoryInterval(rangeStr, yahooInterval(rangeStr))
+}
+
+// FetchGoldHistoryInterval, FetchGoldHistory ile aynı; yalnızca veri sıklığı (interval) elle verilir.
+func FetchGoldHistoryInterval(rangeStr, interval string) (float64, []StockHistoricalRecord, error) {
+	goldPrice, goldHist, err := FetchBISTHistoryInterval("GC=F", rangeStr, interval)
 	if err != nil {
 		return 0, nil, fmt.Errorf("altın vadeli verisi alınamadı: %w", err)
 	}
 
-	usdPrice, usdHist, err := FetchBISTHistory("USDTRY=X", rangeStr)
+	usdPrice, usdHist, err := FetchBISTHistoryInterval("USDTRY=X", rangeStr, interval)
 	if err != nil {
 		return 0, nil, fmt.Errorf("dolar/TL verisi alınamadı: %w", err)
 	}
@@ -335,32 +340,48 @@ func FetchGoldHistory(rangeStr string) (float64, []StockHistoricalRecord, error)
 
 // FetchBISTHistory, BIST hissesinin güncel fiyatını ve verilen aralıktaki günlük fiyat geçmişini çeker.
 func FetchBISTHistory(symbol string, rangeStr string) (currentPrice float64, history []StockHistoricalRecord, err error) {
+	return FetchBISTHistoryInterval(symbol, rangeStr, yahooInterval(rangeStr))
+}
+
+// yahooInterval, aralığa göre varsayılan veri sıklığını seçer.
+func yahooInterval(rangeStr string) string {
+	switch rangeStr {
+	case "1d":
+		return "5m"
+	case "5d", "1wk":
+		return "30m"
+	case "1mo", "3mo", "6mo":
+		return "1h"
+	case "3y":
+		return "1wk"
+	case "5y", "max":
+		return "1mo"
+	default:
+		return "1d"
+	}
+}
+
+// IsGramGoldSymbol, geçmişi FetchGoldHistoryInterval'dan (vadeli ons × dolar kuru) gelen gram altın sembollerini tanır.
+func IsGramGoldSymbol(symbol string) bool {
+	switch strings.ToUpper(strings.TrimSpace(symbol)) {
+	case "ALTIN", "GRAMALTIN", "GRAM", "XAUTRY":
+		return true
+	}
+	return false
+}
+
+// FetchBISTHistoryInterval, FetchBISTHistory ile aynı; yalnızca veri sıklığı (interval) elle verilir.
+// Altın sembolleri FetchGoldHistoryInterval'a yönlenir.
+func FetchBISTHistoryInterval(symbol, rangeStr, interval string) (currentPrice float64, history []StockHistoricalRecord, err error) {
 	ticker := strings.ToUpper(strings.TrimSpace(symbol))
-	if ticker == "ALTIN" || ticker == "GRAMALTIN" || ticker == "GRAM" || ticker == "XAUTRY" {
-		return FetchGoldHistory(rangeStr)
+	if IsGramGoldSymbol(ticker) {
+		return FetchGoldHistoryInterval(rangeStr, interval)
 	}
 
 	if custom, exists := customTickers[ticker]; exists {
 		ticker = custom
 	} else if !strings.Contains(ticker, "=") && !strings.Contains(ticker, ".") {
 		ticker += ".IS"
-	}
-
-	interval := "1d"
-	if rangeStr == "1d" {
-		interval = "5m"
-	} else if rangeStr == "5d" || rangeStr == "1wk" {
-		interval = "30m"
-	} else if rangeStr == "1mo" {
-		interval = "1h"
-	} else if rangeStr == "3mo" || rangeStr == "6mo" {
-		interval = "1h"
-	} else if rangeStr == "1y" || rangeStr == "ytd" {
-		interval = "1d"
-	} else if rangeStr == "3y" {
-		interval = "1wk"
-	} else if rangeStr == "5y" || rangeStr == "max" {
-		interval = "1mo"
 	}
 
 	url := fmt.Sprintf("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=%s&range=%s", ticker, interval, rangeStr)

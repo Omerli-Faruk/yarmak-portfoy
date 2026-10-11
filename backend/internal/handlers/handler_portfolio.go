@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"yarmak/internal/database"
+	"yarmak/internal/services"
 )
 
 // ============================================================================
@@ -64,6 +65,41 @@ func (cfg *ApiConfig) HandlerGetUserPortfolioHistory(w http.ResponseWriter, r *h
 	}
 	if history == nil {
 		history = []database.PortfolioSnapshot{}
+	}
+	respondWithJSON(w, http.StatusOK, history)
+}
+
+// HandlerGetPortfolioValueHistory — Kullanıcının gerçek portföy geçmişini döner.
+// Her noktada o anki lotlar, o anki fiyatlar ve o ana kadarki gerçekleşen kâr/temettü kullanılır;
+// bugünkü varlıkları geçmişe taşımaz. Zaman çizelgesi portföyün ilk işleminden önce başlamaz.
+// @Summary Portföy Değer Geçmişi
+// @Description Seçilen aralıkta portföy değeri, maliyeti ve toplam kâr/zararının (gerçekleşen kâr ve temettü dahil) zaman serisini döner. Aralık portföyden uzunsa seri ilk işlemden başlar.
+// @Tags Portfolio
+// @Security BearerAuth
+// @Produce json
+// @Param range query string false "Aralık (varsayılan 1Y)" Enums(1D, 1W, 1M, 3M, 6M, YTD, 1Y, 3Y, 5Y)
+// @Success 200 {object} portfolioValueHistoryResponse
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /portfolio/value-history [get]
+func (cfg *ApiConfig) HandlerGetPortfolioValueHistory(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(UserIDKey).(int64)
+	if !ok {
+		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
+		return
+	}
+
+	rng, ok := services.NormalizeValueHistoryRange(r.URL.Query().Get("range"))
+	if !ok {
+		respondWithError(w, http.StatusBadRequest, "Geçersiz aralık; 1D, 1W, 1M, 3M, 6M, YTD, 1Y, 3Y veya 5Y olmalı", nil)
+		return
+	}
+
+	history, err := cfg.Services.Portfolio.GetValueHistory(r.Context(), userID, rng)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Portföy geçmişi hesaplanamadı", err)
+		return
 	}
 	respondWithJSON(w, http.StatusOK, history)
 }

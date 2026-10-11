@@ -170,6 +170,7 @@ func SetupRouter(apiCFG *handlers.ApiConfig) chi.Router {
 	v1Router.Get("/portfolio/holdings", apiCFG.MiddleWareAuth(apiCFG.HandlerGetUserHoldings))
 	v1Router.Delete("/portfolio/holdings/{symbol}", apiCFG.MiddleWareAuth(apiCFG.HandlerDeleteUserAssetHoldings))
 	v1Router.Get("/portfolio/summary", apiCFG.MiddleWareAuth(apiCFG.HandlerGetPortfolioSummary))
+	v1Router.Get("/portfolio/value-history", apiCFG.MiddleWareAuth(apiCFG.HandlerGetPortfolioValueHistory))
 	v1Router.Delete("/transactions/{id}", apiCFG.MiddleWareAuth(apiCFG.HandlerDeleteTransaction))
 	v1Router.Put("/transactions/{id}", apiCFG.MiddleWareAuth(apiCFG.HandlerUpdateTransaction))
 	v1Router.Get("/assets/{id}/price-history", apiCFG.HandlerGetAssetPriceHistory)

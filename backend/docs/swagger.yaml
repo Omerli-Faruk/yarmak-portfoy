@@ -275,6 +275,48 @@ definitions:
       usd_rate:
         type: number
     type: object
+  handlers.portfolioValueHistoryPoint:
+    properties:
+      cost:
+        example: 118000
+        type: number
+      pnl:
+        example: 7300.25
+        type: number
+      t:
+        example: "2026-10-09T07:00:00Z"
+        type: string
+      value:
+        example: 125000.5
+        type: number
+    type: object
+  handlers.portfolioValueHistoryResponse:
+    properties:
+      baseline:
+        allOf:
+        - $ref: '#/definitions/handlers.portfolioValueHistoryPoint'
+        description: 'Yalnızca 1D: önceki kapanıştaki portföy; pnl_change buna göre
+          ölçülür, points''te yer almaz'
+      end:
+        example: "2026-10-10T09:30:00Z"
+        type: string
+      pnl_change:
+        example: 2950.1
+        type: number
+      pnl_change_pct:
+        example: 2.51
+        type: number
+      points:
+        items:
+          $ref: '#/definitions/handlers.portfolioValueHistoryPoint'
+        type: array
+      range:
+        example: 1Y
+        type: string
+      start:
+        example: "2025-10-10T07:00:00Z"
+        type: string
+    type: object
   handlers.userHoldingResponse:
     properties:
       asset_id:
@@ -730,6 +772,56 @@ paths:
       security:
       - BearerAuth: []
       summary: Portföy Özeti (TL ve Dolar)
+      tags:
+      - Portfolio
+  /portfolio/value-history:
+    get:
+      description: Seçilen aralıkta portföy değeri, maliyeti ve toplam kâr/zararının
+        (gerçekleşen kâr ve temettü dahil) zaman serisini döner. Aralık portföyden
+        uzunsa seri ilk işlemden başlar.
+      parameters:
+      - description: Aralık (varsayılan 1Y)
+        enum:
+        - 1D
+        - 1W
+        - 1M
+        - 3M
+        - 6M
+        - YTD
+        - 1Y
+        - 3Y
+        - 5Y
+        in: query
+        name: range
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.portfolioValueHistoryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Portföy Değer Geçmişi
       tags:
       - Portfolio
   /refresh:
