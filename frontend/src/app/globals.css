@@ -1,31 +1,189 @@
 @import "tailwindcss";
 
-:root {
-  --font-geist-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-geist-mono: 'Geist Mono', monospace;
-  --background: #0A0E14;
-  --foreground: #F1F5F9;
-  --surface: #151A24;
-  --surface-hover: #1C2330;
-  --border: #1E2530;
+/* Tema <html data-theme="dark|light"> ile seçilir; dark: varyantı da bu özniteliğe bakar. */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/*
+ * Renk değişkenleri ("hassas terminal", v2). Koyu tema varsayılandır (betik çalışmadan önce de koyu görünür).
+ * v3.1: okunabilirlik için fg-muted ve fg-subtle güçlendirildi (koyu temada açıldı, açık temada koyulaştı) (hedef fg-muted ≥ 7:1, fg-subtle ≥ 5.5:1).
+ * Kontrast (WCAG, ölçüldü):
+ *   koyu:  fg 16.2 bg / 15.5 surface; fg-muted bg 9.5 / surface 9.1 / surface-2 8.5 / surface-3 7.9;
+ *          fg-subtle bg 6.8 / surface 6.5 / surface-2 6.1 / surface-3 5.6;
+ *          primary surface 6.3, profit surface 10.1, loss surface 6.9, warning surface 9.5; on-primary/primary 6.2
+ *   açık:  fg 17.2 bg / 18.9 surface; fg-muted bg 8.6 / surface 9.5 / surface-2 8.8 / surface-3 8.2;
+ *          fg-subtle bg 6.1 / surface 6.7 / surface-2 6.2 / surface-3 5.8;
+ *          primary surface 5.4, profit surface 5.4, loss surface 5.7, warning surface 6.4; on-primary/primary 5.4
+ * Koyu temada primary üzerindeki yazı koyu renktir; beyaz yazı #1A9FD3 üzerinde yalnızca 3:1 veriyor.
+ * Gölge yok: derinlik yüzey tonu ve 1px çizgiyle verilir.
+ */
+:root,
+[data-theme=dark] {
+  color-scheme: dark;
+
+  --bg: #090B0F;
+  --surface: #0E1117;
+  --surface-2: #141821;
+  --surface-3: #1B2029;
+  --border: #1C212B;
+  --border-strong: #2A3140;
+
+  --fg: #E6E9EF;
+  --fg-muted: #ADB4C2;
+  --fg-subtle: #9098A8;
+
   --primary: #1A9FD3;
-  --primary-hover: #0C6991;
-  --primary-light: rgba(26, 159, 211, 0.12);
-  --success: #10B981;
-  --danger: #F43F5E;
+  --primary-hover: #36B1E0;
+  --primary-soft: rgba(26, 159, 211, 0.12);
+  --on-primary: #04131C;
+
+  --profit: #3DD68C;
+  --profit-soft: rgba(61, 214, 140, 0.12);
+  --loss: #FF6B7F;
+  --loss-soft: rgba(255, 107, 127, 0.12);
+  --warning: #F2A93B;
+  --warning-soft: rgba(242, 169, 59, 0.12);
+
+  /* "none" diğer gölge katmanlarıyla birleşemediği için boş gölge kullanılır */
+  --card-shadow: 0 0 #0000;
+
+  --chart-grid: #1A1F28;
+  --chart-axis: #9098A8;
+
+  --scrollbar-thumb: #2A3140;
+  --spotlight: rgba(26, 159, 211, 0.09);
+  --spotlight-soft: rgba(26, 159, 211, 0.03);
+}
+
+[data-theme=light] {
+  color-scheme: light;
+
+  --bg: #F3F4F6;
+  --surface: #FFFFFF;
+  --surface-2: #F5F6F8;
+  --surface-3: #ECEEF2;
+  --border: #E1E4EA;
+  --border-strong: #C9CED8;
+
+  --fg: #0E1117;
+  --fg-muted: #3E4656;
+  --fg-subtle: #545C6D;
+
+  --primary: #0E729C;
+  --primary-hover: #0B5E82;
+  --primary-soft: rgba(14, 114, 156, 0.09);
+  --on-primary: #FFFFFF;
+
+  --profit: #117A3B;
+  --profit-soft: rgba(17, 122, 59, 0.09);
+  --loss: #C4283B;
+  --loss-soft: rgba(196, 40, 59, 0.08);
+  --warning: #9A4706;
+  --warning-soft: rgba(154, 71, 6, 0.09);
+
+  --card-shadow: 0 0 #0000;
+
+  --chart-grid: #ECEEF2;
+  --chart-axis: #545C6D;
+
+  --scrollbar-thumb: #C9CED8;
+  --spotlight: rgba(14, 114, 156, 0.06);
+  --spotlight-soft: rgba(14, 114, 156, 0.02);
+}
+
+/* Eski adlar: sayfalar yeni sınıflara geçene kadar çalışmaya devam etsin diye */
+:root {
+  --background: var(--bg);
+  --foreground: var(--fg);
+  --surface-hover: var(--surface-2);
+  --primary-light: var(--primary-soft);
+  --success: var(--profit);
+  --danger: var(--loss);
+}
+
+/* Yazı tipleri: --font-inter-tight ve --font-space-grotesk, layout.tsx'te next/font ile <html>'e eklenir */
+@theme {
+  --font-sans: var(--font-inter-tight), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Rakamlar için ayrı bir kod yazı tipi yerine Inter Tight'ın sabit genişlikli rakamları kullanılır;
+     metinle aynı yükseklikte durur, alt alta da hizalanır. Sınıf adı geriye uyum için font-mono kaldı. */
+  --font-mono: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+  /* Sayfa başlığı, bölüm başlığı ve kahraman sayı (v3) */
+  --font-display: var(--font-space-grotesk), var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+
+  /*
+   * v3.1 okunabilirlik ölçeği (yaşlı kullanıcılar da rahat okusun diye): sitede 13px'ten küçük yazı yok.
+   * Eski adlar korunup büyütüldü, böylece sayfalar değişmeden büyür:
+   *   text-11 ve text-xs  -> 13px (etiket, tablo başlığı, ipucu; en küçük boyut)
+   *   text-13 ve text-sm  -> 15px (gövde, düğme, tablo hücresi)
+   *   text-base           -> 16px (form alanı, paragraf)
+   * text-[10px], text-[11px], text-[12px] gibi elle verilen boyutları kullanmayın.
+   */
+  --text-11: 0.8125rem;
+  --text-11--line-height: 1.25rem;
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.25rem;
+  --text-13: 0.9375rem;
+  --text-13--line-height: 1.375rem;
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.375rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+
+  /* Başlık ölçeği: bölüm başlığı 24px, sayfa başlığı 32px, kahraman sayı 56px */
+  --text-section: 1.5rem;
+  --text-section--line-height: 2rem;
+  --text-title: 2rem;
+  --text-title--line-height: 2.5rem;
+  --text-hero: 3.5rem;
+  --text-hero--line-height: 1;
+
+  /* Büyük display yazının sıkı harf aralığı (tracking-display) */
+  --tracking-display: -0.03em;
 }
 
 @theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
-  --color-primary-light: var(--primary-light);
-  --color-surface: var(--surface);
-  --color-surface-hover: var(--surface-hover);
-  --color-border: var(--border);
-  --color-profit: var(--success);
-  --color-loss: var(--danger);
+  --color-primary-soft: var(--primary-soft);
+  --color-on-primary: var(--on-primary);
+
+  --color-profit: var(--profit);
+  --color-profit-soft: var(--profit-soft);
+  --color-loss: var(--loss);
+  --color-loss-soft: var(--loss-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-axis: var(--chart-axis);
+
+  /* Eski sınıf adları (bg-surface-hover, bg-primary-light, text-foreground, bg-background) */
+  --color-surface-hover: var(--surface-2);
+  --color-primary-light: var(--primary-soft);
+  --color-foreground: var(--fg);
+  --color-background: var(--bg);
+
+  --shadow-card: var(--card-shadow);
 }
 
+@layer base {
+  /* Sayılar hizalı dursun diye rakamlar sabit genişlikte ve satır hizasında çizilir */
+  .font-mono,
+  .font-display {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+  }
+}
 
 html {
   scrollbar-gutter: stable;
@@ -33,22 +191,34 @@ html {
 
 html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
   min-height: 100vh;
   width: 100%;
   max-width: 100vw;
-  overflow-x: hidden;
+  overflow-x: clip; /* hidden, sticky başlıkları bozuyordu */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+body {
+  font-size: 1rem;
+  line-height: 1.5;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+::selection {
+  background: var(--primary-soft);
+}
+
+/* Sayfanın üstündeki çok hafif mavi ışık; iki temada da arka plan rengine göre ayarlanır */
 .bg-ambient-spotlight {
-  background-color: #0A0E14;
+  background-color: var(--bg);
   background-image:
-          radial-gradient(ellipse 80% 50% at 50% -5%, rgba(26, 159, 211, 0.18) 0%, rgba(10, 14, 20, 0) 70%),
-          radial-gradient(circle at 50% 0%, rgba(26, 159, 211, 0.06) 0%, rgba(10, 14, 20, 0) 90%);
+          radial-gradient(ellipse 70% 40% at 50% -8%, var(--spotlight) 0%, transparent 70%),
+          radial-gradient(circle at 50% 0%, var(--spotlight-soft) 0%, transparent 80%);
+  background-repeat: no-repeat;
 }
 
 /* Yatay kaydırılan buton satırlarında kaydırma çubuğunu gizler */
@@ -70,11 +240,17 @@ button, a, input, select {
   display: none !important;
 }
 
+/* Grafiğe tıklanınca tarayıcının çizdiği odak çerçevesi */
+.recharts-wrapper:focus,
+.recharts-surface:focus {
+  outline: none;
+}
+
 /* İnce kaydırma çubuğu */
 .custom-horizontal-scrollbar,
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(51, 65, 85, 0.7) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 .custom-horizontal-scrollbar::-webkit-scrollbar,
 .custom-scrollbar::-webkit-scrollbar {
@@ -87,12 +263,12 @@ button, a, input, select {
 }
 .custom-horizontal-scrollbar::-webkit-scrollbar-thumb,
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(51, 65, 85, 0.7);
+  background: var(--scrollbar-thumb);
   border-radius: 9999px;
 }
 .custom-horizontal-scrollbar::-webkit-scrollbar-thumb:hover,
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(26, 159, 211, 0.85);
+  background: var(--fg-subtle);
 }
 
 /* Genel kaydırma çubuğu stili */
@@ -104,13 +280,13 @@ button, a, input, select {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(51, 65, 85, 0.6);
+  background: var(--scrollbar-thumb);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(26, 159, 211, 0.85);
+  background: var(--fg-subtle);
 }
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(51, 65, 85, 0.6) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }

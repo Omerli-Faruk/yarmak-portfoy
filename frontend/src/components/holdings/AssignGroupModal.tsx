@@ -1,8 +1,11 @@
 'use client';
 
 import React from 'react';
-import { X, Check } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import { AssetGroup, UserHolding } from '@/types';
+import { cn } from '@/lib/cn';
+import Modal from '@/components/ui/Modal';
+import Button from '@/components/ui/Button';
 
 interface AssignGroupModalProps {
     isOpen: boolean;
@@ -23,88 +26,76 @@ export default function AssignGroupModal({
     onToggleGroup,
     onOpenCreateGroup,
 }: AssignGroupModalProps) {
-    if (!isOpen || !asset) return null;
+    if (!asset) return null;
 
     const assigned = assetGroups[asset.symbol] || [];
 
     return (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[90dvh] overflow-y-auto">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <div>
-                        <h3 className="text-base font-bold text-white">Gruplara Ata: {asset.symbol}</h3>
-                        <p className="text-xs text-slate-400">{asset.asset_name}</p>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="text-slate-400 hover:text-white cursor-pointer"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
-
-                <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
-                    {groups.length > 0 ? (
-                        groups.map(g => {
-                            const isAssigned = assigned.includes(g.id);
-                            return (
-                                <button
-                                    key={g.id}
-                                    type="button"
-                                    onClick={() => onToggleGroup(asset.symbol, g.id)}
-                                    className={`w-full flex items-center justify-between p-3 rounded-xl border transition text-left cursor-pointer ${
-                                        isAssigned
-                                            ? 'bg-[#1A9FD3]/15 border-[#1A9FD3]/40 text-white'
-                                            : 'bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800'
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-2.5">
-                                        <span
-                                            className="w-3 h-3 rounded-full"
-                                            style={{ backgroundColor: g.color }}
-                                        />
-                                        <span className="text-xs font-bold text-slate-200">{g.name}</span>
-                                    </div>
-                                    <div
-                                        className={`w-5 h-5 rounded-md flex items-center justify-center border ${
-                                            isAssigned
-                                                ? 'bg-[#1A9FD3] border-[#1A9FD3] text-white'
-                                                : 'border-slate-700'
-                                        }`}
-                                    >
-                                        {isAssigned && <Check className="w-3.5 h-3.5" />}
-                                    </div>
-                                </button>
-                            );
-                        })
-                    ) : (
-                        <p className="text-xs text-slate-500 text-center py-4">
-                            Henüz oluşturulmuş özel grup yok.
-                        </p>
-                    )}
-                </div>
-
-                <div className="flex items-center justify-between pt-3 border-t border-slate-800">
-                    <button
-                        type="button"
+        <Modal
+            open={isOpen}
+            onClose={onClose}
+            title={`Gruplara ata: ${asset.symbol}`}
+            description={asset.asset_name}
+            footer={
+                <>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={<Plus />}
+                        className="sm:mr-auto"
                         onClick={() => {
                             onClose();
                             onOpenCreateGroup();
                         }}
-                        className="text-xs font-bold text-[#1A9FD3] hover:underline cursor-pointer"
                     >
-                        + Yeni Grup Ekle
-                    </button>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="px-5 py-2 rounded-xl text-xs font-bold bg-[#1A9FD3] hover:bg-[#0C6991] text-white transition shadow-sm shadow-[#1A9FD3]/20 cursor-pointer"
-                    >
+                        Yeni grup
+                    </Button>
+                    <Button size="sm" onClick={onClose}>
                         Tamamla
-                    </button>
+                    </Button>
+                </>
+            }
+        >
+            {groups.length > 0 ? (
+                <div className="flex flex-col border-y border-border divide-y divide-border">
+                    {groups.map(g => {
+                        const isAssigned = assigned.includes(g.id);
+                        return (
+                            <button
+                                key={g.id}
+                                type="button"
+                                role="checkbox"
+                                aria-checked={isAssigned}
+                                onClick={() => onToggleGroup(asset.symbol, g.id)}
+                                className={cn(
+                                    'flex w-full h-12 items-center justify-between gap-3 px-3 text-left cursor-pointer',
+                                    'transition-colors duration-[120ms] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary',
+                                    isAssigned ? 'bg-primary-soft' : 'hover:bg-surface-2',
+                                )}
+                            >
+                                <span className="flex items-center gap-2.5 min-w-0">
+                                    {/* Grup rengi kullanıcı verisidir */}
+                                    <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: g.color }} />
+                                    <span className="truncate text-sm text-fg">{g.name}</span>
+                                </span>
+                                <span
+                                    aria-hidden
+                                    className={cn(
+                                        'flex items-center justify-center size-5 shrink-0 rounded-[3px] border',
+                                        isAssigned ? 'bg-primary border-primary text-on-primary' : 'border-border-strong',
+                                    )}
+                                >
+                                    {isAssigned && <Check className="size-4" />}
+                                </span>
+                            </button>
+                        );
+                    })}
                 </div>
-            </div>
-        </div>
+            ) : (
+                <p className="py-4 text-center text-sm text-fg-muted">
+                    Henüz oluşturulmuş özel grup yok.
+                </p>
+            )}
+        </Modal>
     );
 }

@@ -5,10 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import type { CatalogAsset } from '@/data/homeData';
 import HeroSearch from '@/components/home/HeroSearch';
+import MarketBoard from '@/components/home/MarketBoard';
 import MarketTicker from '@/components/home/MarketTicker';
 import PortfolioShowcase from '@/components/home/PortfolioShowcase';
 import FeatureCardsSection from '@/components/home/FeatureCardsSection';
 import FaqSection from '@/components/home/FaqSection';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import PageContainer from '@/components/ui/PageContainer';
 
 export default function Home() {
     const router = useRouter();
@@ -52,38 +55,44 @@ export default function Home() {
 
     if (!authLoading && user) {
         return (
-            <div className="flex-1 flex items-center justify-center min-h-[60vh]">
-                <div className="flex flex-col items-center gap-3 text-slate-400">
-                    <span className="size-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                    <span className="text-xs font-mono">Portföyünüze yönlendiriliyorsunuz...</span>
-                </div>
+            <div className="flex min-h-[60vh] flex-1 items-center justify-center">
+                <LoadingSpinner fullScreen={false} message="Portföyünüze yönlendiriliyorsunuz..." />
             </div>
         );
     }
 
     return (
-        <div className="flex-1 flex flex-col items-center justify-start w-full overflow-hidden">
-            {/* Giriş bölümü: başlık, arama ve örnek portföy */}
-            <section className="w-full max-w-6xl mx-auto px-4 pt-12 pb-12 flex flex-col items-center text-center">
-                <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-white max-w-3xl leading-[1.15]">
-                    Hisse, fon ve altın portföyünüz tek ekranda
-                </h1>
+        <PageContainer className="flex-1 overflow-x-clip">
+            {/* Giriş: sayfanın tek odağı olan büyük başlık ve arama; yanda dar sütunda piyasa özeti */}
+            <div className="flex flex-col gap-8 lg:gap-10">
+                <div className="flex flex-col gap-10 lg:flex-row lg:items-start">
+                    <section className="flex min-w-0 flex-col gap-5 lg:basis-0 lg:grow lg:pt-2">
+                        <h1 className="max-w-[18ch] font-display text-[2.375rem] font-bold leading-[1.05] tracking-display text-fg text-balance sm:text-5xl lg:text-hero">
+                            Hisse, fon ve altın portföyünüz tek ekranda
+                        </h1>
 
-                <p className="text-slate-400 text-sm sm:text-base max-w-2xl mt-5 leading-relaxed">
-                    BIST hisseleri, TEFAS fonları ve altın işlemlerinizi kaydedin; ortalama maliyetinizi,
-                    kâr/zararınızı ve temettülerinizi TL ya da dolar karşılığıyla görün.
-                </p>
+                        <p className="max-w-xl text-base leading-relaxed text-fg-muted text-pretty">
+                            İşlemlerinizi kaydedin; ortalama maliyetinizi, kâr/zararınızı ve temettülerinizi
+                            TL ya da dolar karşılığıyla görün.
+                        </p>
 
-                <HeroSearch assets={assets} />
+                        <div className="flex w-full pt-1">
+                            <HeroSearch assets={assets} />
+                        </div>
+                    </section>
 
-                <PortfolioShowcase />
-            </section>
+                    <MarketBoard assets={assets} className="w-full lg:w-[340px] lg:shrink-0" />
+                </div>
 
-            <MarketTicker assets={assets} />
+                {/* Kayan fiyat şeridi, giriş ile örnek portföy arasında ince bir ayraç gibi durur */}
+                <MarketTicker assets={assets} />
+            </div>
+
+            <PortfolioShowcase />
 
             <FeatureCardsSection />
 
             <FaqSection />
-        </div>
+        </PageContainer>
     );
 }

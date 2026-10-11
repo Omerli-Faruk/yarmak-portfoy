@@ -2,11 +2,14 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'motion/react';
-import { Search, TrendingUp, TrendingDown, ArrowRight, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { popularTags, type CatalogAsset } from '@/data/homeData';
-import { formatPriceTR, formatSignedPercent, ASSET_TYPE_LABELS } from '@/lib/formatters';
+import { formatPriceTR, ASSET_TYPE_LABELS } from '@/lib/formatters';
 import { scoreAssetMatch } from '@/lib/searchUtils';
+import { cn } from '@/lib/cn';
+import Button from '@/components/ui/Button';
+import IconButton from '@/components/ui/IconButton';
+import ChangePill from '@/components/ui/ChangePill';
 
 const FEATURED_SYMBOLS = ['ASELS', 'TUPRS', 'THYAO', 'ALTIN', 'XU100', 'USDTRY'];
 const INDEX_SYMBOLS = ['XU100', 'XU030'];
@@ -30,7 +33,7 @@ function formatAssetPrice(asset: CatalogAsset): string {
     return formatPriceTR(price);
 }
 
-// Ana sayfadaki arama kutusu, öneri listesi ve popüler etiketler
+// Ana sayfadaki komut çubuğu tarzı arama kutusu, öneri listesi ve popüler etiketler
 export default function HeroSearch({ assets }: { assets: CatalogAsset[] }) {
     const router = useRouter();
     const [searchQuery, setSearchQuery] = useState('');
@@ -106,22 +109,24 @@ export default function HeroSearch({ assets }: { assets: CatalogAsset[] }) {
     }, [searchQuery, assets, dynamicMatches]);
 
     return (
-        <div className="w-full max-w-xl mt-9 relative z-50" ref={searchRef}>
+        <div className="relative z-30 flex w-full max-w-[600px] flex-col gap-3" ref={searchRef}>
             <form
+                role="search"
                 onSubmit={(e) => {
                     e.preventDefault();
                     if (searchQuery.trim() !== '') {
                         router.push(`/assets/${searchQuery.trim().toUpperCase()}`);
                     }
                 }}
-                className={`flex items-center gap-3 bg-[#131924] border ${
-                    isSearchFocused ? 'border-primary' : 'border-border/80 hover:border-slate-600'
-                } rounded-full px-5 py-3.5 transition-colors duration-200`}
+                className={cn(
+                    'flex h-12 items-center gap-2.5 rounded border bg-surface pl-3.5 pr-2',
+                    'transition-colors duration-[120ms]',
+                    isSearchFocused ? 'border-primary' : 'border-border-strong hover:border-fg-subtle',
+                )}
             >
                 <Search
-                    className={`size-5 shrink-0 transition-colors ${
-                        isSearchFocused ? 'text-primary' : 'text-slate-400'
-                    }`}
+                    aria-hidden
+                    className={cn('size-4 shrink-0', isSearchFocused ? 'text-primary' : 'text-fg-subtle')}
                 />
                 <input
                     type="text"
@@ -132,117 +137,87 @@ export default function HeroSearch({ assets }: { assets: CatalogAsset[] }) {
                     }}
                     onFocus={() => setIsSearchFocused(true)}
                     placeholder="Hisse veya fon ara (örn: THYAO, ASELS, TI2)..."
-                    className="w-full bg-transparent border-none outline-none text-sm text-white placeholder:text-slate-500 focus:outline-none"
+                    aria-label="Hisse veya fon ara"
+                    className="h-full min-w-0 flex-1 bg-transparent text-base text-fg outline-none placeholder:text-fg-subtle"
                     autoComplete="off"
                     spellCheck={false}
                 />
                 {searchQuery && (
-                    <button
-                        type="button"
+                    <IconButton
+                        icon={<X />}
+                        label="Temizle"
+                        size="sm"
                         onClick={() => setSearchQuery('')}
-                        className="text-slate-400 hover:text-white transition p-1 cursor-pointer"
-                        aria-label="Temizle"
-                    >
-                        <X className="size-4" />
-                    </button>
+                    />
                 )}
-                <button
-                    type="submit"
-                    className="bg-primary hover:bg-primary-hover text-white text-xs font-bold px-4 py-2 rounded-full transition shrink-0 hidden sm:flex items-center gap-1.5 cursor-pointer"
-                >
-                    Keşfet <ArrowRight className="size-3.5" />
-                </button>
+                {/* Button kendi display sınıfını taşıdığı için mobilde gizleme sarmalayıcıyla yapılır */}
+                <span className="hidden shrink-0 sm:flex">
+                    <Button
+                        type="submit"
+                        size="sm"
+                        variant="secondary"
+                        rightIcon={<kbd aria-hidden className="font-mono text-xs text-fg-subtle">↵</kbd>}
+                    >
+                        Keşfet
+                    </Button>
+                </span>
             </form>
 
             {/* Öneri listesi */}
-            <AnimatePresence>
-                {isSearchFocused && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 6, scale: 0.99 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 4, scale: 0.99 }}
-                        transition={{ duration: 0.15 }}
-                        className="absolute top-full left-0 right-0 mt-2 bg-[#111722] border border-border/80 rounded-2xl shadow-2xl overflow-hidden z-[70] text-left divide-y divide-border/30"
-                    >
-                        <div className="px-4 py-2.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider bg-surface/40 flex items-center justify-between">
-                            <span>{searchQuery ? `Sonuçlar (${searchResults.length})` : 'Öne Çıkan Varlıklar'}</span>
-                            <span className="text-[9px] text-slate-500 font-mono">BIST 15 dk gecikmeli</span>
-                        </div>
+            {isSearchFocused && (
+                <div className="absolute inset-x-0 top-[3.25rem] z-40 flex flex-col overflow-hidden rounded-md border border-border-strong bg-surface text-left">
+                    {/* Gecikme notu ekranda bir kez, yandaki Piyasalar listesinde yazılır */}
+                    <div className="flex h-9 items-center border-b border-border px-3 text-xs text-fg-muted">
+                        {searchQuery ? `Sonuçlar (${searchResults.length})` : 'Öne çıkan varlıklar'}
+                    </div>
 
-                        {searchResults.length > 0 ? (
-                            <div className="max-h-80 overflow-y-auto divide-y divide-border/20">
-                                {searchResults.map((asset) => {
-                                    const num = parseFloat(asset.change || '0');
-                                    const isZero = isNaN(num) || Math.abs(num) < 0.005;
-                                    const isPos = num > 0;
-                                    return (
-                                        <div
-                                            key={asset.symbol}
+                    {searchResults.length > 0 ? (
+                        <ul className="flex max-h-80 flex-col divide-y divide-border overflow-y-auto custom-scrollbar">
+                            {searchResults.map((asset) => {
+                                const num = parseFloat(asset.change || '0');
+                                const isZero = isNaN(num) || Math.abs(num) < 0.005;
+                                return (
+                                    <li key={asset.symbol}>
+                                        <button
+                                            type="button"
                                             onClick={() => {
                                                 setSearchQuery(asset.symbol);
                                                 setIsSearchFocused(false);
                                                 router.push(`/assets/${asset.symbol}`);
                                             }}
-                                            className="flex items-center justify-between px-4 py-3 hover:bg-primary/10 transition-colors group cursor-pointer"
+                                            className="flex min-h-12 w-full cursor-pointer items-center gap-3 px-3 py-1.5 text-left transition-colors duration-[120ms] hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none"
                                         >
-                                            <div className="flex items-center gap-3">
-                                                <div className="size-9 rounded-xl bg-[#1A2230] border border-border/60 flex items-center justify-center font-bold text-xs text-primary group-hover:border-primary/50 transition-colors">
-                                                    {asset.symbol.substring(0, 2)}
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-sm font-bold text-white group-hover:text-primary transition-colors">
-                                                            {asset.symbol}
-                                                        </span>
-                                                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface border border-border/50 text-slate-400 font-semibold">
-                                                            {ASSET_TYPE_LABELS[asset.asset_type] ?? asset.asset_type}
-                                                        </span>
-                                                    </div>
-                                                    <div className="text-[11px] text-slate-400 line-clamp-1 max-w-[220px] sm:max-w-xs">
-                                                        {asset.name}
-                                                    </div>
-                                                </div>
-                                            </div>
+                                            <span className="flex min-w-0 flex-1 flex-col">
+                                                <span className="flex min-w-0 items-baseline gap-2">
+                                                    <span className="truncate font-mono text-sm font-medium text-fg">
+                                                        {asset.symbol}
+                                                    </span>
+                                                    <span className="shrink-0 text-xs text-fg-muted">
+                                                        {ASSET_TYPE_LABELS[asset.asset_type] ?? asset.asset_type}
+                                                    </span>
+                                                </span>
+                                                <span className="truncate text-xs text-fg-muted">{asset.name}</span>
+                                            </span>
+                                            <span className="flex shrink-0 flex-col items-end">
+                                                <span className="font-mono text-sm text-fg">{formatAssetPrice(asset)}</span>
+                                                <ChangePill value={isZero ? 0 : num} />
+                                            </span>
+                                        </button>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    ) : (
+                        <p className="px-3 py-4 text-sm text-fg">
+                            &quot;{searchQuery}&quot; için piyasada hisse veya fon bulunamadı.
+                        </p>
+                    )}
+                </div>
+            )}
 
-                                            <div className="text-right">
-                                                <div className="text-sm font-bold font-mono text-white">
-                                                    {formatAssetPrice(asset)}
-                                                </div>
-                                                <div
-                                                    className={`text-[11px] font-mono flex items-center justify-end gap-0.5 ${
-                                                        isZero
-                                                            ? 'text-slate-400'
-                                                            : isPos
-                                                            ? 'text-emerald-400'
-                                                            : 'text-rose-400'
-                                                    }`}
-                                                >
-                                                    {!isZero && (
-                                                        isPos ? (
-                                                            <TrendingUp className="size-3" />
-                                                        ) : (
-                                                            <TrendingDown className="size-3" />
-                                                        )
-                                                    )}
-                                                    <span>{formatSignedPercent(isZero ? 0 : num)}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        ) : (
-                            <div className="p-6 text-center text-sm text-slate-400">
-                                &quot;{searchQuery}&quot; için piyasada hisse veya fon bulunamadı.
-                            </div>
-                        )}
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            {/* Popüler etiketler */}
-            <div className="flex flex-wrap items-center justify-center gap-2 mt-5 text-xs">
-                <span className="text-slate-500 font-medium">Popüler:</span>
+            {/* Popüler aramalar: kutusuz, altı çizili metin düğmeleri; dokunma yüksekliği 44/40px */}
+            <div className="flex flex-wrap items-center gap-x-4">
+                <span className="text-sm text-fg-muted">Popüler:</span>
                 {popularTags.map((item) => (
                     <button
                         type="button"
@@ -251,7 +226,7 @@ export default function HeroSearch({ assets }: { assets: CatalogAsset[] }) {
                             setSearchQuery(item.query);
                             setIsSearchFocused(true);
                         }}
-                        className="px-3.5 py-1.5 rounded-full bg-[#131924]/60 border border-border/70 hover:border-primary/60 hover:bg-primary/10 text-slate-200 font-semibold text-xs transition shadow-sm cursor-pointer"
+                        className="inline-flex min-h-11 cursor-pointer items-center rounded text-sm text-fg underline decoration-border-strong underline-offset-4 transition-colors duration-[120ms] hover:text-primary hover:decoration-primary sm:min-h-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                     >
                         {item.label}
                     </button>

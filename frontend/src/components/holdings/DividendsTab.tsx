@@ -5,21 +5,19 @@ import { Dividend, UserHolding } from '@/types';
 import api from '@/lib/api';
 import { formatCurrency } from '@/lib/formatters';
 import { normalizeDividend } from '@/lib/normalize';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import Disclosure from '@/components/ui/Disclosure';
+import Button from '@/components/ui/Button';
+import IconButton from '@/components/ui/IconButton';
+import EmptyState from '@/components/ui/EmptyState';
+import Skeleton from '@/components/ui/Skeleton';
+import { cn } from '@/lib/cn';
 import AddDividendModal from './AddDividendModal';
 import DividendSummaryCards, { DividendMetrics } from './dividends/DividendSummaryCards';
 import DividendFilterBar from './dividends/DividendFilterBar';
 import DividendList, { DividendRow } from './dividends/DividendList';
 import DeleteDividendModal from './dividends/DeleteDividendModal';
-import {
-    Coins,
-    Plus,
-    RefreshCw,
-    ChevronLeft,
-    ChevronRight,
-    Info,
-    CheckCircle2,
-} from 'lucide-react';
+import ListPagination from './transactions/ListPagination';
+import { Coins, Plus, RefreshCw, CheckCircle2 } from 'lucide-react';
 
 interface DividendsTabProps {
     currency: 'TRY' | 'USD';
@@ -165,144 +163,100 @@ export default function DividendsTab({
     const hasActiveFilters = !!searchQuery || selectedYear !== 'ALL';
 
     return (
-        <div className="space-y-6">
-            {/* Başlık ve eylemler */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 p-4 sm:p-5 rounded-2xl">
-                <div>
-                    <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2.5">
-                        <Coins className="w-5 h-5 text-slate-400" />
-                        <span>Temettü Gelirleri</span>
-                    </h2>
-                    <p className="text-xs sm:text-sm text-slate-400 mt-1">
-                        Hisselerinizin ödediği nakit temettülerin ve portföyünüze eklenen nakit getirilerin takibi
+        <>
+            {/* Kutusuz bölüm: özet şeridi, filtre satırı ve tablo doğrudan sayfa zemininde.
+                Sekme adı zaten "Temettüler" olduğu için görünür bölüm başlığı yok; başlık yalnızca ekran okuyucuya. */}
+            <section aria-labelledby="temettu-baslik" className="flex flex-col gap-4 min-w-0">
+                <h2 id="temettu-baslik" className="sr-only">Temettüler</h2>
+                {deleteSuccessMsg && (
+                    <p role="status" className="flex items-center gap-2 text-sm text-profit">
+                        <CheckCircle2 className="size-4 shrink-0" aria-hidden />
+                        <span>{deleteSuccessMsg}</span>
                     </p>
-                </div>
+                )}
 
-                <div className="flex items-center gap-2.5 w-full sm:w-auto">
-                    <button
-                        onClick={() => loadDividends(true)}
-                        disabled={refreshing}
-                        className="p-2.5 bg-slate-800 hover:bg-slate-700/80 text-slate-300 rounded-xl border border-slate-700/60 transition cursor-pointer"
-                        title="Yenile"
-                    >
-                        <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-slate-400' : ''}`} />
-                    </button>
+                <DividendSummaryCards metrics={metrics} fmt={fmt} />
 
-                    <button
-                        onClick={() => setIsAddModalOpen(true)}
-                        className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 bg-[#1A9FD3] hover:bg-[#0C6991] active:scale-[0.98] text-white font-bold rounded-xl text-xs sm:text-sm transition cursor-pointer shadow-md shadow-[#1A9FD3]/20"
-                    >
-                        <Plus className="w-4 h-4" />
-                        <span>Temettü Ekle</span>
-                    </button>
-                </div>
-            </div>
-
-            {deleteSuccessMsg && (
-                <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs sm:text-sm">
-                    <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    <span>{deleteSuccessMsg}</span>
-                </div>
-            )}
-
-            <DividendSummaryCards metrics={metrics} fmt={fmt} />
-
-            {/* Bilgilendirme */}
-            <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-2xl flex items-start gap-3">
-                <Info className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
-                <div className="text-xs sm:text-sm text-slate-300 space-y-1">
-                    <p className="font-semibold text-white">Nakit Temettü Bilgilendirmesi</p>
-                    <p className="text-slate-400 leading-relaxed">
+                {/* Seyrek gereken açıklama kapalı durur */}
+                <Disclosure summary="Nakit temettü nasıl kaydedilir?">
+                    <p className="max-w-3xl text-sm text-fg-muted leading-relaxed">
                         Nakit temettüler, stopaj kesildikten sonra yatırım hesabınıza yatırılır. Aracı kurumunuzda veya bankanızda gördüğünüz net tutarı kaydedebilirsiniz. Brüt tutar ve stopaj, kayıtta girdiğiniz stopaj oranına göre hesaplanır.
                     </p>
-                </div>
-            </div>
+                </Disclosure>
 
-            <DividendFilterBar
-                searchQuery={searchQuery}
-                onSearchChange={value => {
-                    setSearchQuery(value);
-                    setCurrentPage(1);
-                }}
-                selectedYear={selectedYear}
-                onYearChange={year => {
-                    setSelectedYear(year);
-                    setCurrentPage(1);
-                }}
-                availableYears={availableYears}
-            />
+                <DividendFilterBar
+                    searchQuery={searchQuery}
+                    onSearchChange={value => {
+                        setSearchQuery(value);
+                        setCurrentPage(1);
+                    }}
+                    selectedYear={selectedYear}
+                    onYearChange={year => {
+                        setSelectedYear(year);
+                        setCurrentPage(1);
+                    }}
+                    availableYears={availableYears}
+                    actions={
+                        <>
+                            <IconButton
+                                icon={<RefreshCw className={cn(refreshing && 'animate-spin')} />}
+                                label="Temettüleri yenile"
+                                size="sm"
+                                onClick={() => loadDividends(true)}
+                                disabled={refreshing}
+                            />
+                            <Button variant="secondary" size="sm" leftIcon={<Plus />} onClick={() => setIsAddModalOpen(true)}>
+                                Temettü ekle
+                            </Button>
+                        </>
+                    }
+                />
 
-            {loading ? (
-                <div className="py-20 flex flex-col items-center justify-center gap-3">
-                    <LoadingSpinner />
-                    <span className="text-xs sm:text-sm text-slate-400 font-medium">Temettü geçmişi yükleniyor...</span>
-                </div>
-            ) : filteredRows.length === 0 ? (
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-10 text-center flex flex-col items-center justify-center">
-                    <div className="p-3.5 rounded-xl bg-slate-800 text-slate-400 border border-slate-700/60 mb-3">
-                        <Coins className="w-6 h-6" />
-                    </div>
-                    <h3 className="text-base font-bold text-white">
-                        {hasActiveFilters
-                            ? 'Filtreye uygun temettü bulunamadı'
-                            : 'Henüz kayıtlı temettünüz yok'}
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                        {hasActiveFilters
-                            ? 'Arama kriterlerinizi değiştirerek veya filtreleri temizleyerek tekrar deneyebilirsiniz.'
-                            : 'Hisselerinizden aldığınız nakit temettüleri kaydederek net getiri ve nakit girişlerinizi takip edin.'}
-                    </p>
-                    <button
-                        onClick={() => setIsAddModalOpen(true)}
-                        className="mt-5 flex items-center gap-2 px-4 py-2 bg-[#1A9FD3] hover:bg-[#0C6991] text-white font-bold rounded-xl text-xs sm:text-sm transition cursor-pointer shadow-md shadow-[#1A9FD3]/20"
-                    >
-                        <Plus className="w-4 h-4" />
-                        <span>İlk Temettüyü Ekle</span>
-                    </button>
-                </div>
-            ) : (
-                <div className="space-y-4">
-                    <DividendList
-                        rows={paginatedRows}
-                        fmt={fmt}
-                        onEdit={setEditingDividend}
-                        onDelete={setDeletingDividend}
-                    />
-
-                    {totalPages > 1 && (
-                        <div className="flex items-center justify-between pt-2">
-                            <span className="text-xs text-slate-400">
-                                Toplam <strong className="text-white">{filteredRows.length}</strong> kayıttan{' '}
-                                <strong className="text-white">{(currentPage - 1) * PAGE_SIZE + 1}</strong> -{' '}
-                                <strong className="text-white">
-                                    {Math.min(currentPage * PAGE_SIZE, filteredRows.length)}
-                                </strong>{' '}
-                                arası gösteriliyor
-                            </span>
-
-                            <div className="flex items-center gap-1.5">
-                                <button
-                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                    disabled={currentPage === 1}
-                                    className="p-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-slate-800 rounded-lg text-slate-300 transition cursor-pointer"
-                                >
-                                    <ChevronLeft className="w-4 h-4" />
-                                </button>
-                                <span className="text-xs text-slate-300 px-2 font-mono">
-                                    {currentPage} / {totalPages}
-                                </span>
-                                <button
-                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                    disabled={currentPage === totalPages}
-                                    className="p-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-slate-800 rounded-lg text-slate-300 transition cursor-pointer"
-                                >
-                                    <ChevronRight className="w-4 h-4" />
-                                </button>
+                {loading ? (
+                    <div role="status" className="flex flex-col border-y border-border divide-y divide-border">
+                        <span className="sr-only">Temettü geçmişi yükleniyor...</span>
+                        {[0, 1, 2, 3, 4].map(i => (
+                            <div key={i} className="flex items-center gap-4 h-12">
+                                <Skeleton className="h-4 w-24" />
+                                <Skeleton className="h-4 w-32" />
+                                <Skeleton className="h-4 w-20 ml-auto" />
+                                <Skeleton className="hidden sm:block h-4 w-24" />
                             </div>
-                        </div>
-                    )}
-                </div>
-            )}
+                        ))}
+                    </div>
+                ) : filteredRows.length === 0 ? (
+                    // "Temettü ekle" düğmesi hemen üstteki filtre satırında; boş durumda ikinci bir düğme yok
+                    <EmptyState
+                        icon={<Coins />}
+                        title={hasActiveFilters ? 'Filtreye uygun temettü bulunamadı' : 'Henüz kayıtlı temettünüz yok'}
+                        description={
+                            hasActiveFilters
+                                ? 'Arama kriterlerinizi değiştirerek veya filtreleri temizleyerek tekrar deneyebilirsiniz.'
+                                : 'Hisselerinizden aldığınız nakit temettüleri kaydederek net getiri ve nakit girişlerinizi takip edin.'
+                        }
+                    />
+                ) : (
+                    <div className="flex flex-col">
+                        <DividendList
+                            rows={paginatedRows}
+                            fmt={fmt}
+                            onEdit={setEditingDividend}
+                            onDelete={setDeletingDividend}
+                        />
+
+                        {totalPages > 1 && (
+                            <ListPagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                totalCount={filteredRows.length}
+                                pageSize={PAGE_SIZE}
+                                unitLabel="kayıttan"
+                                onPageChange={setCurrentPage}
+                            />
+                        )}
+                    </div>
+                )}
+            </section>
 
             {/* Temettü ekleme / düzenleme */}
             <AddDividendModal
@@ -333,6 +287,6 @@ export default function DividendsTab({
                     onConfirm={handleConfirmDelete}
                 />
             )}
-        </div>
+        </>
     );
 }

@@ -5,7 +5,10 @@ import { NormalizedTransaction, Transaction } from '@/types';
 import api from '@/lib/api';
 import { formatCurrency } from '@/lib/formatters';
 import { normalizeTransaction } from '@/lib/normalize';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import IconButton from '@/components/ui/IconButton';
+import Skeleton from '@/components/ui/Skeleton';
+import { cn } from '@/lib/cn';
+import { RefreshCw } from 'lucide-react';
 import TxSummaryCards, { TxMetrics } from './transactions/TxSummaryCards';
 import TxFilterBar, { TxTypeFilter } from './transactions/TxFilterBar';
 import TxTable from './transactions/TxTable';
@@ -17,14 +20,12 @@ interface TransactionHistoryTabProps {
     // Kur yoksa (null ya da 0) tutarlar TL gösterilir
     usdRate: number | null;
     onRefreshHoldings: () => void;
-    onOpenAddTxModal: () => void;
 }
 
 export default function TransactionHistoryTab({
     currency,
     usdRate,
     onRefreshHoldings,
-    onOpenAddTxModal,
 }: TransactionHistoryTabProps) {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
@@ -125,7 +126,7 @@ export default function TransactionHistoryTab({
         });
     }, [rows, searchQuery, typeFilter, assetTypeFilter]);
 
-    // Özet kartlar filtreden bağımsız olarak tüm işlemlerden hesaplanır
+    // Özet şeridi filtreden bağımsız olarak tüm işlemlerden hesaplanır
     const metrics = useMemo<TxMetrics>(() => {
         let buyCount = 0;
         let sellCount = 0;
@@ -159,40 +160,80 @@ export default function TransactionHistoryTab({
         };
     }, [rows]);
 
+    // Filtre satırının sonundaki yenileme. Yeni işlem eklemek için sayfa başlığındaki "İşlem ekle" kullanılır.
+    const refreshButton = (
+        <IconButton
+            icon={<RefreshCw className={cn(refreshing && 'animate-spin')} />}
+            label="İşlemleri yenile"
+            size="sm"
+            onClick={() => loadTransactions(true)}
+            disabled={refreshing || loading}
+        />
+    );
+
+    // Sekme adı zaten "İşlem geçmişi" olduğu için görünür bölüm başlığı yok; başlık yalnızca ekran okuyucuya
     if (loading) {
         return (
-            <div className="py-16">
-                <LoadingSpinner message="İşlem geçmişiniz yükleniyor..." />
-            </div>
+            <section aria-labelledby="islem-gecmisi-baslik" className="flex flex-col gap-4 min-w-0">
+                <h2 id="islem-gecmisi-baslik" className="sr-only">İşlem geçmişi</h2>
+                <div role="status" className="flex flex-col gap-4">
+                    <span className="sr-only">İşlem geçmişiniz yükleniyor...</span>
+                    {/* Özet şeridi */}
+                    <div className="flex flex-wrap border-y border-border">
+                        {[0, 1, 2, 3].map((i) => (
+                            <div key={i} className="flex flex-col gap-1.5 basis-1/2 sm:basis-0 sm:grow py-3.5 pr-4">
+                                <Skeleton className="h-4 w-20" />
+                                <Skeleton className="h-5 w-28" />
+                            </div>
+                        ))}
+                    </div>
+                    {/* Filtre satırı */}
+                    <div className="flex items-center gap-2">
+                        <Skeleton className="h-11 sm:h-10 flex-1 sm:flex-none sm:w-64" />
+                        <Skeleton className="hidden sm:block h-10 w-48" />
+                    </div>
+                    <div className="flex flex-col border-y border-border divide-y divide-border">
+                        {[0, 1, 2, 3, 4, 5].map((i) => (
+                            <div key={i} className="flex items-center gap-4 h-12">
+                                <Skeleton className="h-4 w-24" />
+                                <Skeleton className="h-4 w-32" />
+                                <Skeleton className="h-4 w-20 ml-auto" />
+                                <Skeleton className="hidden sm:block h-4 w-24" />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
         );
     }
 
     return (
-        <div className="space-y-6">
-            <TxSummaryCards metrics={metrics} fmt={fmt} />
+        <>
+            {/* Kutusuz bölüm: özet şeridi, filtre satırı ve tablo doğrudan sayfa zemininde */}
+            <section aria-labelledby="islem-gecmisi-baslik" className="flex flex-col gap-4 min-w-0">
+                <h2 id="islem-gecmisi-baslik" className="sr-only">İşlem geçmişi</h2>
+                <TxSummaryCards metrics={metrics} fmt={fmt} />
 
-            <TxFilterBar
-                searchQuery={searchQuery}
-                onSearchChange={changeSearch}
-                typeFilter={typeFilter}
-                onTypeFilterChange={changeTypeFilter}
-                assetTypeFilter={assetTypeFilter}
-                onAssetTypeFilterChange={changeAssetTypeFilter}
-                refreshing={refreshing}
-                onRefresh={() => loadTransactions(true)}
-                onAddTx={onOpenAddTxModal}
-            />
+                <TxFilterBar
+                    searchQuery={searchQuery}
+                    onSearchChange={changeSearch}
+                    typeFilter={typeFilter}
+                    onTypeFilterChange={changeTypeFilter}
+                    assetTypeFilter={assetTypeFilter}
+                    onAssetTypeFilterChange={changeAssetTypeFilter}
+                    actions={refreshButton}
+                />
 
-            <TxTable
-                rows={filteredRows}
-                hasActiveFilters={!!searchQuery || typeFilter !== 'ALL' || assetTypeFilter !== 'ALL'}
-                currentPage={currentPage}
-                onPageChange={setCurrentPage}
-                fmt={fmt}
-                onAddTx={onOpenAddTxModal}
-                onEdit={setEditingTx}
-                onDelete={setDeletingTx}
-            />
+                <TxTable
+                    rows={filteredRows}
+                    hasActiveFilters={!!searchQuery || typeFilter !== 'ALL' || assetTypeFilter !== 'ALL'}
+                    currentPage={currentPage}
+                    onPageChange={setCurrentPage}
+                    fmt={fmt}
+                    onEdit={setEditingTx}
+                    onDelete={setDeletingTx}
+                />
+            </section>
 
             {deletingTx && (
                 <DeleteTransactionModal
@@ -216,6 +257,6 @@ export default function TransactionHistoryTab({
                     onSaved={handleTxSaved}
                 />
             )}
-        </div>
+        </>
     );
 }

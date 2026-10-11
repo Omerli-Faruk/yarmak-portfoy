@@ -3,96 +3,112 @@
 import React from 'react';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
-import { ASSET_TYPE_LABELS, formatPriceTR, formatSignedPercent } from '@/lib/formatters';
+import Badge from '@/components/ui/Badge';
+import ChangePill from '@/components/ui/ChangePill';
+import Button from '@/components/ui/Button';
+import IconButton from '@/components/ui/IconButton';
+import Section from '@/components/ui/Section';
+import Skeleton from '@/components/ui/Skeleton';
+import { cn } from '@/lib/cn';
+import { ASSET_TYPE_LABELS, formatPriceTR } from '@/lib/formatters';
 import type { MarketAssetItem } from '@/types';
 
 interface MarketLeaderColumnProps {
     title: string;
-    subtitle: string;
-    icon: React.ReactNode;
     items: MarketAssetItem[];
     loading: boolean;
     emptyText: string;
     keyPrefix: string;
     onQuickAdd: (item: MarketAssetItem) => void;
+    className?: string;
 }
 
-// Yükselenler, düşenler ve seçili hisseler için aynı kart kullanılır
+// Yükselenler ve düşenler için aynı kutusuz liste: satırlar sayfa zemininde, ince çizgilerle ayrılır
 export default function MarketLeaderColumn({
     title,
-    subtitle,
-    icon,
     items,
     loading,
     emptyText,
     keyPrefix,
     onQuickAdd,
+    className,
 }: MarketLeaderColumnProps) {
     return (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col">
-            <div className="flex items-center justify-between pb-3.5 border-b border-slate-800 mb-3">
-                <div className="flex items-center gap-2">
-                    <div className="p-1.5 rounded-lg bg-slate-800 text-slate-300 border border-slate-700/60">
-                        {icon}
+        <Section title={title} className={className}>
+            {items.length === 0 ? (
+                loading ? (
+                    <div className="flex flex-col divide-y divide-border border-t border-border">
+                        <span className="sr-only">Yükleniyor...</span>
+                        {Array.from({ length: 5 }, (_, i) => (
+                            <div key={i} className="flex h-12 items-center gap-4">
+                                <span className="flex flex-1 flex-col gap-1.5">
+                                    <Skeleton className="h-3.5 w-14" />
+                                    <Skeleton className="h-3 w-28" />
+                                </span>
+                                <Skeleton className="h-3.5 w-16" />
+                                <Skeleton className="h-3.5 w-14" />
+                            </div>
+                        ))}
                     </div>
-                    <h3 className="font-bold text-white text-sm">{title}</h3>
-                </div>
-                <span className="text-[11px] text-slate-500 font-mono">{subtitle}</span>
-            </div>
-
-            <div className="space-y-2 flex-1">
-                {items.length === 0 ? (
-                    <p className="text-xs text-slate-500 py-6 text-center">
-                        {loading ? 'Yükleniyor...' : emptyText}
-                    </p>
                 ) : (
-                    items.map((item, idx) => (
-                        <div
+                    <p className="border-t border-border py-6 text-sm text-fg-muted">{emptyText}</p>
+                )
+            ) : (
+                <ul className="flex flex-col divide-y divide-border border-t border-border">
+                    {items.map((item, idx) => (
+                        <li
                             key={`${keyPrefix}-${item.id}-${item.symbol}-${idx}`}
-                            className="group flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-800/60 transition border border-transparent hover:border-slate-700/50"
+                            className="flex h-12 items-center gap-2 transition-colors duration-[120ms] hover:bg-surface-2 sm:gap-3"
                         >
-                            <Link href={`/assets/${item.symbol}`} className="flex items-center gap-2.5 flex-1 min-w-0">
-                                <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center font-bold text-xs text-white shrink-0 group-hover:bg-[#1A9FD3] transition">
-                                    {item.symbol.slice(0, 2)}
-                                </div>
-                                <div className="truncate">
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="font-bold text-xs text-white group-hover:text-[#1A9FD3] transition font-mono">
+                            <Link
+                                href={`/assets/${item.symbol}`}
+                                className={cn(
+                                    'group flex h-full min-w-0 flex-1 items-center gap-3 rounded sm:gap-4',
+                                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                                )}
+                            >
+                                {/* Solda sembol ve ad, sağda fiyat ve günlük değişim */}
+                                <span className="flex min-w-0 flex-1 flex-col">
+                                    <span className="flex min-w-0 items-center gap-1.5">
+                                        <span className="truncate font-mono text-sm font-medium text-fg transition-colors duration-[120ms] group-hover:text-primary">
                                             {item.symbol}
                                         </span>
-                                        <span className="text-[10px] px-1.5 rounded bg-slate-800 text-slate-400 font-medium">
-                                            {ASSET_TYPE_LABELS[item.asset_type] ?? item.asset_type}
-                                        </span>
-                                    </div>
-                                    <p className="text-[11px] text-slate-400 truncate">{item.name}</p>
-                                </div>
+                                        {/* Listeler zaten hisse listesi; tür yalnızca hisse dışı varlıkta yazılır */}
+                                        {item.asset_type !== 'HISSE' && (
+                                            <Badge>{ASSET_TYPE_LABELS[item.asset_type] ?? item.asset_type}</Badge>
+                                        )}
+                                    </span>
+                                    <span className="truncate text-xs text-fg-muted">{item.name}</span>
+                                </span>
+                                <span className="w-24 shrink-0 text-right font-mono text-sm text-fg sm:w-28">
+                                    {formatPriceTR(item.price)}
+                                </span>
+                                <span className="flex w-[5.25rem] shrink-0 justify-end sm:w-24">
+                                    <ChangePill value={item.change_value} />
+                                </span>
                             </Link>
-
-                            <div className="flex items-center gap-3 shrink-0 ml-2">
-                                <div className="text-right">
-                                    <div className="text-xs font-semibold text-slate-200 tabular-nums">
-                                        {formatPriceTR(item.price)}
-                                    </div>
-                                    <div
-                                        className={`text-[11px] font-bold font-mono tabular-nums ${
-                                            item.positive ? 'text-emerald-400' : 'text-rose-400'
-                                        }`}
-                                    >
-                                        {formatSignedPercent(item.change_value)}
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => onQuickAdd(item)}
-                                    title="Portföyüme Ekle"
-                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-[#1A9FD3] text-slate-300 hover:text-white transition cursor-pointer"
-                                >
-                                    <Plus className="size-3.5" />
-                                </button>
-                            </div>
-                        </div>
-                    ))
-                )}
-            </div>
-        </div>
+                            {/* Masaüstünde yazılı, mobilde simgeli ekle düğmesi */}
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                leftIcon={<Plus />}
+                                onClick={() => onQuickAdd(item)}
+                                aria-label="Portföyüme ekle"
+                                className="hidden md:inline-flex"
+                            >
+                                Ekle
+                            </Button>
+                            <IconButton
+                                icon={<Plus />}
+                                label="Portföyüme ekle"
+                                size="sm"
+                                className="md:hidden"
+                                onClick={() => onQuickAdd(item)}
+                            />
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </Section>
     );
 }

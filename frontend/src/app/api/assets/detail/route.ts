@@ -162,7 +162,7 @@ async function fetchFundamentals(ticker: string, isTefas: boolean): Promise<Reco
         const result: Record<string, string> = {
             marketCap: formatCap(sd?.marketCap || ks?.marketCap),
             peRatio: trNumber(rawOf(sd?.trailingPE, ks?.trailingPE)),
-            dividendYield: dividendYieldRaw === null ? '-' : `${trNumber(dividendYieldRaw * 100)}%`,
+            dividendYield: dividendYieldRaw === null ? '-' : `%${trNumber(dividendYieldRaw * 100)}`,
             dividendRate: trMoney(rawOf(sd?.dividendRate)),
             exDividendDate: formatExDate(sd?.exDividendDate),
             isExDateFuture: isExDateFuture ? 'true' : 'false',
@@ -238,10 +238,11 @@ async function getAccurateSummary(ticker: string, isTefas: boolean, backendSumma
             ret1D = ((current - prev) / prev) * 100;
         }
 
-        // Önceki kapanış; 1D grafiğinin başlangıç noktası
+        // Önceki kapanış; 1G grafiğindeki referans çizgisi. Kuruşa yuvarlanmaz: dövizde 4 hane var,
+        // yuvarlayınca "Günlük" ile "1G getirisi" ayrışıyordu.
         let prevClose = 0;
         if (ret1D !== 0 && current > 0) {
-            prevClose = Math.round((current / (1 + ret1D / 100)) * 100) / 100;
+            prevClose = Math.round((current / (1 + ret1D / 100)) * 1e6) / 1e6;
         } else if (points.length >= 2) {
             prevClose = points[points.length - 2].price;
         }
@@ -613,7 +614,7 @@ export async function GET(request: Request) {
             fetch(`${BACKEND_URL}/assets/${assetId}/backfill`, { method: 'POST', headers: backendHeaders }).catch(console.error);
         }
 
-        // 4) Son kaydın tarihine göre "Son Güncelleme" notu
+        // 4) Son kaydın tarihine göre "Son güncelleme" notu
         let latestRecordTime: Date | null = null;
         if (chartData.length > 0) {
             latestRecordTime = chartData[chartData.length - 1].rawDate || null;
@@ -637,18 +638,18 @@ export async function GET(request: Request) {
             if (isTefas) {
                 if (!isToday) {
                     isStale = true;
-                    staleMessage = `Son Güncelleme: ${formattedRecDate} (TEFAS verisi bekleniyor)`;
+                    staleMessage = `Son güncelleme: ${formattedRecDate} (TEFAS verisi bekleniyor)`;
                 } else {
                     isStale = false;
-                    staleMessage = `Son Güncelleme: ${formattedRecDate} (Bugün)`;
+                    staleMessage = `Son güncelleme: ${formattedRecDate} (Bugün)`;
                 }
             } else {
                 if (!isToday) {
                     isStale = true;
-                    staleMessage = `Son Güncelleme: ${formattedRecDate}`;
+                    staleMessage = `Son güncelleme: ${formattedRecDate}`;
                 } else {
                     isStale = false;
-                    staleMessage = `Son Güncelleme: Bugün ${latestRecordTime.toLocaleTimeString('tr-TR', { timeZone: tz, hour: '2-digit', minute: '2-digit' })}`;
+                    staleMessage = `Son güncelleme: Bugün ${latestRecordTime.toLocaleTimeString('tr-TR', { timeZone: tz, hour: '2-digit', minute: '2-digit' })}`;
                 }
             }
         }
@@ -672,7 +673,11 @@ export async function GET(request: Request) {
                     }
                 }
                 if (!summaryData) summaryData = {};
-                if (spot.change) {
+                // Günlük değişim grafikteki önceki kapanış çizgisine göre: "Günlük" ile "1G getirisi" aynı sayı olur.
+                // Önceki kapanış yoksa serbest piyasanın kendi günlük değişimi kullanılır.
+                if (previousClose && previousClose > 0) {
+                    summaryData['1D'] = ((spot.price - previousClose) / previousClose) * 100;
+                } else if (spot.change) {
                     summaryData['1D'] = parseFloat(spot.change);
                 }
             }
@@ -708,14 +713,10 @@ export async function GET(request: Request) {
             lastUpdateDate: lastUpdateDateStr
         };
 
-        // rawDate istemciye gönderilmez
+        // rawDate istemciye gönderilmez. 1G'de önceki kapanış nokta olarak eklenmez; istemci previousClose'u
+        // kesikli referans çizgisi olarak çizer (ilk nokta "Dün" olunca grafik hep büyük bir sıçramayla başlıyordu).
         const cleanChartData = chartData.map(d => ({ date: d.date, price: d.price }));
-        if (range === '1D' && previousClose && previousClose > 0) {
-            cleanChartData.unshift({
-                date: 'Dün',
-                price: previousClose
-            });
-        } else if (cleanChartData.length === 1) {
+        if (cleanChartData.length === 1) {
             cleanChartData.unshift({
                 date: 'Önceki',
                 price: cleanChartData[0].price
@@ -741,7 +742,7 @@ export async function GET(request: Request) {
             latestPositive = val >= 0;
         } else if (cleanChartData.length >= 2) {
             const last = cleanChartData[cleanChartData.length - 1].price;
-            const prev = cleanChartData[0].price;
+            const prev = range === '1D' && previousClose && previousClose > 0 ? previousClose : cleanChartData[0].price;
             if (prev > 0) {
                 const pct = ((last - prev) / prev) * 100;
                 latestChange = signedChange(pct);

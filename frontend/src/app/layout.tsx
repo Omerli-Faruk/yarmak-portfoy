@@ -1,19 +1,28 @@
-import type {Metadata} from "next";
-import {Geist, Geist_Mono} from "next/font/google";
+import type {Metadata, Viewport} from "next";
+import {Inter_Tight, Space_Grotesk} from "next/font/google";
 import "./globals.css";
 import {AuthProvider} from "@/context/AuthContext";
+import {ThemeProvider} from "@/components/ui/ThemeProvider";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import {THEME_BG, THEME_INIT_SCRIPT} from "@/lib/theme";
 
-const geistSans = Geist({
-    variable: "--font-geist-sans",
-    subsets: ["latin"],
+// Arayüz yazısı ve rakamlar Inter Tight (rakamlar sabit genişlikte), başlıklar ve büyük değerler Space Grotesk.
+// Türkçe harfler (ğ, ş, İ) için latin-ext de yüklenir.
+// globals.css bu değişkenlerden --font-sans, --font-mono ve --font-display'i (font-sans / font-mono / font-display) üretir.
+const interTight = Inter_Tight({
+    variable: "--font-inter-tight",
+    subsets: ["latin", "latin-ext"],
+    display: "swap",
 });
 
-const geistMono = Geist_Mono({
-    variable: "--font-geist-mono",
-    subsets: ["latin"],
+const spaceGrotesk = Space_Grotesk({
+    variable: "--font-space-grotesk",
+    weight: ["500", "700"],
+    subsets: ["latin", "latin-ext"],
+    display: "swap",
 });
+
 
 export const metadata: Metadata = {
     title: {
@@ -37,22 +46,37 @@ export const metadata: Metadata = {
     },
 };
 
+// Mobil tarayıcı çubuğu sistem temasına göre renklenir
+export const viewport: Viewport = {
+    themeColor: [
+        { media: "(prefers-color-scheme: light)", color: THEME_BG.light },
+        { media: "(prefers-color-scheme: dark)", color: THEME_BG.dark },
+    ],
+};
+
 export default function RootLayout({children}: LayoutProps<"/">) {
     return (
         <html
             lang="tr"
-            className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+            className={`${interTight.variable} ${spaceGrotesk.variable} h-full antialiased`}
+            suppressHydrationWarning
         >
-        <body className="min-h-full flex flex-col">
-        <AuthProvider>
-            <div className="min-h-screen flex flex-col bg-ambient-spotlight">
-                <Navbar />
-                <main className="flex-1 flex flex-col">
-                    {children}
-                </main>
-                <Footer/>
-            </div>
-        </AuthProvider>
+        <head>
+            {/* Tema, sayfa boyanmadan önce uygulanır (açılışta yanıp sönme olmasın diye) */}
+            <script dangerouslySetInnerHTML={{__html: THEME_INIT_SCRIPT}}/>
+        </head>
+        <body className="min-h-full flex flex-col bg-bg font-sans text-fg">
+        <ThemeProvider>
+            <AuthProvider>
+                <div className="min-h-screen flex flex-col bg-ambient-spotlight">
+                    <Navbar />
+                    <main className="flex-1 flex flex-col">
+                        {children}
+                    </main>
+                    <Footer/>
+                </div>
+            </AuthProvider>
+        </ThemeProvider>
         </body>
         </html>
     );

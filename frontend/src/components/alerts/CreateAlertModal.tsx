@@ -1,10 +1,16 @@
 'use client';
 
 import { useState, useEffect, type FormEvent } from 'react';
-import { motion } from 'motion/react';
-import { AlertCircle, ArrowDownRight, ArrowUpRight, Bell, Info, Plus, RefreshCw, Search, X } from 'lucide-react';
+import { AlertCircle, Info, Plus } from 'lucide-react';
 import api from '@/lib/api';
 import { formatPriceTR, formatSignedPercent } from '@/lib/formatters';
+import { cn } from '@/lib/cn';
+import Button from '@/components/ui/Button';
+import ChangePill from '@/components/ui/ChangePill';
+import Field from '@/components/ui/Field';
+import Input from '@/components/ui/Input';
+import Modal from '@/components/ui/Modal';
+import AssetSearchInput, { type AssetSearchItem } from '@/components/AssetSearchInput';
 
 interface AssetSearchResult {
     id?: number;
@@ -37,10 +43,10 @@ type Direction = 'ABOVE' | 'BELOW';
 // 1 TL altındaki fonlarda 2 basamağa yuvarlamak hedefi son fiyatın öbür tarafına atabiliyor.
 const toTargetString = (price: number): string => price.toFixed(price < 0.01 ? 6 : price < 1 ? 4 : 2);
 
+const FORM_ID = 'create-alert-form';
+
 export default function CreateAlertModal({ initialSymbol, onClose, onCreated }: CreateAlertModalProps) {
     const [modalSymbolSearch, setModalSymbolSearch] = useState(initialSymbol ?? '');
-    const [searchResults, setSearchResults] = useState<AssetSearchResult[]>([]);
-    const [isSearching, setIsSearching] = useState(false);
     const [selectedAsset, setSelectedAsset] = useState<AssetSearchResult | null>(null);
     const [direction, setDirection] = useState<Direction>('ABOVE');
     const [targetPriceInput, setTargetPriceInput] = useState('');
@@ -103,45 +109,10 @@ export default function CreateAlertModal({ initialSymbol, onClose, onCreated }: 
         };
     }, [initialSymbol]);
 
-    // Yazılan sembolü 300 ms bekleyip ara; varlık seçiliyse arama yapılmaz
-    useEffect(() => {
-        if (!modalSymbolSearch.trim() || selectedAsset) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setSearchResults([]);
-            return;
-        }
-
-        const timer = setTimeout(async () => {
-            setIsSearching(true);
-            try {
-                const res = await fetch(`/api/assets?q=${encodeURIComponent(modalSymbolSearch.trim())}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    if (Array.isArray(data)) {
-                        setSearchResults(
-                            data.slice(0, 6).map((item: ApiAssetResponse) => ({
-                                id: item.id,
-                                symbol: item.symbol,
-                                name: item.name || item.symbol,
-                                price: parseFloat(item.current_price || item.price || '0') || 0,
-                                type: item.asset_type || item.type,
-                            }))
-                        );
-                    }
-                }
-            } catch (err) {
-                console.error('Varlık arama hatası:', err);
-            } finally {
-                setIsSearching(false);
-            }
-        }, 300);
-
-        return () => clearTimeout(timer);
-    }, [modalSymbolSearch, selectedAsset]);
-
-    const handleSelectAsset = async (asset: AssetSearchResult) => {
+    // Arama kutusundan seçilen varlık (arama ve liste AssetSearchInput'ta)
+    const handleSelectAsset = async (picked: AssetSearchItem) => {
+        const asset: AssetSearchResult = { id: picked.id, symbol: picked.symbol, name: picked.name, price: picked.price, type: picked.assetType };
         setModalSymbolSearch(asset.symbol);
-        setSearchResults([]);
 
         let currentPrice = asset.price;
         let assetId = asset.id;
@@ -283,8 +254,8 @@ export default function CreateAlertModal({ initialSymbol, onClose, onCreated }: 
             (direction === 'BELOW' && parsed > selectedAsset.price);
         if (isMismatch) {
             return (
-                <p className="text-[11px] font-semibold text-rose-400 mt-1.5 flex items-center gap-1.5">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <p className="flex items-start gap-1.5 text-sm text-loss">
+                    <AlertCircle className="size-4 shrink-0 mt-0.5" aria-hidden />
                     <span>
                         Hedef fiyat ({formatPriceTR(parsed)}), son fiyattan ({formatPriceTR(selectedAsset.price)}){' '}
                         {direction === 'ABOVE' ? 'yüksek' : 'düşük'} olmalıdır.
@@ -295,215 +266,167 @@ export default function CreateAlertModal({ initialSymbol, onClose, onCreated }: 
 
         const diffPct = ((parsed - selectedAsset.price) / selectedAsset.price) * 100;
         return (
-            <p className="text-[11px] font-medium text-slate-400 mt-1.5 flex items-center gap-1">
+            <div className="flex items-center gap-2 text-sm text-fg-muted">
                 <span>Son fiyata göre:</span>
-                <span className={`font-bold ${diffPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {formatSignedPercent(diffPct)}
-                </span>
-            </p>
+                <ChangePill value={diffPct} />
+            </div>
         );
     };
 
+    // Yön seçeneği: düz, zeminsiz; seçiliyken çerçeve ve başlık yön renginde, değilken nötr ince çizgi
+    const directionOptionClass = (option: Direction) =>
+        cn(
+            'flex flex-1 basis-0 min-w-0 min-h-11 flex-col gap-0.5 rounded border px-3 py-2.5 text-left cursor-pointer',
+            'transition-colors duration-[120ms] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+            direction === option
+                ? option === 'ABOVE' ? 'border-profit' : 'border-loss'
+                : 'border-border hover:border-border-strong hover:bg-surface-2',
+        );
+
+    const directionTitleClass = (option: Direction) =>
+        cn(
+            'flex items-center gap-1.5 text-sm font-medium',
+            direction === option ? (option === 'ABOVE' ? 'text-profit' : 'text-loss') : 'text-fg-muted',
+        );
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-            <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                className="bg-surface border border-white/10 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative"
-            >
-                <button
-                    onClick={onClose}
-                    className="absolute right-5 top-5 text-slate-400 hover:text-white transition cursor-pointer"
-                >
-                    <X className="w-5 h-5" />
-                </button>
+        <Modal
+            open
+            onClose={onClose}
+            dismissible={!isSubmitting}
+            title="Yeni fiyat alarmı"
+            footer={
+                <>
+                    <Button variant="secondary" size="sm" onClick={onClose} disabled={isSubmitting}>
+                        Vazgeç
+                    </Button>
+                    <Button
+                        type="submit"
+                        form={FORM_ID}
+                        size="sm"
+                        loading={isSubmitting}
+                        disabled={!selectedAsset}
+                        leftIcon={<Plus />}
+                    >
+                        {isSubmitting ? 'Kaydediliyor...' : 'Alarmı kur'}
+                    </Button>
+                </>
+            }
+        >
+            <form id={FORM_ID} onSubmit={handleCreateAlert} className="flex flex-col gap-4">
+                <Field label="Varlık" htmlFor="alert-symbol">
+                    <AssetSearchInput
+                        id="alert-symbol"
+                        value={modalSymbolSearch}
+                        onChange={(val) => {
+                            setModalSymbolSearch(val);
+                            setSelectedAsset(null);
+                        }}
+                        onSelect={handleSelectAsset}
+                        searchEnabled={!selectedAsset}
+                        placeholder="Sembol yazın (örn: THYAO, TUPRS)"
+                        required
+                    />
 
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-                        <Bell className="w-5 h-5" />
-                    </div>
-                    <div>
-                        <h3 className="text-lg font-black text-foreground">Yeni Fiyat Alarmı Kur</h3>
-                        <p className="text-xs text-slate-400">Hedef fiyatı belirleyin, tetiklendiğinde görün.</p>
-                    </div>
-                </div>
-
-                <form onSubmit={handleCreateAlert} className="space-y-5">
-                    <div>
-                        <label className="text-xs font-semibold text-slate-300 block mb-2">Varlık</label>
-                        <div className="relative">
-                            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                            <input
-                                type="text"
-                                value={modalSymbolSearch}
-                                onChange={(e) => {
-                                    setModalSymbolSearch(e.target.value.toUpperCase());
-                                    setSelectedAsset(null);
-                                }}
-                                placeholder="Sembol yazın (örn: THYAO, TUPRS)"
-                                className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-slate-500 focus:outline-none focus:border-primary uppercase font-bold"
-                                required
-                            />
-                            {isSearching && (
-                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
-                                    <RefreshCw className="w-4 h-4 text-primary animate-spin" />
-                                </div>
-                            )}
-                        </div>
-
-                        {searchResults.length > 0 && !selectedAsset && (
-                            <div className="mt-2 bg-slate-900 border border-white/10 rounded-xl shadow-xl overflow-hidden max-h-48 overflow-y-auto z-10">
-                                {searchResults.map((res) => (
-                                    <button
-                                        key={res.symbol}
-                                        type="button"
-                                        onClick={() => handleSelectAsset(res)}
-                                        className="w-full text-left px-4 py-2.5 hover:bg-white/5 transition flex items-center justify-between border-b border-white/5 last:border-0 cursor-pointer"
-                                    >
-                                        <div>
-                                            <span className="text-xs font-black text-white mr-2">{res.symbol}</span>
-                                            <span className="text-[11px] text-slate-400 truncate">{res.name}</span>
-                                        </div>
-                                        <span className="text-xs font-bold text-primary">
-                                            {res.price > 0 ? formatPriceTR(res.price) : ''}
-                                        </span>
-                                    </button>
-                                ))}
+                    {selectedAsset && (
+                        <div className="flex items-center gap-3 border-y border-border py-2.5">
+                            <div className="flex flex-1 min-w-0 flex-col">
+                                <span className="font-mono text-sm font-medium text-fg">{selectedAsset.symbol}</span>
+                                <span className="text-xs text-fg-muted truncate">{selectedAsset.name}</span>
                             </div>
-                        )}
-
-                        {selectedAsset && (
-                            <div className="mt-2 p-3 bg-primary/10 border border-primary/20 rounded-xl flex items-center justify-between">
-                                <div>
-                                    <span className="text-xs font-black text-primary mr-2">{selectedAsset.symbol}</span>
-                                    <span className="text-[11px] text-slate-300">{selectedAsset.name}</span>
-                                </div>
-                                <span className="text-xs font-bold text-foreground">
-                                    Son fiyat: {selectedAsset.price > 0 ? formatPriceTR(selectedAsset.price) : '— ₺'}
+                            <div className="flex flex-col items-end shrink-0">
+                                <span className="text-xs text-fg-muted">Son fiyat</span>
+                                <span className="font-mono text-sm font-medium text-fg whitespace-nowrap">
+                                    {selectedAsset.price > 0 ? formatPriceTR(selectedAsset.price) : '— ₺'}
                                 </span>
                             </div>
-                        )}
-
-                        {isFund && (
-                            <p className="text-[11px] text-slate-400 mt-2 flex items-start gap-1.5">
-                                <Info className="w-3.5 h-3.5 shrink-0 mt-px" />
-                                <span>
-                                    Fon fiyatları günde bir kez açıklandığı için fon alarmları, yeni fiyat TEFAS&apos;ta
-                                    yayımlanıp sisteme alındığında kontrol edilir.
-                                </span>
-                            </p>
-                        )}
-                    </div>
-
-                    <div>
-                        <label className="text-xs font-semibold text-slate-300 block mb-2">Alarm Koşulu</label>
-                        <div className="grid grid-cols-2 gap-3">
-                            <button
-                                type="button"
-                                onClick={() => handleDirectionChange('ABOVE')}
-                                className={`p-3 rounded-xl border text-left transition cursor-pointer flex flex-col gap-1 ${
-                                    direction === 'ABOVE'
-                                        ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
-                                        : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
-                                }`}
-                            >
-                                <div className="flex items-center gap-1.5 font-bold text-xs">
-                                    <ArrowUpRight className="w-4 h-4" />
-                                    <span>Fiyat Yükselirse</span>
-                                </div>
-                                <span className="text-[10px] opacity-80">Fiyat hedefe ulaşınca veya geçince</span>
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => handleDirectionChange('BELOW')}
-                                className={`p-3 rounded-xl border text-left transition cursor-pointer flex flex-col gap-1 ${
-                                    direction === 'BELOW'
-                                        ? 'border-rose-500 bg-rose-500/10 text-rose-400'
-                                        : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
-                                }`}
-                            >
-                                <div className="flex items-center gap-1.5 font-bold text-xs">
-                                    <ArrowDownRight className="w-4 h-4" />
-                                    <span>Fiyat Düşerse</span>
-                                </div>
-                                <span className="text-[10px] opacity-80">Fiyat hedefe inince veya altına düşünce</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="text-xs font-semibold text-slate-300 block mb-2">Hedef Fiyat (₺)</label>
-                        <div className="relative">
-                            <input
-                                type="text"
-                                inputMode="decimal"
-                                value={targetPriceInput}
-                                onChange={(e) => handlePriceInputChange(e.target.value)}
-                                placeholder="Örn: 350,50"
-                                className="w-full bg-white/5 border border-white/10 rounded-xl pl-4 pr-10 py-3 text-sm text-foreground placeholder:text-slate-500 focus:outline-none focus:border-primary font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                required
-                            />
-                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none">
-                                ₺
-                            </span>
-                        </div>
-
-                        {renderTargetHint()}
-
-                        {selectedAsset && selectedAsset.price > 0 && (
-                            <div className="flex items-center gap-2 mt-2">
-                                <span className="text-[10px] text-slate-500 font-medium">Hızlı:</span>
-                                {(direction === 'ABOVE' ? [2, 5, 10, 15] : [-2, -5, -10, -15]).map((pct) => (
-                                    <button
-                                        key={pct}
-                                        type="button"
-                                        onClick={() => handleQuickPercent(pct)}
-                                        className="px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 text-[10px] font-bold text-slate-300 hover:text-white transition cursor-pointer border border-white/5"
-                                    >
-                                        {formatSignedPercent(pct, 0)}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {formError && (
-                        <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4 shrink-0" />
-                            <span>{formError}</span>
                         </div>
                     )}
 
-                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">
+                    {isFund && (
+                        <p className="flex items-start gap-1.5 text-xs text-fg-muted">
+                            <Info className="size-4 shrink-0 mt-px text-fg-muted" aria-hidden />
+                            <span>
+                                Fon fiyatları günde bir kez açıklandığı için fon alarmları, yeni fiyat TEFAS&apos;ta
+                                yayımlanıp sisteme alındığında kontrol edilir.
+                            </span>
+                        </p>
+                    )}
+                </Field>
+
+                <div className="flex flex-col gap-1">
+                    <span id="alert-direction-label" className="text-sm font-medium text-fg">
+                        Alarm koşulu
+                    </span>
+                    <div role="group" aria-labelledby="alert-direction-label" className="flex gap-2">
                         <button
                             type="button"
-                            onClick={onClose}
-                            className="px-4 py-2.5 rounded-xl border border-white/10 text-slate-300 hover:text-white transition text-xs font-bold cursor-pointer"
+                            aria-pressed={direction === 'ABOVE'}
+                            onClick={() => handleDirectionChange('ABOVE')}
+                            className={directionOptionClass('ABOVE')}
                         >
-                            Vazgeç
+                            <span className={directionTitleClass('ABOVE')}>
+                                <span aria-hidden className="text-[0.8em] leading-none">▲</span>
+                                <span>Fiyat yükselirse</span>
+                            </span>
+                            <span className="text-xs text-fg-muted">Fiyat hedefe ulaşınca veya geçince</span>
                         </button>
+
                         <button
-                            type="submit"
-                            disabled={isSubmitting || !selectedAsset}
-                            className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-bold text-xs transition shadow-lg shadow-primary/20 cursor-pointer disabled:opacity-50 flex items-center gap-2"
+                            type="button"
+                            aria-pressed={direction === 'BELOW'}
+                            onClick={() => handleDirectionChange('BELOW')}
+                            className={directionOptionClass('BELOW')}
                         >
-                            {isSubmitting ? (
-                                <>
-                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                    <span>Kaydediliyor...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Plus className="w-3.5 h-3.5" />
-                                    <span>Alarmı Başlat</span>
-                                </>
-                            )}
+                            <span className={directionTitleClass('BELOW')}>
+                                <span aria-hidden className="text-[0.8em] leading-none">▼</span>
+                                <span>Fiyat düşerse</span>
+                            </span>
+                            <span className="text-xs text-fg-muted">Fiyat hedefe inince veya altına düşünce</span>
                         </button>
                     </div>
-                </form>
-            </motion.div>
-        </div>
+                </div>
+
+                <Field label="Hedef fiyat" htmlFor="alert-target">
+                    <Input
+                        id="alert-target"
+                        type="text"
+                        inputMode="decimal"
+                        value={targetPriceInput}
+                        onChange={(e) => handlePriceInputChange(e.target.value)}
+                        placeholder="Örn: 350,50"
+                        autoComplete="off"
+                        className="font-medium"
+                        rightSlot={<span className="font-mono">₺</span>}
+                        required
+                    />
+
+                    {renderTargetHint()}
+
+                    {selectedAsset && selectedAsset.price > 0 && (
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                            <span className="text-xs text-fg-muted">Hızlı:</span>
+                            {(direction === 'ABOVE' ? [2, 5, 10, 15] : [-2, -5, -10, -15]).map((pct) => (
+                                <button
+                                    key={pct}
+                                    type="button"
+                                    onClick={() => handleQuickPercent(pct)}
+                                    className="min-h-11 sm:min-h-10 rounded border border-border px-3 font-mono text-sm text-fg cursor-pointer transition-colors duration-[120ms] hover:border-border-strong hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                                >
+                                    {formatSignedPercent(pct, 0)}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </Field>
+
+                {formError && (
+                    <div role="alert" className="flex items-start gap-2 rounded border border-loss bg-loss-soft px-3 py-2.5 text-sm text-loss">
+                        <AlertCircle className="size-4 shrink-0 mt-0.5" aria-hidden />
+                        <span>{formError}</span>
+                    </div>
+                )}
+            </form>
+        </Modal>
     );
 }

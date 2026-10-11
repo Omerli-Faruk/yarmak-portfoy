@@ -1,18 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { NormalizedTransaction, Transaction } from '@/types';
 import api from '@/lib/api';
 import { formatTRY } from '@/lib/formatters';
-import {
-    AlertTriangle,
-    ArrowDownRight,
-    ArrowUpRight,
-    CheckCircle2,
-    Pencil,
-    RefreshCw,
-    X,
-} from 'lucide-react';
+import { AlertTriangle, ArrowDownRight, ArrowUpRight } from 'lucide-react';
+import Modal from '@/components/ui/Modal';
+import Button from '@/components/ui/Button';
+import Field from '@/components/ui/Field';
+import Input from '@/components/ui/Input';
+import { cn } from '@/lib/cn';
 
 interface EditTransactionModalProps {
     tx: NormalizedTransaction;
@@ -29,6 +26,8 @@ function toLocalInputValue(value: string): string {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+const FORM_ID = 'edit-transaction-form';
+
 export default function EditTransactionModal({ tx, onClose, onSaved }: EditTransactionModalProps) {
     // Bileşen her işlem için key ile yeniden kurulduğundan başlangıç değerleri doğrudan kayıttan alınır
     const [editType, setEditType] = useState<'BUY' | 'SELL'>(tx.type === 'SELL' ? 'SELL' : 'BUY');
@@ -38,6 +37,13 @@ export default function EditTransactionModal({ tx, onClose, onSaved }: EditTrans
     const [editCommission, setEditCommission] = useState(String(tx.commission));
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const ids = useId();
+    const typeLabelId = `${ids}-type`;
+    const amountId = `${ids}-amount`;
+    const priceId = `${ids}-price`;
+    const commissionId = `${ids}-commission`;
+    const dateId = `${ids}-date`;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -92,175 +98,142 @@ export default function EditTransactionModal({ tx, onClose, onSaved }: EditTrans
         }
     };
 
+    // Seçili tür çizgisi ve yazısı yeşil/kırmızı olur; metin ve ok simgesi de türü belirtir
+    const typeButtonClass = (active: boolean, tone: 'profit' | 'loss') =>
+        cn(
+            'flex flex-1 items-center justify-center gap-1.5 h-11 sm:h-10 rounded border text-sm font-medium cursor-pointer [&_svg]:size-4',
+            'transition-colors duration-[120ms] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+            active
+                ? tone === 'profit'
+                    ? 'bg-profit-soft text-profit border-profit'
+                    : 'bg-loss-soft text-loss border-loss'
+                : 'bg-surface-2 text-fg-muted border-border hover:text-fg hover:border-border-strong',
+        );
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
-
-                {/* Başlık */}
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <div className="flex items-center gap-2.5">
-                        <div className="p-2.5 bg-amber-500/10 rounded-xl border border-amber-500/20 text-amber-400">
-                            <Pencil className="size-5" />
-                        </div>
-                        <div>
-                            <h3 className="text-base font-bold text-white flex items-center gap-2">
-                                <span>İşlemi Düzenle</span>
-                                <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
-                                    {tx.symbol}
-                                </span>
-                            </h3>
-                            <p className="text-xs text-slate-400 truncate max-w-xs">
-                                {tx.assetName}
-                            </p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+        <Modal
+            open
+            onClose={onClose}
+            title={
+                <span className="flex flex-wrap items-baseline gap-2">
+                    <span>İşlemi düzenle</span>
+                    <span className="font-mono text-base font-medium text-fg-muted">{tx.symbol}</span>
+                </span>
+            }
+            description={tx.assetName}
+            size="lg"
+            dismissible={!submitting}
+            footer={
+                <>
+                    <Button variant="secondary" onClick={onClose} disabled={submitting}>
+                        Vazgeç
+                    </Button>
+                    <Button
+                        type="submit"
+                        form={FORM_ID}
+                        loading={submitting}
                     >
-                        <X className="size-5" />
-                    </button>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Alış / satış */}
-                    <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                            İşlem Türü
-                        </label>
-                        <div className="grid grid-cols-2 gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setEditType('BUY')}
-                                className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border cursor-pointer ${
-                                    editType === 'BUY'
-                                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500 shadow-sm shadow-emerald-500/10'
-                                        : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-white'
-                                }`}
-                            >
-                                <ArrowDownRight className="size-4" />
-                                <span>ALIŞ</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setEditType('SELL')}
-                                className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border cursor-pointer ${
-                                    editType === 'SELL'
-                                        ? 'bg-rose-500/20 text-rose-400 border-rose-500 shadow-sm shadow-rose-500/10'
-                                        : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-white'
-                                }`}
-                            >
-                                <ArrowUpRight className="size-4" />
-                                <span>SATIŞ</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Adet ve birim fiyat. Fiyat her zaman TL olarak kaydedilir. */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                                Adet / Lot
-                            </label>
-                            <input
-                                type="number"
-                                step="any"
-                                required
-                                value={editAmount}
-                                onChange={(e) => setEditAmount(e.target.value)}
-                                placeholder="0"
-                                className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-700 rounded-xl text-sm font-mono text-white focus:outline-none focus:border-primary transition"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                                Birim Fiyat (₺)
-                            </label>
-                            <input
-                                type="number"
-                                step="any"
-                                required
-                                value={editPrice}
-                                onChange={(e) => setEditPrice(e.target.value)}
-                                placeholder="0.00"
-                                className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-700 rounded-xl text-sm font-mono text-white focus:outline-none focus:border-primary transition"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Girilen adet ve fiyata göre toplam */}
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs">
-                        <span className="text-slate-400">Toplam İşlem Tutarı:</span>
-                        <span className="text-sm font-black font-mono text-white">
-                            {formatTRY((parseFloat(editAmount) || 0) * (parseFloat(editPrice) || 0))}
-                        </span>
-                    </div>
-
-                    {/* Komisyon ve tarih */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                                Komisyon (₺)
-                            </label>
-                            <input
-                                type="number"
-                                step="any"
-                                value={editCommission}
-                                onChange={(e) => setEditCommission(e.target.value)}
-                                placeholder="0.00"
-                                className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-700 rounded-xl text-sm font-mono text-white focus:outline-none focus:border-primary transition"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                                İşlem Tarihi & Saati
-                            </label>
-                            <input
-                                type="datetime-local"
-                                required
-                                value={editDate}
-                                onChange={(e) => setEditDate(e.target.value)}
-                                className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-700 rounded-xl text-xs font-mono text-white focus:outline-none focus:border-primary transition [color-scheme:dark]"
-                            />
-                        </div>
-                    </div>
-
-                    {error && (
-                        <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-start gap-2">
-                            <AlertTriangle className="size-4 shrink-0 mt-0.5" />
-                            <span>{error}</span>
-                        </div>
-                    )}
-
-                    <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                        {submitting ? 'Güncelleniyor...' : 'Kaydet'}
+                    </Button>
+                </>
+            }
+        >
+            <form id={FORM_ID} onSubmit={handleSubmit} className="flex flex-col gap-3">
+                {/* Alış / satış */}
+                <div className="flex flex-col gap-1">
+                    <span id={typeLabelId} className="text-13 font-medium text-fg">
+                        İşlem türü
+                    </span>
+                    <div role="group" aria-labelledby={typeLabelId} className="flex gap-2">
                         <button
                             type="button"
-                            onClick={onClose}
-                            disabled={submitting}
-                            className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:bg-slate-800 transition cursor-pointer"
+                            aria-pressed={editType === 'BUY'}
+                            onClick={() => setEditType('BUY')}
+                            className={typeButtonClass(editType === 'BUY', 'profit')}
                         >
-                            Vazgeç
+                            <ArrowDownRight />
+                            <span>Alış</span>
                         </button>
                         <button
-                            type="submit"
-                            disabled={submitting}
-                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-primary hover:bg-primary-hover text-white transition shadow-sm cursor-pointer disabled:opacity-50"
+                            type="button"
+                            aria-pressed={editType === 'SELL'}
+                            onClick={() => setEditType('SELL')}
+                            className={typeButtonClass(editType === 'SELL', 'loss')}
                         >
-                            {submitting ? (
-                                <>
-                                    <RefreshCw className="size-3.5 animate-spin" />
-                                    <span>Güncelleniyor...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <CheckCircle2 className="size-3.5" />
-                                    <span>Değişiklikleri Kaydet</span>
-                                </>
-                            )}
+                            <ArrowUpRight />
+                            <span>Satış</span>
                         </button>
                     </div>
-                </form>
-            </div>
-        </div>
+                </div>
+
+                {/* Adet ve birim fiyat. Fiyat her zaman TL olarak kaydedilir. */}
+                <div className="flex gap-3">
+                    <Field label="Adet (lot)" htmlFor={amountId} className="flex-1">
+                        <Input
+                            id={amountId}
+                            type="number"
+                            inputMode="decimal"
+                            step="any"
+                            required
+                            value={editAmount}
+                            onChange={(e) => setEditAmount(e.target.value)}
+                            placeholder="0"
+                        />
+                    </Field>
+                    <Field label="Birim fiyat (₺)" htmlFor={priceId} className="flex-1">
+                        <Input
+                            id={priceId}
+                            type="number"
+                            inputMode="decimal"
+                            step="any"
+                            required
+                            value={editPrice}
+                            onChange={(e) => setEditPrice(e.target.value)}
+                            placeholder="0.00"
+                        />
+                    </Field>
+                </div>
+
+                {/* Girilen adet ve fiyata göre toplam: kutusuz etiket/değer satırı */}
+                <div className="flex items-center justify-between gap-3 py-2 border-y border-border">
+                    <span className="text-sm text-fg-muted">İşlem tutarı</span>
+                    <span className="font-mono text-base font-medium text-fg">
+                        {formatTRY((parseFloat(editAmount) || 0) * (parseFloat(editPrice) || 0))}
+                    </span>
+                </div>
+
+                {/* Komisyon ve tarih */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <Field label="Komisyon (₺)" htmlFor={commissionId} className="flex-1">
+                        <Input
+                            id={commissionId}
+                            type="number"
+                            inputMode="decimal"
+                            step="any"
+                            value={editCommission}
+                            onChange={(e) => setEditCommission(e.target.value)}
+                            placeholder="0.00"
+                        />
+                    </Field>
+                    <Field label="Tarih ve saat" htmlFor={dateId} className="flex-1">
+                        <Input
+                            id={dateId}
+                            type="datetime-local"
+                            required
+                            value={editDate}
+                            onChange={(e) => setEditDate(e.target.value)}
+                            className="font-mono"
+                        />
+                    </Field>
+                </div>
+
+                {error && (
+                    <div role="alert" className="flex items-start gap-2 rounded bg-loss-soft px-3 py-2 text-sm text-loss">
+                        <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+                        <span>{error}</span>
+                    </div>
+                )}
+            </form>
+        </Modal>
     );
 }

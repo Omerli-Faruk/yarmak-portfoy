@@ -1,6 +1,7 @@
 'use client';
 
 import type { Currency } from '@/hooks/useCurrency';
+import { cn } from '@/lib/cn';
 
 interface CurrencyToggleProps {
     currency: Currency;
@@ -9,7 +10,13 @@ interface CurrencyToggleProps {
     className?: string;
 }
 
-// TRY / USD geçiş düğmesi (Portföyüm ve Varlıklarım üst bölümü)
+const OPTIONS: { value: Currency; label: string }[] = [
+    { value: 'TRY', label: '₺ TRY' },
+    { value: 'USD', label: '$ USD' },
+];
+
+// TRY / USD geçiş düğmesi (Portföyüm ve Varlıklarım üst bölümü). Tek düğmedir; tıklayınca diğer birime geçer.
+// Görünümü SegmentedControl ile aynıdır.
 export default function CurrencyToggle({ currency, onToggle, disabled = false, className = '' }: CurrencyToggleProps) {
     // Kur yokken tutarlar TL gösterildiği için düğme de TL göstersin
     const shown: Currency = disabled ? 'TRY' : currency;
@@ -20,19 +27,27 @@ export default function CurrencyToggle({ currency, onToggle, disabled = false, c
             onClick={onToggle}
             disabled={disabled}
             title={disabled ? 'Kur bilgisi alınamadı' : 'Tüm değerleri dolar veya TL cinsinden görüntüle'}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-sm border bg-slate-800 border-slate-700 text-slate-100 ${
-                disabled
-                    ? 'opacity-50 cursor-not-allowed'
-                    : 'hover:border-[#1A9FD3] hover:text-[#1A9FD3] active:scale-95 cursor-pointer'
-            } ${className}`}
+            className={cn(
+                'inline-flex items-center gap-px p-0.5 rounded border border-border bg-surface-2 text-13 font-medium shrink-0',
+                'transition-colors duration-[120ms]',
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-border-strong',
+                className,
+            )}
         >
-            <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-slate-700/80 text-slate-200">
-                {shown}
-            </span>
-            <span>Para Birimi:</span>
-            <span className="px-2 py-0.5 rounded-md font-extrabold bg-[#1A9FD3]/15 text-[#1A9FD3]">
-                {shown === 'TRY' ? '₺ TRY' : '$ USD'}
-            </span>
+            <span className="sr-only">Para Birimi: {shown}</span>
+            {OPTIONS.map(option => (
+                <span
+                    key={option.value}
+                    aria-hidden
+                    className={cn(
+                        'flex items-center h-10 sm:h-9 px-3 rounded-[3px] whitespace-nowrap font-mono transition-colors duration-[120ms]',
+                        option.value === shown ? 'bg-surface-3 text-fg ring-1 ring-inset ring-border-strong' : 'text-fg-muted',
+                    )}
+                >
+                    {option.label}
+                </span>
+            ))}
         </button>
     );
 }

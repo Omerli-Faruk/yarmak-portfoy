@@ -2,27 +2,45 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Activity, Layers, Plus, Search, X } from 'lucide-react';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { ASSET_TYPE_LABELS, formatPriceTR, formatSignedPercent } from '@/lib/formatters';
+import { Activity, Plus, Search, X } from 'lucide-react';
+import Badge from '@/components/ui/Badge';
+import Button from '@/components/ui/Button';
+import ChangePill from '@/components/ui/ChangePill';
+import EmptyState from '@/components/ui/EmptyState';
+import IconButton from '@/components/ui/IconButton';
+import Input from '@/components/ui/Input';
+import Section from '@/components/ui/Section';
+import SegmentedControl from '@/components/ui/SegmentedControl';
+import Select from '@/components/ui/Select';
+import Skeleton from '@/components/ui/Skeleton';
+import { cn } from '@/lib/cn';
+import { ASSET_TYPE_LABELS, formatPriceTR } from '@/lib/formatters';
 import type { MarketAssetItem } from '@/types';
 
 export type MarketCategory = 'ALL' | 'HISSE' | 'FON' | 'EMTIA';
 export type MarketSort = 'gainers' | 'losers' | 'popular' | 'alpha';
 
-const CATEGORY_OPTIONS: { id: MarketCategory; label: string }[] = [
-    { id: 'ALL', label: 'Tümü' },
-    { id: 'HISSE', label: 'BIST Hisseleri' },
-    { id: 'FON', label: 'TEFAS Fonları' },
-    { id: 'EMTIA', label: 'Altın & Döviz' },
+const CATEGORY_OPTIONS: { value: MarketCategory; label: string }[] = [
+    { value: 'ALL', label: 'Tümü' },
+    { value: 'HISSE', label: 'BIST hisseleri' },
+    { value: 'FON', label: 'TEFAS fonları' },
+    { value: 'EMTIA', label: 'Altın ve döviz' },
 ];
 
+// "Seçili hisseler önce" API'deki sabit BIST seçkisini başa alır; sayfadaki ayrı liste bu sıralamaya taşındı
 const SORT_OPTIONS: { id: MarketSort; label: string }[] = [
-    { id: 'gainers', label: 'En Çok Artanlar' },
-    { id: 'losers', label: 'En Çok Düşenler' },
+    { id: 'gainers', label: 'En çok artanlar' },
+    { id: 'losers', label: 'En çok düşenler' },
     { id: 'popular', label: 'Seçili hisseler önce' },
     { id: 'alpha', label: 'A-Z' },
 ];
+
+// Masaüstünde başlık satırı ile veri satırları aynı sütun genişliklerini kullanır
+const COL_SYMBOL = 'md:w-20 shrink-0';
+const COL_TYPE = 'w-20 shrink-0';
+const COL_PRICE = 'md:w-28 shrink-0 text-right';
+const COL_CHANGE = 'md:w-28 shrink-0 flex justify-end';
+const COL_ACTIONS = 'md:w-24 shrink-0 flex items-center justify-end';
 
 interface MarketScreenerProps {
     searchQuery: string;
@@ -38,7 +56,7 @@ interface MarketScreenerProps {
     onQuickAdd: (item: MarketAssetItem) => void;
 }
 
-// Filtre durumu sayfada tutulur; bu bileşen yalnızca listeyi ve kontrolleri çizer
+// Filtre durumu sayfada tutulur; bu bileşen yalnızca tabloyu ve kontrolleri çizer
 export default function MarketScreener({
     searchQuery,
     onSearchChange,
@@ -53,178 +71,181 @@ export default function MarketScreener({
     onQuickAdd,
 }: MarketScreenerProps) {
     return (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm">
-            {/* Başlık ve arama */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-800/80">
-                <div>
-                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                        <Layers className="size-5 text-slate-400" />
-                        Varlık Keşif Listesi
-                    </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                        Kriterlerinize göre hisse ve fonları filtreleyin, anında portföyünüze ekleyin.
-                    </p>
-                </div>
-
-                <div className="relative w-full md:w-80">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
-                    <input
+        <Section title="Varlık keşfi">
+            {/* Tek filtre satırı: solda kategori sekmeleri, sağda arama ve sıralama.
+                Mobilde sekmeler alta iner ki alt çizgileri satırın ayracına otursun. */}
+            <div className="flex flex-col-reverse gap-2 border-b border-border lg:flex-row lg:items-end lg:justify-between lg:gap-4">
+                <SegmentedControl
+                    variant="underline"
+                    options={CATEGORY_OPTIONS}
+                    value={category}
+                    onChange={onCategoryChange}
+                    size="sm"
+                    ariaLabel="Kategori"
+                    className="-mb-px"
+                />
+                {/* Mobilde arama ve sıralama alt alta, tam genişlikte; geniş ekranda yan yana */}
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:pb-2">
+                    <Input
                         type="text"
                         value={searchQuery}
                         onChange={e => onSearchChange(e.target.value)}
                         placeholder="Hisse, fon veya sembol ara..."
-                        className="w-full bg-slate-800/90 border border-slate-700/70 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-100 placeholder-slate-400 focus:outline-none focus:border-[#1A9FD3] transition"
-                    />
-                    {searchQuery && (
-                        <button
-                            onClick={() => onSearchChange('')}
-                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                        >
-                            <X className="size-3.5" />
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            {/* Kategori ve sıralama */}
-            <div className="flex flex-wrap items-center justify-between gap-3 py-4">
-                <div className="flex items-center gap-1.5 bg-slate-800/70 p-1 rounded-xl border border-slate-700/60 overflow-x-auto no-scrollbar">
-                    {CATEGORY_OPTIONS.map(cat => (
-                        <button
-                            key={cat.id}
-                            onClick={() => onCategoryChange(cat.id)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
-                                category === cat.id
-                                    ? 'bg-[#1A9FD3] text-white shadow-xs'
-                                    : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-                            }`}
-                        >
-                            {cat.label}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-slate-500 font-medium hidden sm:inline">Sırala:</span>
-                    <div className="flex items-center gap-1 bg-slate-800/70 p-1 rounded-xl border border-slate-700/60 text-xs font-semibold">
-                        {SORT_OPTIONS.map(s => (
+                        aria-label="Hisse, fon veya sembol ara"
+                        leftIcon={<Search />}
+                        rightSlot={searchQuery ? (
                             <button
-                                key={s.id}
-                                onClick={() => onSortChange(s.id)}
-                                className={`px-2.5 py-1 rounded-lg transition cursor-pointer text-xs ${
-                                    sort === s.id
-                                        ? 'bg-slate-700 text-white font-bold'
-                                        : 'text-slate-400 hover:text-slate-200'
-                                }`}
+                                type="button"
+                                aria-label="Aramayı temizle"
+                                title="Aramayı temizle"
+                                onClick={() => onSearchChange('')}
+                                className="-mr-2 flex size-10 cursor-pointer items-center justify-center rounded text-fg-muted transition-colors duration-[120ms] hover:bg-surface-3 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary [&_svg]:size-[18px]"
                             >
-                                {s.label}
+                                <X />
                             </button>
-                        ))}
+                        ) : undefined}
+                        containerClassName="min-w-0 sm:flex-1 lg:w-72 lg:flex-none"
+                    />
+                    <label htmlFor="market-sort" className="hidden shrink-0 text-sm text-fg-muted lg:inline">
+                        Sırala:
+                    </label>
+                    {/* Select kabı w-full taşır; genişliği sarmalayıcı belirler */}
+                    <div className="w-full shrink-0 sm:w-56">
+                        <Select
+                            id="market-sort"
+                            aria-label="Sırala"
+                            value={sort}
+                            onChange={e => onSortChange(e.target.value as MarketSort)}
+                        >
+                            {SORT_OPTIONS.map(s => (
+                                <option key={s.id} value={s.id}>{s.label}</option>
+                            ))}
+                        </Select>
                     </div>
                 </div>
             </div>
 
             {/* Arama sonucu sayısı */}
             {debouncedSearch && totalFound !== null && (
-                <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300 bg-slate-800/80 px-3.5 py-2 rounded-xl border border-slate-700/60">
-                    <div className="flex items-center gap-2">
-                        <Search className="size-3.5 text-[#1A9FD3]" />
-                        <span>
-                            <strong>&quot;{debouncedSearch}&quot;</strong> için <strong>{totalFound}</strong> varlık bulundu
-                        </span>
-                    </div>
-                    <span className="text-[11px] text-slate-400">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 border-b border-border py-2.5 text-sm">
+                    <span className="min-w-0 break-words text-fg-muted">
+                        <strong className="font-medium text-fg">&quot;{debouncedSearch}&quot;</strong> için <strong className="font-mono font-medium text-fg">{totalFound}</strong> varlık bulundu
+                    </span>
+                    <span className="text-xs text-fg-muted">
                         En alakalılar üstte, benzer varlıklar aşağıda listelenir
                     </span>
                 </div>
             )}
 
             {loading ? (
-                <div className="py-16 flex flex-col items-center justify-center text-slate-400">
-                    <LoadingSpinner fullScreen={false} message="Piyasa varlıkları yükleniyor..." />
+                <div className="flex flex-col divide-y divide-border">
+                    <span className="sr-only">Piyasa varlıkları yükleniyor...</span>
+                    {Array.from({ length: 8 }, (_, i) => (
+                        <div key={i} className="flex h-12 items-center gap-4">
+                            <Skeleton className="h-3.5 w-14" />
+                            <Skeleton className="h-3 w-40 max-w-full" />
+                            <span className="flex-1" />
+                            <Skeleton className="h-3.5 w-20" />
+                            <Skeleton className="hidden h-3.5 w-16 md:block" />
+                        </div>
+                    ))}
                 </div>
             ) : items.length === 0 ? (
-                <div className="py-16 text-center text-slate-500">
-                    <Activity className="size-10 mx-auto mb-2 opacity-20" />
-                    <p className="text-sm font-medium">
-                        {debouncedSearch ? `"${debouncedSearch}" aramasına uygun veya benzer varlık bulunamadı.` : 'Aramanıza uygun varlık bulunamadı.'}
-                    </p>
-                    <p className="text-xs text-slate-600 mt-1">Farklı bir sembol veya arama terimi deneyebilirsiniz.</p>
-                </div>
+                <EmptyState
+                    icon={<Activity />}
+                    title={debouncedSearch ? `"${debouncedSearch}" aramasına uygun veya benzer varlık bulunamadı.` : 'Aramanıza uygun varlık bulunamadı.'}
+                    description="Farklı bir sembol veya arama terimi deneyebilirsiniz."
+                    action={searchQuery ? (
+                        <Button size="sm" variant="secondary" leftIcon={<X />} onClick={() => onSearchChange('')}>
+                            Aramayı temizle
+                        </Button>
+                    ) : undefined}
+                />
             ) : (
-                <div className="overflow-x-auto custom-horizontal-scrollbar">
-                    <table className="w-full text-left text-xs">
-                        <thead>
-                            <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider">
-                                <th className="py-3 px-3">Varlık</th>
-                                <th className="py-3 px-3">Tür</th>
-                                <th className="py-3 px-3 text-right">Fiyat</th>
-                                <th className="py-3 px-3 text-right">Günlük Değişim</th>
-                                <th className="py-3 px-3 text-center">İşlem</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-800/60 font-medium">
-                            {items.map((item, idx) => (
-                                <tr key={`scr-${item.id}-${item.symbol}-${idx}`} className="hover:bg-slate-800/30 transition group">
-                                    <td className="py-3 px-3">
-                                        <Link href={`/assets/${item.symbol}`} className="flex items-center gap-2.5 hover:text-[#1A9FD3] transition">
-                                            <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center font-bold text-xs text-white shrink-0 group-hover:bg-[#1A9FD3] transition">
-                                                {item.symbol.slice(0, 2)}
-                                            </div>
-                                            <div>
-                                                <span className="font-bold text-white group-hover:text-[#1A9FD3] transition font-mono">
-                                                    {item.symbol}
-                                                </span>
-                                                <p className="text-[11px] text-slate-400 truncate max-w-xs sm:max-w-md">
-                                                    {item.name}
-                                                </p>
-                                            </div>
-                                        </Link>
-                                    </td>
+                <div className="flex flex-col">
+                    {/* Masaüstü sütun başlıkları; mobilde iki satırlı yığın satırlar kendi içinde anlaşılır */}
+                    <div
+                        aria-hidden
+                        className="sticky top-0 z-10 hidden h-9 items-center gap-6 border-b border-border bg-bg text-xs text-fg-muted md:flex"
+                    >
+                        <span className="min-w-0 flex-1">Varlık</span>
+                        <span className={cn(COL_TYPE, 'hidden lg:block')}>Tür</span>
+                        <span className={COL_PRICE}>Fiyat</span>
+                        <span className={COL_CHANGE}>Günlük değişim</span>
+                        <span className={cn(COL_ACTIONS, 'pr-3.5')}>İşlem</span>
+                    </div>
 
-                                    <td className="py-3 px-3">
-                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700/80">
-                                            {ASSET_TYPE_LABELS[item.asset_type] ?? item.asset_type}
+                    <ul className="flex flex-col divide-y divide-border">
+                        {items.map((item, idx) => {
+                            const typeLabel = ASSET_TYPE_LABELS[item.asset_type] ?? item.asset_type;
+                            return (
+                                <li
+                                    key={`scr-${item.id}-${item.symbol}-${idx}`}
+                                    className="flex min-h-14 items-center gap-2 py-1.5 transition-colors duration-[120ms] hover:bg-surface-2 md:h-12 md:min-h-0 md:gap-6 md:py-0"
+                                >
+                                    {/* Mobilde: üstte sembol + tür, altta ad. Masaüstünde tek satır. */}
+                                    <Link
+                                        href={`/assets/${item.symbol}`}
+                                        className={cn(
+                                            'group flex min-w-0 flex-1 flex-col justify-center self-stretch rounded md:flex-row md:items-center md:justify-start md:gap-6',
+                                            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                                        )}
+                                    >
+                                        <span className={cn(COL_SYMBOL, 'flex min-w-0 items-center gap-1.5')}>
+                                            <span className="truncate font-mono text-sm font-medium text-fg transition-colors duration-[120ms] group-hover:text-primary">
+                                                {item.symbol}
+                                            </span>
+                                            {/* Tür etiketi mobilde sembolün yanında, geniş ekranda kendi sütununda */}
+                                            <span className="flex lg:hidden">
+                                                <Badge>{typeLabel}</Badge>
+                                            </span>
                                         </span>
-                                    </td>
-
-                                    <td className="py-3 px-3 text-right font-bold text-slate-200 tabular-nums font-mono">
-                                        {formatPriceTR(item.price)}
-                                    </td>
-
-                                    <td className="py-3 px-3 text-right">
-                                        <span className={`inline-flex items-center font-bold font-mono tabular-nums px-2 py-0.5 rounded ${
-                                            item.positive
-                                                ? 'bg-emerald-500/10 text-emerald-400'
-                                                : 'bg-rose-500/10 text-rose-400'
-                                        }`}>
-                                            {formatSignedPercent(item.change_value)}
+                                        <span className="min-w-0 truncate text-xs text-fg-muted md:text-sm">
+                                            {item.name}
                                         </span>
-                                    </td>
+                                    </Link>
 
-                                    <td className="py-3 px-3 text-center">
-                                        <div className="flex items-center justify-center gap-1.5">
-                                            <Link
-                                                href={`/assets/${item.symbol}`}
-                                                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition font-semibold text-[11px]"
-                                            >
-                                                Detay
-                                            </Link>
-                                            <button
+                                    <span className={cn(COL_TYPE, 'hidden text-sm text-fg-muted lg:block')}>
+                                        {typeLabel}
+                                    </span>
+
+                                    {/* Mobilde fiyat ve değişim alt alta, masaüstünde yan yana sütunlar */}
+                                    <div className="flex shrink-0 flex-col items-end md:flex-row md:items-center md:gap-6">
+                                        <span className={cn(COL_PRICE, 'font-mono text-sm text-fg')}>
+                                            {formatPriceTR(item.price)}
+                                        </span>
+                                        <span className={COL_CHANGE}>
+                                            <ChangePill value={item.change_value} />
+                                        </span>
+                                    </div>
+
+                                    <div className={COL_ACTIONS}>
+                                        {/* Satırdaki varlık bağlantısı detaya götürür; masaüstünde yazılı, mobilde simgeli ekle düğmesi */}
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            leftIcon={<Plus />}
+                                            onClick={() => onQuickAdd(item)}
+                                            aria-label="Portföyüme ekle"
+                                            className="hidden md:inline-flex"
+                                        >
+                                            Ekle
+                                        </Button>
+                                        <span className="flex md:hidden">
+                                            <IconButton
+                                                icon={<Plus />}
+                                                label="Portföyüme ekle"
+                                                size="sm"
                                                 onClick={() => onQuickAdd(item)}
-                                                className="px-2.5 py-1 rounded-lg bg-[#1A9FD3]/20 hover:bg-[#1A9FD3] text-[#1A9FD3] hover:text-white border border-[#1A9FD3]/30 transition font-bold text-[11px] flex items-center gap-1 cursor-pointer"
-                                            >
-                                                <Plus className="size-3 stroke-[3]" />
-                                                <span>Ekle</span>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                                            />
+                                        </span>
+                                    </div>
+                                </li>
+                            );
+                        })}
+                    </ul>
                 </div>
             )}
-        </div>
+        </Section>
     );
 }

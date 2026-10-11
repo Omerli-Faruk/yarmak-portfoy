@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import type { AssetGroup, User } from '@/types';
 import { HOLDINGS_SORT_OPTIONS, type HoldingsSortType } from './HoldingsToolbar';
 
-// İlk girişte (kayıtlı grup yoksa) oluşturulan gruplar
+// İlk girişte (kayıtlı grup yoksa) oluşturulan gruplar. Renkler tema rengi değil, localStorage'a kaydedilen grup verisidir.
 const DEFAULT_GROUPS: AssetGroup[] = [
     { id: 'g_temettu', name: 'Temettü Hisselerim', color: '#10b981' },
     { id: 'g_buyume', name: 'Büyüme Portföyü', color: '#1A9FD3' },

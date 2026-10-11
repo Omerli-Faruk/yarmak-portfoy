@@ -2,103 +2,54 @@
 
 import { useMemo } from 'react';
 import { motion } from 'motion/react';
-import { SLIDER_CONFIG, type CatalogAsset, type TickerType } from '@/data/homeData';
-import { formatPriceTR, formatSignedPercent } from '@/lib/formatters';
+import type { CatalogAsset } from '@/data/homeData';
+import ChangePill from '@/components/ui/ChangePill';
+import Skeleton from '@/components/ui/Skeleton';
+import { buildMarketItems, type MarketItem } from './marketItems';
 
-// Şeritte varlık adının önündeki küçük etiket. Endekslerde etiket yok.
-const TYPE_BADGES: Partial<Record<TickerType, string>> = {
-    flag_us: 'USD',
-    flag_eu: 'EUR',
-    gold: 'ALTIN',
-    tefas: 'FON',
-    stock: 'BIST',
-};
-
-interface TickerItem {
-    id: string;
-    label: string;
-    price: string;
-    change: string;
-    positive: boolean;
-    badge?: string;
+function TickerEntry({ item }: { item: MarketItem }) {
+    return (
+        <div className="flex shrink-0 cursor-default items-baseline gap-2 whitespace-nowrap">
+            <span className="text-sm text-fg-muted">{item.label}</span>
+            <span className="font-mono text-sm text-fg">{item.price}</span>
+            <ChangePill value={item.change} />
+        </div>
+    );
 }
 
 // Kayan fiyat şeridi. Fiyatlar /api/assets'ten gelir; şeritteki varlıklar SLIDER_CONFIG sırasıyla gösterilir.
+// Şerit her durumda kayar (hareket azaltma tercihine bakılmaz). Kutu yok, üstte ve altta ince çizgi.
 export default function MarketTicker({ assets }: { assets: CatalogAsset[] }) {
-    const items = useMemo(() => {
-        const result: TickerItem[] = [];
-
-        SLIDER_CONFIG.forEach((cfg) => {
-            const asset = assets.find((a) => a.symbol === cfg.symbol);
-            const price = asset ? parseFloat(asset.current_price) : NaN;
-            if (!asset || !(price > 0)) return;
-
-            const change = parseFloat(asset.change);
-            result.push({
-                id: cfg.symbol.toLowerCase(),
-                label: cfg.label,
-                // Endeks puanı TL değildir, ₺ eklenmez
-                price: cfg.type === 'index'
-                    ? price.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                    : formatPriceTR(price),
-                change: formatSignedPercent(isNaN(change) ? 0 : change),
-                positive: asset.positive,
-                badge: TYPE_BADGES[cfg.type],
-            });
-        });
-
-        return result;
-    }, [assets]);
+    const items = useMemo(() => buildMarketItems(assets), [assets]);
 
     return (
-        <section className="w-full border-y border-white/[0.08] bg-[#090D14] py-3.5 overflow-hidden flex items-center justify-center">
-            {items.length > 0 ? (
-                <div className="flex w-full overflow-hidden select-none">
+        <section
+            aria-label="Piyasa fiyatları"
+            className="flex h-11 w-full shrink-0 items-center overflow-hidden border-y border-border"
+        >
+            {items.length === 0 ? (
+                <div role="status" className="flex items-center gap-3">
+                    <Skeleton className="h-3.5 w-14" />
+                    <span className="text-sm text-fg-muted">Piyasa verileri yükleniyor...</span>
+                    <Skeleton className="h-3.5 w-14" />
+                </div>
+            ) : (
+                <div className="flex w-full select-none overflow-hidden">
                     <motion.div
-                        className="flex shrink-0 items-center gap-8 sm:gap-12"
+                        className="flex shrink-0 items-center gap-10 pr-10"
                         animate={{ x: ['0%', '-50%'] }}
                         transition={{
                             repeat: Infinity,
                             repeatType: 'loop',
-                            duration: 32,
+                            duration: 40,
                             ease: 'linear',
                         }}
                     >
                         {/* Liste iki kez art arda basılır, böylece kayma kesintisiz görünür */}
                         {[...items, ...items].map((item, idx) => (
-                            <div key={`${item.id}-${idx}`} className="flex items-center gap-2 shrink-0 group cursor-default">
-                                {item.badge && (
-                                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/80">
-                                        {item.badge}
-                                    </span>
-                                )}
-
-                                <span className="text-slate-200 font-semibold tracking-wide text-xs sm:text-[13px]">
-                                    {item.label}
-                                </span>
-
-                                <span
-                                    className={`font-mono font-bold text-xs sm:text-[13px] ${
-                                        item.positive ? 'text-emerald-400' : 'text-rose-400'
-                                    }`}
-                                >
-                                    {item.price}
-                                </span>
-
-                                <span
-                                    className={`font-mono text-xs sm:text-[13px] ${
-                                        item.positive ? 'text-emerald-400' : 'text-rose-400'
-                                    }`}
-                                >
-                                    {item.change}
-                                </span>
-                            </div>
+                            <TickerEntry key={`${item.symbol}-${idx}`} item={item} />
                         ))}
                     </motion.div>
-                </div>
-            ) : (
-                <div className="text-xs font-mono text-slate-400 py-1">
-                    Piyasa verileri yükleniyor...
                 </div>
             )}
         </section>

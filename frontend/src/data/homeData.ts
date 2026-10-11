@@ -1,5 +1,3 @@
-import { Globe, LineChart, Clock, Activity, Bell, Shield } from 'lucide-react';
-
 // /api/assets yanıtındaki bir varlık (fiyat ve değişim metin olarak gelir: "318.50", "+1.25")
 export interface CatalogAsset {
     id: number;
@@ -12,12 +10,12 @@ export interface CatalogAsset {
 }
 
 export const featureCards = [
-    { icon: Globe, title: 'Hisse, fon ve altın tek yerde', desc: 'BIST hisseleri, TEFAS yatırım fonları, gram altın ve döviz yatırımlarınızı tek bir panelden takip edin. Farklı aracı kurumlardaki işlemlerinizi tek listede toplayabilirsiniz.' },
-    { icon: LineChart, title: 'Dolar karşılığı', desc: 'Portföy değerinizi ve kâr/zararınızı güncel USD/TRY kuruyla dolar cinsinden de görüntüleyebilirsiniz. Çevrim, alış tarihindeki kurla değil güncel kurla yapılır.' },
-    { icon: Clock, title: 'Bedelsiz ve temettü takibi', desc: 'Bedelsiz sermaye artırımı veya bölünme yönetici tarafından sisteme tanımlandığında lot sayınız ve birim maliyetiniz orana göre düzeltilir. Hesabınıza geçen net temettüleri kendiniz kaydederek toplam getirinize dahil edebilirsiniz.' },
-    { icon: Activity, title: 'Ortalama maliyet (AOF) hesabı', desc: 'Her alımınız ve alış komisyonunuz ağırlıklı ortalama fiyat yöntemiyle birim maliyetinize eklenir. Satışta ödediğiniz komisyon ise gerçekleşen kârınızdan düşülür.' },
-    { icon: Bell, title: 'Fiyat alarmları', desc: 'Hisse, fon, altın veya döviz için hedef fiyat belirleyin. Fiyat hedefe ulaştığında alarm site içindeki bildirim zilinde görünür; e-posta veya telefon bildirimi gönderilmez. Fiyatlar seans saatlerinde gecikmeli verilerle yaklaşık 5 dakikada bir, fonlarda ise günlük fiyat alındığında kontrol edilir.' },
-    { icon: Shield, title: 'Banka şifresi ve yetki istemiyoruz', desc: 'Hiçbir banka veya aracı kurum hesabınıza bağlanmıyor, şifre istemiyoruz. İşlemlerinizi siz girersiniz, hesaplamaları Yarmak yapar.' },
+    { title: 'Tüm aracı kurumlar tek listede', desc: 'Farklı aracı kurumlardaki hisse, fon, altın ve döviz işlemlerinizi tek listede toplayabilirsiniz.' },
+    { title: 'Dolar karşılığı', desc: 'Portföy değerinizi ve kâr/zararınızı güncel USD/TRY kuruyla dolar cinsinden de görüntüleyebilirsiniz. Çevrim, alış tarihindeki kurla değil güncel kurla yapılır.' },
+    { title: 'Bedelsiz ve temettü takibi', desc: 'Bedelsiz sermaye artırımı veya bölünme yönetici tarafından sisteme tanımlandığında lot sayınız ve birim maliyetiniz orana göre düzeltilir. Hesabınıza geçen net temettüleri kendiniz kaydederek toplam getirinize dahil edebilirsiniz.' },
+    { title: 'Ortalama maliyet (AOF) hesabı', desc: 'Her alımınız ve alış komisyonunuz ağırlıklı ortalama fiyat yöntemiyle birim maliyetinize eklenir. Satışta ödediğiniz komisyon ise gerçekleşen kârınızdan düşülür.' },
+    { title: 'Fiyat alarmları', desc: 'Hisse, fon, altın veya döviz için hedef fiyat belirleyin. Fiyat hedefe ulaştığında alarm site içindeki bildirim zilinde görünür; e-posta veya telefon bildirimi gönderilmez. Fiyatlar seans saatlerinde gecikmeli verilerle yaklaşık 5 dakikada bir, fonlarda ise günlük fiyat alındığında kontrol edilir.' },
+    { title: 'Banka şifresi ve yetki istemiyoruz', desc: 'Hiçbir banka veya aracı kurum hesabınıza bağlanmıyoruz. İşlemlerinizi siz girersiniz, hesaplamaları Yarmak yapar.' },
 ];
 
 export const faqItems = [

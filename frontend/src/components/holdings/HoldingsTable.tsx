@@ -4,17 +4,20 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import {
     GripVertical,
-    ArrowUpRight,
     Tag,
     Plus,
     MinusCircle,
     Trash2,
     ChevronRight,
+    ChevronDown,
 } from 'lucide-react';
 import type { AssetGroup, AssetSummaryMap, Period, UserHolding } from '@/types';
+import { cn } from '@/lib/cn';
 import { getPeriodHeaderLabel } from '@/lib/periodUtils';
-import { ASSET_TYPE_LABELS, formatSignedPercent } from '@/lib/formatters';
-import { getHoldingRowMetrics } from './holdingRowMetrics';
+import { ASSET_TYPE_LABELS } from '@/lib/formatters';
+import ChangePill from '@/components/ui/ChangePill';
+import Sparkline from '@/components/ui/Sparkline';
+import { getHoldingRowMetrics, getHoldingSparkline } from './holdingRowMetrics';
 import GroupBadges from './GroupBadges';
 
 interface HoldingsTableProps {
@@ -36,6 +39,57 @@ interface HoldingsTableProps {
     onDropAsset: (draggedSymbol: string, targetSymbol: string) => void;
 }
 
+// Satırdaki düğmeler: zeminsiz, yazılı; dokunma hedefi mobilde 44px, masaüstünde 40px
+const ACTION_BASE =
+    'inline-flex items-center justify-center gap-1.5 shrink-0 rounded text-sm font-medium cursor-pointer transition-colors duration-[120ms] [&_svg]:size-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+const ACTION_ICON = cn(ACTION_BASE, 'size-11 sm:size-10');
+const ACTION_TEXT = cn(ACTION_BASE, 'h-11 sm:h-10 px-3');
+
+// Masaüstü tablo hücreleri: başlık 36px ve yapışkan, satırlar 48px, sayılar sağa yaslı mono, sütun arası 24px.
+// Tablo sabit düzende (table-fixed): sayı sütunları sabit genişlikte, kalan yer varlık sütununa kalır.
+// Türe göre görünümde her tür ayrı tablo olduğu için sütunlar ancak böyle alt alta hizalı kalır.
+const TH = 'sticky top-0 z-10 h-9 px-3 bg-bg border-b border-border text-xs font-normal text-fg-muted whitespace-nowrap';
+const TD = 'h-12 px-3 border-b border-border whitespace-nowrap';
+const NUM_TH = cn(TH, 'text-right');
+const NUM_TD = cn(TD, 'text-right font-mono text-sm text-fg');
+const COL = {
+    index: 'w-14',
+    amount: 'w-24',
+    price: 'w-28',
+    value: 'w-36',
+    trend: 'w-24',
+    pnl: 'w-36',
+    actions: 'w-44',
+} as const;
+
+// Açılan satırın kapladığı sütun sayısı (xl'deki en geniş hâl; fazlası zararsız)
+const COLUMN_COUNT = 9;
+
+// Alt alta tutar ve yüzde: ikisi de sağa yaslı, aynı satır yüksekliğinde ve aynı kalınlıkta
+const STACK = 'flex flex-col items-end gap-0.5 leading-tight';
+
+const pnlTextClass = (isPos: boolean) => (isPos ? 'text-profit' : 'text-loss');
+
+// Açılan satırdaki etiket / değer çifti
+function DetailItem({ label, children, className }: { label: React.ReactNode; children: React.ReactNode; className?: string }) {
+    return (
+        <div className={cn('flex flex-col gap-0.5 min-w-0', className)}>
+            <span className="text-xs text-fg-muted">{label}</span>
+            <span className="font-mono text-sm text-fg">{children}</span>
+        </div>
+    );
+}
+
+// Mobil ayrıntı alanındaki etiket / değer satırı
+function DetailRow({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
+    return (
+        <div className="flex items-baseline justify-between gap-3 text-sm">
+            <span className="text-fg-muted">{label}</span>
+            <span className="font-mono text-fg text-right">{children}</span>
+        </div>
+    );
+}
+
 export default function HoldingsTable({
     items,
     selectedPeriod,
@@ -53,8 +107,12 @@ export default function HoldingsTable({
 }: HoldingsTableProps) {
     const [draggedSymbol, setDraggedSymbol] = useState<string | null>(null);
     const [dragOverSymbol, setDragOverSymbol] = useState<string | null>(null);
+    // Ayrıntısı açık olan satır (yalnızca görünüm durumu; masaüstü ve mobil aynı anda görünmez)
+    const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
 
     const periodHeaderLabel = getPeriodHeaderLabel(selectedPeriod);
+
+    const toggleExpanded = (symbol: string) => setExpandedSymbol(prev => (prev === symbol ? null : symbol));
 
     const resetDrag = () => {
         setDraggedSymbol(null);
@@ -68,7 +126,7 @@ export default function HoldingsTable({
         resetDrag();
     };
 
-    // Masaüstü satırı ve mobil kart aynı sürükle-bırak davranışını kullanır
+    // Masaüstü satırı ve mobil satır aynı sürükle-bırak davranışını kullanır
     const dragHandlers = (symbol: string) => ({
         draggable: true,
         onDragStart: (e: React.DragEvent) => {
@@ -91,393 +149,335 @@ export default function HoldingsTable({
         onDragEnd: resetDrag,
     });
 
+    const assignedGroupsOf = (symbol: string) => {
+        const ids = assetGroups[symbol] || [];
+        return groups.filter(g => ids.includes(g.id));
+    };
+
+    // Grup etiketleri ve "Gruba ata / Düzenle" düğmesi
+    const renderGroups = (h: UserHolding, assigned: AssetGroup[]) => (
+        <div className="flex flex-wrap items-center gap-x-1 min-w-0">
+            {assigned.length > 0 && <GroupBadges groups={assigned} />}
+            <button
+                type="button"
+                onClick={() => onAssignAsset(h)}
+                className="inline-flex items-center gap-1.5 shrink-0 min-h-11 sm:min-h-10 px-2 rounded text-sm text-primary cursor-pointer transition-colors duration-[120ms] hover:bg-surface-3 focus-visible:outline-2 focus-visible:outline-primary"
+                aria-label={`${h.symbol} gruplarını düzenle`}
+            >
+                <Tag className="size-4" aria-hidden />
+                <span>{assigned.length > 0 ? 'Düzenle' : 'Gruba ata'}</span>
+            </button>
+        </div>
+    );
+
+    // Satırdaki hızlı alış ve satış: yazılı düğmeler
+    const renderQuickTrade = (h: UserHolding) => (
+        <>
+            <button
+                type="button"
+                onClick={() => onQuickAddTx(h.symbol)}
+                className={cn(ACTION_TEXT, 'px-2.5 text-fg-muted hover:bg-surface-3 hover:text-primary')}
+                aria-label={`${h.symbol} alış ekle`}
+                title="Alış ekle"
+            >
+                <Plus aria-hidden />
+                <span>Al</span>
+            </button>
+            <button
+                type="button"
+                onClick={() => onQuickSellTx(h)}
+                className={cn(ACTION_TEXT, 'px-2.5 text-loss hover:bg-loss-soft')}
+                aria-label={`${h.symbol} sat`}
+                title="Satış ekle"
+            >
+                Sat
+            </button>
+        </>
+    );
+
+    // Açılan satırdaki seyrek işlemler: gruptan çıkarma, silme ve (mobilde) detay sayfası.
+    // Masaüstünde sembolün kendisi detay sayfasına gittiği için ikinci bağlantı yalnızca mobilde.
+    const renderRowManagement = (h: UserHolding, withDetailLink: boolean) => (
+        <>
+            {/* Özel grup seçiliyse gruptan çıkarma düğmesi */}
+            {activeGroupMetrics.isCustomGroup && (
+                <button
+                    type="button"
+                    onClick={() => onRemoveFromCurrentGroup(h.symbol)}
+                    className={cn(ACTION_TEXT, 'text-warning hover:bg-warning-soft')}
+                    title={`Bu varlığı "${activeGroupMetrics.groupName}" grubundan çıkar`}
+                    aria-label={`Bu varlığı "${activeGroupMetrics.groupName}" grubundan çıkar`}
+                >
+                    <MinusCircle aria-hidden />
+                    <span>Gruptan çıkar</span>
+                </button>
+            )}
+
+            <button
+                type="button"
+                onClick={() => onDeleteAsset(h)}
+                className={cn(ACTION_TEXT, 'text-fg-muted hover:bg-loss-soft hover:text-loss')}
+                title="Varlığı ve tüm işlemlerini portföyden sil"
+                aria-label={`${h.symbol} varlığını ve tüm işlemlerini portföyden sil`}
+            >
+                <Trash2 aria-hidden />
+                <span>Sil</span>
+            </button>
+
+            {withDetailLink && (
+                <Link
+                    href={`/assets/${h.symbol}`}
+                    className={cn(ACTION_TEXT, 'text-fg hover:bg-surface-3')}
+                    aria-label={`${h.symbol} grafik ve detay`}
+                >
+                    <span>Grafik ve detay</span>
+                    <ChevronRight aria-hidden />
+                </Link>
+            )}
+        </>
+    );
+
+    const dragHandle = (idx: number) => (
+        <span
+            className="flex items-center gap-0.5 cursor-grab active:cursor-grabbing text-fg-muted transition-colors duration-[120ms] group-hover/row:text-fg"
+            title="Sırasını değiştirmek için tutup sürükleyin"
+        >
+            <GripVertical className="size-4 shrink-0" aria-hidden />
+            <span className="min-w-5 text-right font-mono text-xs">{idx + 1}</span>
+        </span>
+    );
+
+    const typeLabel = (h: UserHolding) => ASSET_TYPE_LABELS[h.asset_type] ?? h.asset_type;
+
     return (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-            {/* Masaüstü: tablo */}
-            <div className="hidden md:block overflow-x-auto custom-horizontal-scrollbar">
-                <table className="w-full text-left border-collapse">
+        <div className="flex flex-col min-w-0">
+            {/* Masaüstü: kutusuz yoğun tablo. Geniş ekranda başlık sayfayla birlikte yapışkan kalır; dar masaüstünde
+                taşarsa yatay kayar (o aralıkta kaydırma kabı yüzünden başlık yapışmaz). */}
+            <div className="hidden lg:block lg:overflow-x-auto xl:overflow-x-visible custom-horizontal-scrollbar">
+                {/* Gerçek 2B veri tablosu: sütun hizası için <table> */}
+                <table className="w-full table-fixed text-left border-separate border-spacing-0">
                     <thead>
-                        <tr className="border-b border-slate-800 bg-slate-900/80 text-[11px] uppercase tracking-wider font-semibold text-slate-400">
-                            <th scope="col" className="py-3.5 pl-4 pr-1 text-center w-16">Sıra</th>
-                            <th scope="col" className="py-3.5 pl-2 pr-3">Varlık</th>
-                            <th scope="col" className="py-3.5 px-3">Tür</th>
-                            <th scope="col" className="py-3.5 px-3 text-right">Adet & Maliyet</th>
-                            <th scope="col" className="py-3.5 px-3 text-right">Güncel Fiyat</th>
-                            <th scope="col" className="py-3.5 px-3 text-right">{periodHeaderLabel}</th>
-                            <th scope="col" className="py-3.5 px-3 text-right">Net Kâr / Zarar</th>
-                            <th scope="col" className="py-3.5 pl-2 pr-5 text-right w-40">İşlemler</th>
+                        <tr>
+                            <th scope="col" className={cn(TH, COL.index, 'pl-2 pr-1')}>
+                                <span aria-hidden>#</span>
+                                <span className="sr-only">Sıra</span>
+                            </th>
+                            <th scope="col" className={TH}>Varlık</th>
+                            <th scope="col" className={cn(NUM_TH, COL.amount, 'hidden xl:table-cell')}>Adet</th>
+                            <th scope="col" className={cn(NUM_TH, COL.price)}>Fiyat</th>
+                            <th scope="col" className={cn(NUM_TH, COL.value)}>Değer</th>
+                            {/* Seyir "olsa iyi olur" sütunu: dar masaüstünde gizli, varlık adına yer kalsın */}
+                            <th scope="col" className={cn(NUM_TH, COL.trend, 'hidden xl:table-cell')} title="1 yıl, 6 ay, 3 ay, 1 ay, 1 hafta ve 1 gün önceki fiyatlardan">
+                                Seyir (1Y)
+                            </th>
+                            {/* Uzun dönem adı ("Yılbaşından bugüne K/Z") iki satıra iner */}
+                            <th scope="col" className={cn(NUM_TH, COL.pnl)}>
+                                <span className="inline-block whitespace-normal leading-tight">{periodHeaderLabel}</span>
+                            </th>
+                            <th scope="col" className={cn(NUM_TH, COL.pnl)}>Toplam K/Z</th>
+                            <th scope="col" className={cn(NUM_TH, COL.actions, 'pr-2')}>
+                                <span className="sr-only">İşlemler</span>
+                            </th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/60 text-sm">
+                    <tbody className="text-sm">
                         {items.map((h, idx) => {
                             const { pnl, pnlPct, isPos, periodRetVal, periodPnl, isPeriodPos } =
                                 getHoldingRowMetrics(h, selectedPeriod, assetSummaries);
-
-                            const assignedGroupIds = assetGroups[h.symbol] || [];
-                            const assignedGroupObjects = groups.filter(g => assignedGroupIds.includes(g.id));
-
                             const isDragging = draggedSymbol === h.symbol;
                             const isOver = dragOverSymbol === h.symbol;
+                            const isExpanded = expandedSymbol === h.symbol;
+                            const spark = getHoldingSparkline(h, assetSummaries);
+                            const detailId = `holding-row-detail-${h.symbol}`;
 
                             return (
-                                <tr
-                                    key={h.symbol}
-                                    {...dragHandlers(h.symbol)}
-                                    className={`hover:bg-slate-800/40 transition-colors group select-none ${
-                                        isDragging ? 'opacity-30 bg-slate-800/90' : ''
-                                    } ${isOver ? 'border-t-2 border-[#1A9FD3] bg-[#1A9FD3]/15' : ''}`}
-                                >
-                                    {/* Sıra numarası ve sürükleme tutamacı */}
-                                    <td className="py-3.5 pl-4 pr-1 text-center whitespace-nowrap">
-                                        <div
-                                            className="flex items-center justify-center gap-1 cursor-grab active:cursor-grabbing text-slate-500 hover:text-white transition py-1 rounded"
-                                            title="Sırasını değiştirmek için tutup sürükleyin"
-                                        >
-                                            <GripVertical className="w-4 h-4 text-slate-500 group-hover:text-[#1A9FD3] transition" />
-                                            <span className="text-xs font-mono font-bold text-slate-400 w-4 text-center">
-                                                {idx + 1}
-                                            </span>
-                                        </div>
-                                    </td>
-
-                                    {/* Sembol, ad ve grup etiketleri */}
-                                    <td className="py-3.5 pl-2 pr-3">
-                                        <div className="flex items-center gap-3">
-                                            <Link
-                                                href={`/assets/${h.symbol}`}
-                                                className="w-9 h-9 rounded-lg bg-slate-800 border border-slate-700/80 flex items-center justify-center font-bold text-white group-hover:border-[#1A9FD3]/50 group-hover:bg-[#1A9FD3]/10 transition shrink-0"
-                                                title="Detaylı Grafik ve Analiz"
-                                            >
-                                                <span className="text-xs font-black font-mono tracking-tight text-[#1A9FD3]">
-                                                    {h.symbol.slice(0, 4)}
-                                                </span>
-                                            </Link>
-                                            <div className="min-w-0">
-                                                <div className="flex items-center gap-1.5">
-                                                    <Link
-                                                        href={`/assets/${h.symbol}`}
-                                                        className="font-bold text-white group-hover:text-[#1A9FD3] transition flex items-center gap-1 text-sm sm:text-base"
-                                                    >
-                                                        <span>{h.symbol}</span>
-                                                        <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-[#1A9FD3]" />
-                                                    </Link>
-                                                </div>
-                                                <p className="text-xs text-slate-400 truncate max-w-[180px] lg:max-w-[240px]">
-                                                    {h.asset_name}
-                                                </p>
-                                                <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                                                    <GroupBadges groups={assignedGroupObjects} />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => onAssignAsset(h)}
-                                                        className="text-[11px] text-slate-500 hover:text-[#1A9FD3] font-medium transition cursor-pointer flex items-center gap-0.5"
-                                                        title="Grupları Düzenle"
-                                                    >
-                                                        <Tag className="w-2.5 h-2.5" />
-                                                        <span>
-                                                            {assignedGroupObjects.length > 0 ? 'Düzenle' : '+ Gruba Ata'}
-                                                        </span>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </td>
-
-                                    <td className="py-3.5 px-3 whitespace-nowrap">
-                                        <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700/80">
-                                            {ASSET_TYPE_LABELS[h.asset_type] ?? h.asset_type}
-                                        </span>
-                                    </td>
-
-                                    <td className="py-3.5 px-3 text-right whitespace-nowrap">
-                                        <div className="text-sm font-semibold text-slate-200 tabular-nums">
-                                            {h.total_amount.toLocaleString('tr-TR')} Adet
-                                        </div>
-                                        <div className="text-xs text-slate-400 tabular-nums">
-                                            Ort. {fmt(h.average_cost)}
-                                        </div>
-                                    </td>
-
-                                    <td className="py-3.5 px-3 text-right whitespace-nowrap">
-                                        <div className="text-sm sm:text-base font-bold text-white font-mono tabular-nums">
-                                            {fmt(h.current_price)}
-                                        </div>
-                                    </td>
-
-                                    {/* Seçili dönemin K/Z'si */}
-                                    <td className="py-3.5 px-3 text-right whitespace-nowrap">
-                                        {periodPnl !== null && periodRetVal !== null ? (
-                                            <>
-                                                <div
-                                                    className={`text-sm sm:text-base font-black font-mono tabular-nums ${
-                                                        isPeriodPos ? 'text-emerald-400' : 'text-rose-400'
-                                                    }`}
-                                                >
-                                                    {fmt(periodPnl, true)}
-                                                </div>
-                                                <div
-                                                    className={`text-xs font-bold font-mono tabular-nums ${
-                                                        isPeriodPos ? 'text-emerald-400/90' : 'text-rose-400/90'
-                                                    }`}
-                                                >
-                                                    {formatSignedPercent(periodRetVal)}
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <div className="text-sm font-mono text-slate-500">—</div>
+                                <React.Fragment key={h.symbol}>
+                                    <tr
+                                        {...dragHandlers(h.symbol)}
+                                        className={cn(
+                                            'group/row select-none transition-colors duration-[120ms] hover:bg-surface-2',
+                                            isExpanded && 'bg-surface-2 [&>td]:border-b-0',
+                                            isDragging && 'opacity-40',
+                                            // Bırakılacak yer: satırın üstünde 2px mavi çizgi
+                                            isOver && 'bg-primary-soft hover:bg-primary-soft [&>td]:relative [&>td]:before:absolute [&>td]:before:inset-x-0 [&>td]:before:top-0 [&>td]:before:h-0.5 [&>td]:before:bg-primary',
                                         )}
-                                    </td>
+                                    >
+                                        <td className={cn(TD, 'pl-2 pr-1')}>{dragHandle(idx)}</td>
 
-                                    {/* Pozisyonun toplam K/Z'si */}
-                                    <td className="py-3.5 px-3 text-right whitespace-nowrap">
-                                        <div
-                                            className={`text-sm sm:text-base font-black font-mono tabular-nums ${
-                                                isPos ? 'text-emerald-400' : 'text-rose-400'
-                                            }`}
-                                        >
-                                            {fmt(pnl, true)}
-                                        </div>
-                                        <div
-                                            className={`text-xs font-bold font-mono tabular-nums ${
-                                                isPos ? 'text-emerald-400/90' : 'text-rose-400/90'
-                                            }`}
-                                        >
-                                            {formatSignedPercent(pnlPct)}
-                                        </div>
-                                    </td>
+                                        {/* Sembol; altında ad */}
+                                        <td className={TD}>
+                                            <div className="flex flex-col min-w-0 leading-tight">
+                                                <Link
+                                                    href={`/assets/${h.symbol}`}
+                                                    className="w-fit rounded font-mono text-sm font-semibold text-fg underline-offset-2 transition-colors duration-[120ms] hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                                                    title={`${h.symbol} grafik ve detay`}
+                                                >
+                                                    {h.symbol}
+                                                </Link>
+                                                <span className="text-xs text-fg-muted truncate">{h.asset_name}</span>
+                                            </div>
+                                        </td>
 
-                                    <td className="py-3.5 pl-2 pr-5 text-right whitespace-nowrap">
-                                        <div className="flex items-center justify-end gap-1.5">
-                                            <button
-                                                type="button"
-                                                onClick={() => onQuickAddTx(h.symbol)}
-                                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-[#1A9FD3] text-[#1A9FD3] hover:text-white border border-[#1A9FD3]/30 transition cursor-pointer"
-                                                title="Hızlı Alış Ekle"
-                                            >
-                                                <Plus className="w-3.5 h-3.5" />
-                                            </button>
+                                        <td className={cn(NUM_TD, 'hidden xl:table-cell')}>{h.total_amount.toLocaleString('tr-TR')}</td>
 
-                                            <button
-                                                type="button"
-                                                onClick={() => onQuickSellTx(h)}
-                                                className="px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/25 transition cursor-pointer text-xs font-bold"
-                                                title="Hızlı Satış Yap"
-                                            >
-                                                Sat
-                                            </button>
+                                        <td className={NUM_TD}>{fmt(h.current_price)}</td>
 
-                                            {/* Özel grup seçiliyse gruptan çıkarma düğmesi */}
-                                            {activeGroupMetrics.isCustomGroup && (
+                                        <td className={cn(NUM_TD, 'font-medium')}>{fmt(h.total_value)}</td>
+
+                                        <td className={cn(TD, 'hidden xl:table-cell text-right')}>
+                                            {spark.length > 0 ? (
+                                                <Sparkline values={spark} width={64} height={20} className="ml-auto" />
+                                            ) : (
+                                                <span className="font-mono text-fg-muted">—</span>
+                                            )}
+                                        </td>
+
+                                        {/* Seçili dönemin K/Z'si */}
+                                        <td className={NUM_TD}>
+                                            {periodPnl !== null && periodRetVal !== null ? (
+                                                <div className={STACK}>
+                                                    <span className={cn('font-medium', pnlTextClass(isPeriodPos))}>{fmt(periodPnl, true)}</span>
+                                                    <ChangePill value={periodRetVal} className="leading-tight" />
+                                                </div>
+                                            ) : (
+                                                <span className="text-fg-muted">—</span>
+                                            )}
+                                        </td>
+
+                                        {/* Pozisyonun toplam K/Z'si */}
+                                        <td className={NUM_TD}>
+                                            <div className={STACK}>
+                                                <span className={cn('font-medium', pnlTextClass(isPos))}>{fmt(pnl, true)}</span>
+                                                <ChangePill value={pnlPct} className="leading-tight" />
+                                            </div>
+                                        </td>
+
+                                        {/* Hızlı alış/satış ve ayrıntı aç/kapa */}
+                                        <td className={cn(TD, 'pr-2')}>
+                                            <div className="flex items-center justify-end gap-0.5">
+                                                {renderQuickTrade(h)}
                                                 <button
                                                     type="button"
-                                                    onClick={() => onRemoveFromCurrentGroup(h.symbol)}
-                                                    className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-500/25 transition cursor-pointer"
-                                                    title={`Bu varlığı "${activeGroupMetrics.groupName}" grubundan çıkar`}
+                                                    onClick={() => toggleExpanded(h.symbol)}
+                                                    aria-expanded={isExpanded}
+                                                    aria-controls={detailId}
+                                                    className={cn(ACTION_ICON, 'text-fg-muted hover:bg-surface-3 hover:text-fg')}
+                                                    title="Ayrıntılar"
+                                                    aria-label={`${h.symbol} ayrıntıları`}
                                                 >
-                                                    <MinusCircle className="w-3.5 h-3.5" />
+                                                    <ChevronDown className={cn(isExpanded && 'rotate-180')} aria-hidden />
                                                 </button>
-                                            )}
+                                            </div>
+                                        </td>
+                                    </tr>
 
-                                            <button
-                                                type="button"
-                                                onClick={() => onDeleteAsset(h)}
-                                                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/25 transition cursor-pointer"
-                                                title="Varlığı ve tüm işlemlerini portföyden sil"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
-
-                                            <Link
-                                                href={`/assets/${h.symbol}`}
-                                                className="p-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition"
-                                                title="Detaylı Analiz & Grafik"
-                                            >
-                                                <ChevronRight className="w-4 h-4" />
-                                            </Link>
-                                        </div>
-                                    </td>
-                                </tr>
+                                    {/* Açılan satır: seyrek gereken rakamlar, gruplar ve yönetim işlemleri */}
+                                    {isExpanded && (
+                                        <tr id={detailId} className="bg-surface-2">
+                                            <td colSpan={COLUMN_COUNT} className="pl-17 pr-2 pt-1 pb-2 border-b border-border">
+                                                <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
+                                                    <div className="flex flex-wrap items-start gap-x-8 gap-y-2 min-w-0">
+                                                        <DetailItem label="Tür"><span className="font-sans">{typeLabel(h)}</span></DetailItem>
+                                                        <DetailItem label="Adet" className="xl:hidden">{h.total_amount.toLocaleString('tr-TR')}</DetailItem>
+                                                        <DetailItem label="Ortalama maliyet">{fmt(h.average_cost)}</DetailItem>
+                                                        <DetailItem label="Toplam maliyet">{fmt(h.average_cost * h.total_amount)}</DetailItem>
+                                                        <div className="flex flex-col gap-0.5 min-w-0">
+                                                            <span className="text-xs text-fg-muted">Gruplar</span>
+                                                            {renderGroups(h, assignedGroupsOf(h.symbol))}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-0.5">{renderRowManagement(h, false)}</div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </React.Fragment>
                             );
                         })}
                     </tbody>
                 </table>
             </div>
 
-            {/* Mobil: kartlar */}
-            <div className="md:hidden divide-y divide-slate-800/80">
+            {/* Mobil ve tablet: iki satırlı yığın satırlar; dokununca ayrıntı ve işlemler açılır */}
+            <div className="flex flex-col divide-y divide-border border-b border-border lg:hidden">
                 {items.map((h, idx) => {
-                    const { pnl, pnlPct, isPos, periodRetVal, periodPnl, isPeriodPos } =
+                    const { pnl, pnlPct, periodRetVal, periodPnl } =
                         getHoldingRowMetrics(h, selectedPeriod, assetSummaries);
-
-                    const assignedGroupIds = assetGroups[h.symbol] || [];
-                    const assignedGroupObjects = groups.filter(g => assignedGroupIds.includes(g.id));
-
                     const isDragging = draggedSymbol === h.symbol;
                     const isOver = dragOverSymbol === h.symbol;
+                    const isExpanded = expandedSymbol === h.symbol;
+                    const spark = getHoldingSparkline(h, assetSummaries);
+                    const detailId = `holding-detail-${h.symbol}`;
 
                     return (
                         <div
                             key={h.symbol}
                             {...dragHandlers(h.symbol)}
-                            className={`p-4 space-y-3 transition-all select-none ${
-                                isDragging ? 'opacity-30 bg-slate-800/90' : ''
-                            } ${isOver ? 'border-t-2 border-[#1A9FD3] bg-[#1A9FD3]/15' : ''}`}
+                            className={cn(
+                                'group/row relative flex flex-col select-none',
+                                isExpanded && 'bg-surface-2',
+                                isDragging && 'opacity-40',
+                                isOver && 'bg-primary-soft before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-primary',
+                            )}
                         >
-                            <div className="flex items-start justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                    <div
-                                        className="flex items-center gap-1 bg-slate-800/80 px-2 py-1.5 rounded-lg border border-slate-700/60 cursor-grab active:cursor-grabbing text-slate-400 hover:text-white shrink-0"
-                                        title="Sırasını değiştirmek için tutup sürükleyin"
-                                    >
-                                        <GripVertical className="w-3.5 h-3.5 text-[#1A9FD3]" />
-                                        <span className="text-xs font-mono font-bold text-slate-300">
-                                            #{idx + 1}
-                                        </span>
-                                    </div>
-
-                                    <Link
-                                        href={`/assets/${h.symbol}`}
-                                        className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-white shrink-0"
-                                    >
-                                        <span className="text-xs font-black font-mono text-[#1A9FD3]">
-                                            {h.symbol.slice(0, 4)}
-                                        </span>
-                                    </Link>
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-1.5">
-                                            <Link href={`/assets/${h.symbol}`} className="text-base font-bold text-white">
-                                                {h.symbol}
-                                            </Link>
-                                            <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-800 text-slate-300 border border-slate-700/80">
-                                                {ASSET_TYPE_LABELS[h.asset_type] ?? h.asset_type}
-                                            </span>
-                                        </div>
-                                        <p className="text-xs text-slate-400 line-clamp-1">{h.asset_name}</p>
-                                    </div>
-                                </div>
-
-                                <div className="text-right shrink-0">
-                                    <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">
-                                        Net K/Z (Toplam)
+                            {/* Üst satır: sembol + değer; alt satır: ad + toplam K/Z */}
+                            <div className="flex items-center gap-2 pr-1 transition-colors duration-[120ms] hover:bg-surface-2">
+                                {dragHandle(idx)}
+                                <button
+                                    type="button"
+                                    onClick={() => toggleExpanded(h.symbol)}
+                                    aria-expanded={isExpanded}
+                                    aria-controls={detailId}
+                                    className="flex flex-1 items-center gap-3 min-w-0 min-h-14 py-2 text-left cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+                                >
+                                    <span className="flex flex-1 flex-col min-w-0 gap-1">
+                                        <span className="font-mono text-sm font-semibold leading-5 text-fg">{h.symbol}</span>
+                                        <span className="text-xs leading-5 text-fg-muted truncate">{h.asset_name}</span>
                                     </span>
-                                    <div
-                                        className={`text-sm sm:text-base font-black font-mono tabular-nums ${
-                                            isPos ? 'text-emerald-400' : 'text-rose-400'
-                                        }`}
-                                    >
-                                        {fmt(pnl, true)}
-                                    </div>
-                                    <div
-                                        className={`text-xs font-bold font-mono tabular-nums ${
-                                            isPos ? 'text-emerald-400/90' : 'text-rose-400/90'
-                                        }`}
-                                    >
-                                        {formatSignedPercent(pnlPct)}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2.5 py-2 px-3 bg-slate-800/40 rounded-xl border border-slate-800 text-xs">
-                                <div>
-                                    <span className="text-slate-400 block mb-0.5">Adet • Ort. Maliyet</span>
-                                    <span className="font-semibold text-slate-200 tabular-nums">
-                                        {h.total_amount.toLocaleString('tr-TR')} • {fmt(h.average_cost)}
-                                    </span>
-                                </div>
-                                <div className="text-right">
-                                    <span className="text-slate-400 block mb-0.5">Güncel Fiyat</span>
-                                    <span className="font-bold text-white font-mono tabular-nums text-sm">
-                                        {fmt(h.current_price)}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="text-slate-400 block mb-0.5">{periodHeaderLabel}</span>
-                                    {periodPnl !== null && periodRetVal !== null ? (
-                                        <div>
-                                            <span
-                                                className={`font-black font-mono tabular-nums text-xs sm:text-sm block ${
-                                                    isPeriodPos ? 'text-emerald-400' : 'text-rose-400'
-                                                }`}
-                                            >
-                                                {fmt(periodPnl, true)}
-                                            </span>
-                                            <span
-                                                className={`font-bold font-mono tabular-nums text-[11px] ${
-                                                    isPeriodPos ? 'text-emerald-400/90' : 'text-rose-400/90'
-                                                }`}
-                                            >
-                                                {formatSignedPercent(periodRetVal)}
-                                            </span>
-                                        </div>
-                                    ) : (
-                                        <span className="font-mono text-slate-500">—</span>
+                                    {spark.length > 0 && (
+                                        <Sparkline values={spark} width={48} height={18} className="hidden sm:block" />
                                     )}
-                                </div>
-                                <div className="text-right flex items-end justify-end">
-                                    <Link
-                                        href={`/assets/${h.symbol}`}
-                                        className="inline-flex items-center gap-1 text-xs font-bold text-[#1A9FD3] hover:underline"
-                                    >
-                                        Grafik & Detay <ChevronRight className="w-3.5 h-3.5" />
-                                    </Link>
-                                </div>
+                                    {/* Değer üstte, toplam K/Z yüzdesi altta; sabit en az genişlik, satırlar alt alta hizalı */}
+                                    <span className="flex flex-col items-end gap-1 min-w-32 shrink-0">
+                                        <span className="font-mono text-sm font-medium leading-5 text-fg">{fmt(h.total_value)}</span>
+                                        <ChangePill value={pnlPct} title="Toplam K/Z" className="leading-5" />
+                                    </span>
+                                    <ChevronDown
+                                        className={cn('size-5 shrink-0 text-fg-muted', isExpanded && 'rotate-180')}
+                                        aria-hidden
+                                    />
+                                </button>
                             </div>
 
-                            {/* Grup etiketleri ve hızlı işlem düğmeleri */}
-                            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                    <GroupBadges groups={assignedGroupObjects} />
-                                    <button
-                                        type="button"
-                                        onClick={() => onAssignAsset(h)}
-                                        className="text-[11px] text-slate-400 hover:text-[#1A9FD3] font-medium transition cursor-pointer flex items-center gap-1"
-                                    >
-                                        <Tag className="w-3 h-3" />
-                                        <span>{assignedGroupObjects.length > 0 ? 'Düzenle' : '+ Gruba Ata'}</span>
-                                    </button>
+                            {isExpanded && (
+                                <div id={detailId} className="flex flex-col gap-3 pl-10 pr-1 pb-3">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-x-8 sm:[&>*]:basis-[calc(50%-1rem)] sm:[&>*]:grow">
+                                        <DetailRow label="Tür">
+                                            <span className="font-sans">{typeLabel(h)}</span>
+                                        </DetailRow>
+                                        <DetailRow label="Adet">{h.total_amount.toLocaleString('tr-TR')}</DetailRow>
+                                        <DetailRow label="Ortalama maliyet">{fmt(h.average_cost)}</DetailRow>
+                                        <DetailRow label="Fiyat">{fmt(h.current_price)}</DetailRow>
+                                        <DetailRow label={periodHeaderLabel}>
+                                            {periodPnl !== null && periodRetVal !== null ? (
+                                                <ChangePill value={periodRetVal} amount={fmt(periodPnl, true)} />
+                                            ) : (
+                                                <span className="text-fg-muted">—</span>
+                                            )}
+                                        </DetailRow>
+                                        <DetailRow label="Toplam K/Z">
+                                            <ChangePill value={pnlPct} amount={fmt(pnl, true)} />
+                                        </DetailRow>
+                                    </div>
+
+                                    {/* Grup etiketleri ve işlemler */}
+                                    {renderGroups(h, assignedGroupsOf(h.symbol))}
+                                    <div className="flex flex-wrap items-center justify-end gap-1">
+                                        {renderQuickTrade(h)}
+                                        {renderRowManagement(h, true)}
+                                    </div>
                                 </div>
-
-                                <div className="flex items-center gap-1.5 ml-auto">
-                                    <button
-                                        type="button"
-                                        onClick={() => onQuickAddTx(h.symbol)}
-                                        className="px-2.5 py-1 rounded-lg bg-[#1A9FD3]/15 hover:bg-[#1A9FD3] text-[#1A9FD3] hover:text-white border border-[#1A9FD3]/30 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                                        title="İşlem Ekle"
-                                    >
-                                        <Plus className="w-3 h-3" />
-                                        <span>İşlem</span>
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => onQuickSellTx(h)}
-                                        className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/25 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                                        title="Hızlı Satış Yap"
-                                    >
-                                        <span>Sat</span>
-                                    </button>
-
-                                    {activeGroupMetrics.isCustomGroup && (
-                                        <button
-                                            type="button"
-                                            onClick={() => onRemoveFromCurrentGroup(h.symbol)}
-                                            className="p-1 rounded-lg bg-amber-500/10 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-500/25 transition cursor-pointer"
-                                            title={`"${activeGroupMetrics.groupName}" grubundan çıkar`}
-                                        >
-                                            <MinusCircle className="w-3.5 h-3.5" />
-                                        </button>
-                                    )}
-
-                                    <button
-                                        type="button"
-                                        onClick={() => onDeleteAsset(h)}
-                                        className="p-1 rounded-lg bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/25 transition cursor-pointer"
-                                        title="Portföyden Sil"
-                                    >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
-                            </div>
+                            )}
                         </div>
                     );
                 })}

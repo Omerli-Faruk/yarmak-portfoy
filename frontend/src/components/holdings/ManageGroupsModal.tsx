@@ -1,8 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Settings2, X, GripVertical, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
+import { GripVertical, ChevronUp, ChevronDown, Trash2, Plus } from 'lucide-react';
 import { AssetGroup } from '@/types';
+import { cn } from '@/lib/cn';
+import Modal from '@/components/ui/Modal';
+import Button from '@/components/ui/Button';
+import IconButton from '@/components/ui/IconButton';
 
 interface ManageGroupsModalProps {
     isOpen: boolean;
@@ -28,8 +32,6 @@ export default function ManageGroupsModal({
     const [draggedGroupId, setDraggedGroupId] = useState<string | null>(null);
     const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
 
-    if (!isOpen) return null;
-
     const handleDrop = (targetGroupId: string) => {
         if (!draggedGroupId || draggedGroupId === targetGroupId) {
             setDraggedGroupId(null);
@@ -42,27 +44,35 @@ export default function ManageGroupsModal({
     };
 
     return (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[90dvh] overflow-y-auto">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <h3 className="text-base font-bold text-white flex items-center gap-2">
-                        <Settings2 className="w-5 h-5 text-[#1A9FD3]" />
-                        Grupları Yönet ve Sırala
-                    </h3>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="text-slate-400 hover:text-white cursor-pointer"
+        <Modal
+            open={isOpen}
+            onClose={onClose}
+            title="Grupları yönet"
+            description="Sırayı değiştirmek için satırı sürükleyin ya da okları kullanın. Gruplar yalnızca bu tarayıcıda saklanır; başka cihazda görünmez."
+            footer={
+                <>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={<Plus />}
+                        className="sm:mr-auto"
+                        onClick={() => {
+                            onClose();
+                            onOpenCreateGroup();
+                        }}
                     >
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
-
-                <p className="text-xs text-slate-400">
-                    Grupların sekme sırasını değiştirmek için tutamaktan tutup sürükleyebilir veya ok butonlarını kullanabilirsiniz.
-                </p>
-
-                <div className="space-y-2.5 max-h-72 overflow-y-auto custom-scrollbar pr-1">
+                        Yeni grup
+                    </Button>
+                    <Button size="sm" onClick={onClose}>
+                        Tamamla
+                    </Button>
+                </>
+            }
+        >
+            {groups.length === 0 ? (
+                <p className="py-4 text-center text-sm text-fg-muted">Henüz oluşturulmuş özel grup yok.</p>
+            ) : (
+                <div className="flex flex-col border-y border-border divide-y divide-border">
                     {groups.map((g, idx) => {
                         const count = Object.values(assetGroups).filter(arr => arr.includes(g.id)).length;
                         const isDragging = draggedGroupId === g.id;
@@ -93,80 +103,54 @@ export default function ManageGroupsModal({
                                     setDraggedGroupId(null);
                                     setDragOverGroupId(null);
                                 }}
-                                className={`flex items-center justify-between p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 transition select-none ${
-                                    isDragging ? 'opacity-30' : ''
-                                } ${isOver ? 'border-[#1A9FD3] bg-[#1A9FD3]/15' : ''}`}
+                                className={cn(
+                                    'relative flex items-center justify-between gap-3 min-h-14 py-1 pl-2 pr-1 select-none transition-colors duration-[120ms] hover:bg-surface-2',
+                                    // Bırakılacak yer: üstte 2px mavi çizgi
+                                    isOver && 'bg-primary-soft hover:bg-primary-soft before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-primary',
+                                    isDragging && 'opacity-40',
+                                )}
                             >
-                                <div className="flex items-center gap-2.5 cursor-grab active:cursor-grabbing">
-                                    <GripVertical className="w-4 h-4 text-slate-500 hover:text-white" />
-                                    <span
-                                        className="w-3.5 h-3.5 rounded-full shrink-0"
-                                        style={{ backgroundColor: g.color }}
-                                    />
-                                    <div>
-                                        <p className="text-sm font-bold text-white">{g.name}</p>
-                                        <p className="text-xs text-slate-400">{count} varlık kayıtlı</p>
+                                <div className="flex items-center gap-2.5 min-w-0 cursor-grab active:cursor-grabbing">
+                                    <GripVertical className="size-4 shrink-0 text-fg-muted" aria-hidden />
+                                    {/* Grup rengi kullanıcı verisidir */}
+                                    <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: g.color }} />
+                                    <div className="flex flex-col gap-0.5 min-w-0 leading-tight">
+                                        <p className="truncate text-sm font-medium text-fg">{g.name}</p>
+                                        <p className="text-xs text-fg-muted"><span className="font-mono">{count}</span> varlık</p>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-1.5">
-                                    {/* Yukarı Taşı */}
-                                    <button
-                                        type="button"
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                    <IconButton
+                                        icon={<ChevronUp />}
+                                        label="Yukarı taşı"
+                                        size="sm"
                                         disabled={idx === 0}
                                         onClick={() => onMoveGroup(g.id, 'up')}
-                                        className="p-1.5 rounded-lg bg-slate-700/60 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
-                                        title="Yukarı Taşı"
-                                    >
-                                        <ChevronUp className="w-4 h-4" />
-                                    </button>
-
-                                    {/* Aşağı Taşı */}
-                                    <button
-                                        type="button"
+                                    />
+                                    <IconButton
+                                        icon={<ChevronDown />}
+                                        label="Aşağı taşı"
+                                        size="sm"
                                         disabled={idx === groups.length - 1}
                                         onClick={() => onMoveGroup(g.id, 'down')}
-                                        className="p-1.5 rounded-lg bg-slate-700/60 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
-                                        title="Aşağı Taşı"
-                                    >
-                                        <ChevronDown className="w-4 h-4" />
-                                    </button>
-
-                                    {/* Grubu Sil */}
-                                    <button
-                                        type="button"
+                                    />
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        leftIcon={<Trash2 />}
                                         onClick={() => onDeleteGroup(g.id)}
-                                        className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white transition ml-1 cursor-pointer"
-                                        title="Grubu Sil"
+                                        aria-label={`"${g.name}" grubunu sil`}
+                                        className="px-2.5 text-loss hover:bg-loss-soft hover:text-loss"
                                     >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                                        <span className="hidden sm:inline">Sil</span>
+                                    </Button>
                                 </div>
                             </div>
                         );
                     })}
                 </div>
-
-                <div className="flex items-center justify-between pt-3 border-t border-slate-800">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            onClose();
-                            onOpenCreateGroup();
-                        }}
-                        className="text-xs font-bold text-[#1A9FD3] hover:underline cursor-pointer"
-                    >
-                        + Yeni Grup Ekle
-                    </button>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="px-5 py-2 rounded-xl text-xs font-bold bg-[#1A9FD3] hover:bg-[#0C6991] text-white transition shadow-sm shadow-[#1A9FD3]/20 cursor-pointer"
-                    >
-                        Tamamla
-                    </button>
-                </div>
-            </div>
-        </div>
+            )}
+        </Modal>
     );
 }

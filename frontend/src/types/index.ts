@@ -79,12 +79,22 @@ export interface Transaction {
     CreatedAt?: string;
 }
 
-export interface PortfolioSnapshot {
-    id: number;
-    total_value: string;
-    total_cost: string;
-    profit_loss: string;
-    recorded_at: string;
+// GET /portfolio/value-history: portföyün gerçek değer geçmişi (işlemlerden hesaplanır)
+export interface PortfolioValuePoint {
+    t: string;      // RFC3339
+    value: number;  // o anki toplam değer, TL
+    cost: number;   // o anki maliyet, TL
+    pnl: number;    // o ana kadarki K/Z, TL
+}
+
+export interface PortfolioValueHistory {
+    range: string;
+    points: PortfolioValuePoint[];
+    baseline?: PortfolioValuePoint | null; // yalnızca 1D: önceki kapanıştaki portföy (grafikte referans çizgisi)
+    pnl_change: number;      // dönem içindeki K/Z, TL (1D'de önceki kapanışa göre)
+    pnl_change_pct: number;  // dönem K/Z'si, dönem sonundaki maliyete göre %
+    start: string;
+    end: string;
 }
 
 export interface AssetGroup {

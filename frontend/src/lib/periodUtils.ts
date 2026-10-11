@@ -1,6 +1,6 @@
 import { Period } from '@/types';
 
-// Periyot kodlarının ekrandaki kısa adları
+// Periyot kodlarının ekrandaki kısa adları. 'ALL' yalnızca Varlıklarım'daki tüm zamanlar K/Z seçicisinde kullanılır.
 export const PERIOD_LABELS: Record<string, string> = {
     '1D': '1G',
     '1W': '1H',
@@ -14,9 +14,9 @@ export const PERIOD_LABELS: Record<string, string> = {
     'ALL': 'Tümü',
 };
 
-// Grafik periyot düğmeleri, soldan sağa bu sırayla
+// Grafik periyot düğmeleri, soldan sağa bu sırayla. Grafikler en çok 5 yıl gösterdiği için "Tümü" yok.
 export const CHART_PERIODS: { id: string; label: string }[] = [
-    '1D', '1W', '1M', '3M', '6M', 'YTD', '1Y', '3Y', '5Y', 'ALL',
+    '1D', '1W', '1M', '3M', '6M', 'YTD', '1Y', '3Y', '5Y',
 ].map(id => ({ id, label: PERIOD_LABELS[id] }));
 
 // Bugünkü değer ve dönem getirisinden (%) dönem başındaki değeri bulur. -%100 ve altında başlangıç 0 sayılır.
@@ -82,23 +82,23 @@ export function isHoldingNewerThanPeriod(
 export function getPeriodHeaderLabel(selectedPeriod: Period): string {
     switch (selectedPeriod) {
         case 'ALL':
-            return 'Tüm Zamanlar K/Z';
+            return 'Tüm zamanlar K/Z';
         case '1D':
-            return 'Günlük (1G) K/Z';
+            return 'Günlük K/Z';
         case '1W':
-            return 'Haftalık (1H) K/Z';
+            return 'Haftalık K/Z';
         case '1M':
-            return 'Aylık (1A) K/Z';
+            return 'Aylık K/Z';
         case '3M':
-            return '3 Aylık (3A) K/Z';
+            return '3 aylık K/Z';
         case '6M':
-            return '6 Aylık (6A) K/Z';
+            return '6 aylık K/Z';
         case 'YTD':
-            return 'Yılbaşından Bugüne (YBB) K/Z';
+            return 'Yılbaşından bugüne K/Z';
         case '1Y':
-            return 'Yıllık (1Y) K/Z';
+            return 'Yıllık K/Z';
         case '3Y':
-            return '3 Yıllık (3Y) K/Z';
+            return '3 yıllık K/Z';
         default:
             return `${selectedPeriod} K/Z`;
     }

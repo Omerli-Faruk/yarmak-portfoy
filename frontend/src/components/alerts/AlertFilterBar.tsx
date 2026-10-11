@@ -1,58 +1,61 @@
 'use client';
 
 import { Search, X } from 'lucide-react';
+import Input from '@/components/ui/Input';
+import SegmentedControl from '@/components/ui/SegmentedControl';
 
 export type AlertFilter = 'ALL' | 'PENDING' | 'TRIGGERED';
 
 interface AlertFilterBarProps {
     filterTab: AlertFilter;
     onFilterTab: (tab: AlertFilter) => void;
-    counts: Record<AlertFilter, number>;
     searchQuery: string;
     onSearch: (query: string) => void;
 }
 
-const FILTER_TABS: { id: AlertFilter; label: string }[] = [
-    { id: 'ALL', label: 'Tümü' },
-    { id: 'PENDING', label: 'Aktif Bekleyenler' },
-    { id: 'TRIGGERED', label: 'Tetiklenenler' },
+// Sayılar sayfanın üstündeki büyük özetle aynı olduğu için sekmelerde tekrar yazılmaz
+const FILTER_TABS: { value: AlertFilter; label: string }[] = [
+    { value: 'ALL', label: 'Tümü' },
+    { value: 'PENDING', label: 'Bekleyenler' },
+    { value: 'TRIGGERED', label: 'Tetiklenenler' },
 ];
 
-export default function AlertFilterBar({ filterTab, onFilterTab, counts, searchQuery, onSearch }: AlertFilterBarProps) {
+// Tablonun üstündeki tek satır: solda alt çizgili sekmeler, sağda arama. Kutu yok, yalnızca alt çizgi.
+// Sekmelerin kendi alt çizgisi -mb-px ile satırın çizgisinin üstüne oturur, tek çizgi görünür.
+export default function AlertFilterBar({ filterTab, onFilterTab, searchQuery, onSearch }: AlertFilterBarProps) {
     return (
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-6">
-            <div className="flex items-center p-1 bg-surface/70 border border-white/5 rounded-xl self-start">
-                {FILTER_TABS.map((tab) => (
-                    <button
-                        key={tab.id}
-                        onClick={() => onFilterTab(tab.id)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                            filterTab === tab.id ? 'bg-primary text-white shadow-sm' : 'text-slate-400 hover:text-white'
-                        }`}
-                    >
-                        {tab.label} ({counts[tab.id]})
-                    </button>
-                ))}
-            </div>
+        <div className="flex flex-col-reverse gap-3 border-b border-border sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+            <SegmentedControl
+                variant="underline"
+                options={FILTER_TABS}
+                value={filterTab}
+                onChange={onFilterTab}
+                ariaLabel="Alarm durumu"
+                className="-mb-px"
+            />
 
-            <div className="relative w-full sm:w-64">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => onSearch(e.target.value)}
-                    placeholder="Sembol veya varlık ara..."
-                    className="w-full bg-surface/70 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-xs text-foreground placeholder:text-slate-500 focus:outline-none focus:border-primary transition"
-                />
-                {searchQuery && (
-                    <button
-                        onClick={() => onSearch('')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
-                    >
-                        <X className="w-3.5 h-3.5" />
-                    </button>
-                )}
-            </div>
+            <Input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => onSearch(e.target.value)}
+                placeholder="Sembol veya varlık ara"
+                aria-label="Sembol veya varlık ara"
+                leftIcon={<Search />}
+                containerClassName="w-full sm:w-72"
+                rightSlot={
+                    searchQuery ? (
+                        <button
+                            type="button"
+                            onClick={() => onSearch('')}
+                            aria-label="Aramayı temizle"
+                            title="Aramayı temizle"
+                            className="-mr-2 flex items-center justify-center size-10 rounded text-fg-muted hover:bg-surface-3 hover:text-fg transition-colors duration-[120ms] cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                        >
+                            <X className="size-[18px]" />
+                        </button>
+                    ) : undefined
+                }
+            />
         </div>
     );
 }

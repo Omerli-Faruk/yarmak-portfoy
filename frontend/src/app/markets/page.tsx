@@ -5,20 +5,23 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import {
-    TrendingUp,
-    TrendingDown,
-    Activity,
-    Layers,
+    ArrowRight,
     RefreshCw,
     CheckCircle2,
-    Clock,
     ShieldAlert
 } from 'lucide-react';
+import Button, { buttonClasses } from '@/components/ui/Button';
+import PageContainer from '@/components/ui/PageContainer';
+import PageHeader from '@/components/ui/PageHeader';
+import { cn } from '@/lib/cn';
 import AddTransactionModal from '@/components/holdings/AddTransactionModal';
 import IndexStrip from '@/components/markets/IndexStrip';
 import MarketLeaderColumn from '@/components/markets/MarketLeaderColumn';
 import MarketScreener, { type MarketCategory, type MarketSort } from '@/components/markets/MarketScreener';
 import type { MarketAssetItem, MarketIndexItem } from '@/types';
+
+// Yükselenler ve düşenler geniş ekranda iki eşit sütun, dar ekranda alt alta
+const LEADER_COLUMN_CLASSES = 'lg:basis-0 lg:grow';
 
 export default function MarketsPage() {
     const { user } = useAuth();
@@ -27,7 +30,8 @@ export default function MarketsPage() {
     const [indices, setIndices] = useState<MarketIndexItem[]>([]);
     const [topGainers, setTopGainers] = useState<MarketAssetItem[]>([]);
     const [topLosers, setTopLosers] = useState<MarketAssetItem[]>([]);
-    const [mostActive, setMostActive] = useState<MarketAssetItem[]>([]);
+    // API'nin "mostActive" seçkisi ayrı liste olarak gösterilmez; aynı hisseler
+    // keşif listesinde "Seçili hisseler önce" sıralamasıyla başa gelir
     const [screenerItems, setScreenerItems] = useState<MarketAssetItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -67,7 +71,6 @@ export default function MarketsPage() {
                 setIndices(data.indices || []);
                 setTopGainers(data.topGainers || []);
                 setTopLosers(data.topLosers || []);
-                setMostActive(data.mostActive || []);
                 setScreenerItems(data.screener || []);
                 setTotalFound(typeof data.totalCount === 'number' ? data.totalCount : (data.screener?.length || 0));
             }
@@ -98,117 +101,79 @@ export default function MarketsPage() {
         : '';
 
     return (
-        <div className="min-h-screen text-slate-100 py-6 sm:py-8 px-3 sm:px-6 lg:px-8">
-            <div className="max-w-7xl mx-auto space-y-8">
+        <PageContainer>
+            <PageHeader
+                title="Piyasalar"
+                subtitle="Borsa İstanbul hisseleri, TEFAS fonları, altın ve döviz."
+                actions={
+                    // Gecikme notu sayfanın sonundaki uyarıda bir kez yazılır
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => fetchMarketData(true)}
+                        disabled={refreshing}
+                        leftIcon={<RefreshCw className={cn(refreshing && 'animate-spin')} aria-hidden />}
+                    >
+                        {refreshing ? 'Yenileniyor...' : 'Yenile'}
+                    </Button>
+                }
+            />
 
-                {/* Başlık ve yenile */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-6">
-                    <div>
-                        <div className="flex items-center gap-2.5">
-                            <Activity className="size-6 text-[#1A9FD3]" />
-                            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                                Piyasalar & Varlık Keşfi
-                            </h1>
-                        </div>
-                        <p className="text-slate-400 text-xs sm:text-sm mt-1.5 max-w-2xl">
-                            Borsa İstanbul hisseleri, TEFAS yatırım fonları, altın ve döviz piyasalarında günün öne çıkanlarını ve en çok kazandıranlarını keşfedin.
+            <IndexStrip indices={indices} loading={loading} />
+
+            {/* Yükselenler ve düşenler: en çok iki sütun */}
+            <div className="flex flex-col gap-10 lg:flex-row">
+                <MarketLeaderColumn
+                    title="Günün yükselenleri"
+                    items={topGainers}
+                    loading={loading}
+                    emptyText="Gösterilecek yükselen hisse yok."
+                    keyPrefix="gain"
+                    onQuickAdd={handleOpenQuickModal}
+                    className={LEADER_COLUMN_CLASSES}
+                />
+                <MarketLeaderColumn
+                    title="Günün düşenleri"
+                    items={topLosers}
+                    loading={loading}
+                    emptyText="Gösterilecek düşen hisse yok."
+                    keyPrefix="loss"
+                    onQuickAdd={handleOpenQuickModal}
+                    className={LEADER_COLUMN_CLASSES}
+                />
+            </div>
+
+            <MarketScreener
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                category={selectedCategory}
+                onCategoryChange={setSelectedCategory}
+                sort={selectedSort}
+                onSortChange={setSelectedSort}
+                debouncedSearch={debouncedSearch}
+                totalFound={totalFound}
+                loading={loading}
+                items={screenerItems}
+                onQuickAdd={handleOpenQuickModal}
+            />
+
+            {/* Gecikme ve yatırım tavsiyesi uyarısı: kutusuz, sayfanın sonunda sakin bir not */}
+            <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-2.5">
+                    <ShieldAlert className="mt-0.5 size-[18px] shrink-0 text-warning" aria-hidden />
+                    <div className="flex flex-col gap-0.5">
+                        <p className="text-sm font-medium text-fg">
+                            BIST verileri 15 dakika gecikmelidir &bull; Yatırım tavsiyesi değildir
+                        </p>
+                        <p className="text-xs leading-relaxed text-fg-muted">
+                            Piyasa verileri ve fiyatlar genel bilgilendirme amaçlıdır; anlık aracı kurum emir fiyatlarınızdan veya gerçekleşen işlemlerinizden farklılık gösterebilir.
                         </p>
                     </div>
-
-                    <div className="flex flex-wrap items-center gap-3">
-                        <Link
-                            href="/disclaimer"
-                            title="Borsa İstanbul pay piyasası verileri en az 15 dakika gecikmelidir. Yatırım tavsiyesi değildir."
-                            className="bg-slate-900/90 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-300 px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-1.5 transition"
-                        >
-                            <Clock className="size-3.5 text-amber-400" />
-                            <span>BIST 15 Dk. Gecikmeli</span>
-                        </Link>
-                        <button
-                            onClick={() => fetchMarketData(true)}
-                            disabled={refreshing}
-                            className="bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700/60 text-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition cursor-pointer disabled:opacity-50"
-                        >
-                            <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin text-[#1A9FD3]' : ''}`} />
-                            <span>{refreshing ? 'Yenileniyor...' : 'Verileri Yenile'}</span>
-                        </button>
-                    </div>
                 </div>
-
-                <IndexStrip indices={indices} />
-
-                {/* Yükselenler, düşenler ve seçili hisseler */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <MarketLeaderColumn
-                        title="Günün Yükselenleri"
-                        subtitle="En çok artanlar"
-                        icon={<TrendingUp className="size-4" />}
-                        items={topGainers}
-                        loading={loading}
-                        emptyText="Gösterilecek yükselen hisse yok."
-                        keyPrefix="gain"
-                        onQuickAdd={handleOpenQuickModal}
-                    />
-                    <MarketLeaderColumn
-                        title="Günün Düşenleri"
-                        subtitle="En çok düşenler"
-                        icon={<TrendingDown className="size-4" />}
-                        items={topLosers}
-                        loading={loading}
-                        emptyText="Gösterilecek düşen hisse yok."
-                        keyPrefix="loss"
-                        onQuickAdd={handleOpenQuickModal}
-                    />
-                    {/* Liste API'deki sabit bir hisse seçkisinden gelir, takip ya da hacim verisine dayanmaz */}
-                    <MarketLeaderColumn
-                        title="Seçili Hisseler"
-                        subtitle="Sabit BIST listesi"
-                        icon={<Layers className="size-4" />}
-                        items={mostActive}
-                        loading={loading}
-                        emptyText="Gösterilecek hisse yok."
-                        keyPrefix="pop"
-                        onQuickAdd={handleOpenQuickModal}
-                    />
-                </div>
-
-                <MarketScreener
-                    searchQuery={searchQuery}
-                    onSearchChange={setSearchQuery}
-                    category={selectedCategory}
-                    onCategoryChange={setSelectedCategory}
-                    sort={selectedSort}
-                    onSortChange={setSelectedSort}
-                    debouncedSearch={debouncedSearch}
-                    totalFound={totalFound}
-                    loading={loading}
-                    items={screenerItems}
-                    onQuickAdd={handleOpenQuickModal}
-                />
-
-                {/* Gecikme ve yatırım tavsiyesi uyarısı */}
-                <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-slate-400">
-                    <div className="flex items-start sm:items-center gap-3">
-                        <div className="p-2 rounded-xl bg-slate-800 border border-slate-700/60 text-amber-400 shrink-0 mt-0.5 sm:mt-0">
-                            <ShieldAlert className="size-4" />
-                        </div>
-                        <div className="space-y-0.5">
-                            <p className="font-semibold text-slate-200">
-                                BIST Verileri 15 Dakika Gecikmelidir &bull; Yatırım Tavsiyesi Değildir
-                            </p>
-                            <p className="text-[11px] text-slate-400 leading-relaxed">
-                                Piyasa verileri ve fiyatlar genel bilgilendirme amaçlıdır; anlık aracı kurum emir fiyatlarınızdan veya gerçekleşen işlemlerinizden farklılık gösterebilir.
-                            </p>
-                        </div>
-                    </div>
-                    <Link
-                        href="/disclaimer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold shrink-0 transition"
-                    >
-                        <span>Detaylı Yasal Uyarı</span>
-                        <span>&rarr;</span>
-                    </Link>
-                </div>
+                <Link href="/disclaimer" className={buttonClasses({ variant: 'ghost', size: 'sm', className: 'shrink-0 self-start sm:self-auto' })}>
+                    <span>Yasal uyarı</span>
+                    <ArrowRight aria-hidden />
+                </Link>
             </div>
 
             <AddTransactionModal
@@ -220,15 +185,16 @@ export default function MarketsPage() {
                 assetType={quickAddAsset?.asset_type ?? 'HISSE'}
             />
 
+            {/* Mobilde alt sekme çubuğunun üstünde durur */}
             {successMessage && (
                 <div
                     role="status"
-                    className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-slate-900 border border-emerald-500/30 text-emerald-300 text-xs font-semibold px-4 py-2.5 rounded-xl shadow-2xl"
+                    className="fixed bottom-24 left-1/2 z-50 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-md border border-border-strong bg-surface px-3 py-2.5 text-sm font-medium text-fg sm:bottom-6"
                 >
-                    <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
+                    <CheckCircle2 className="size-4 shrink-0 text-profit" aria-hidden />
                     <span>{successMessage}</span>
                 </div>
             )}
-        </div>
+        </PageContainer>
     );
 }

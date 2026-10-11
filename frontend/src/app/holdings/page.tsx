@@ -5,7 +5,11 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import { UserHolding, Period } from '@/types';
+import { SearchX } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import PageContainer from '@/components/ui/PageContainer';
+import Button from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
 import { formatCurrency } from '@/lib/formatters';
 import { useCurrency } from '@/hooks/useCurrency';
 import { usePortfolioData } from '@/hooks/usePortfolioData';
@@ -311,116 +315,117 @@ export default function HoldingsPage() {
     };
 
     return (
-        <div className="min-h-screen text-slate-100 py-6 sm:py-8 px-3 sm:px-6 lg:px-8">
-            <div className="max-w-7xl mx-auto space-y-6">
+        <PageContainer width="wide">
+            <HoldingsHeader
+                currency={currency}
+                currencyDisabled={usdRate === null}
+                onToggleCurrency={toggleCurrency}
+                onAddTx={() => handleQuickAddTx('')}
+                refreshing={refreshing}
+                onRefresh={() => reload(true)}
+            />
 
-                <HoldingsHeader
+            <MainViewTabs tab={mainViewTab} onChange={changeMainTab} />
+
+            {mainViewTab === 'transactions' ? (
+                <TransactionHistoryTab
                     currency={currency}
-                    currencyDisabled={usdRate === null}
-                    onToggleCurrency={toggleCurrency}
-                    onAddTx={() => handleQuickAddTx('')}
-                    refreshing={refreshing}
-                    onRefresh={() => reload(true)}
+                    usdRate={usdRate ?? 0}
+                    onRefreshHoldings={() => reload(true)}
                 />
-
-                <MainViewTabs tab={mainViewTab} positionsCount={holdings.length} onChange={changeMainTab} />
-
-                {mainViewTab === 'transactions' ? (
-                    <TransactionHistoryTab
-                        currency={currency}
-                        usdRate={usdRate ?? 0}
-                        onRefreshHoldings={() => reload(true)}
-                        onOpenAddTxModal={() => handleQuickAddTx('')}
-                    />
-                ) : mainViewTab === 'dividends' ? (
-                    <DividendsTab
-                        currency={currency}
-                        usdRate={usdRate ?? 0}
-                        holdings={holdings}
-                        onRefreshHoldings={() => reload(true)}
-                    />
-                ) : (
-                    <>
-                <PeriodSummaryBar
-                    selectedPeriod={selectedPeriod}
-                    onPeriodChange={setSelectedPeriod}
-                    metrics={activeGroupMetrics}
-                    totalDividends={summary?.total_dividends || 0}
-                    fmt={fmt}
-                />
-
-                <GroupTabsBar
-                    groups={groups}
-                    assetGroups={assetGroups}
+            ) : mainViewTab === 'dividends' ? (
+                <DividendsTab
+                    currency={currency}
+                    usdRate={usdRate ?? 0}
                     holdings={holdings}
-                    activeTab={activeTab}
-                    onTabChange={setActiveTab}
-                    isGroupsWrapped={isGroupsWrapped}
-                    onToggleWrap={toggleWrap}
-                    isCustomGroup={activeGroupMetrics.isCustomGroup}
-                    activeGroupName={activeGroupMetrics.groupName}
-                    onDeleteActiveGroup={() => handleDeleteGroup(activeTab)}
-                    onOpenManage={() => setIsManageGroupsOpen(true)}
-                    onOpenCreate={() => setIsCreateGroupOpen(true)}
-                    onDropGroup={(targetId, sourceId) => reorderGroups(sourceId, targetId)}
+                    onRefreshHoldings={() => reload(true)}
                 />
+            ) : (
+                <div className="flex flex-col gap-8 lg:gap-10">
+                    {/* Odak: seçili grubun değeri ve dönem K/Z'si, altında tek özet şeridi */}
+                    <PeriodSummaryBar
+                        selectedPeriod={selectedPeriod}
+                        onPeriodChange={setSelectedPeriod}
+                        metrics={activeGroupMetrics}
+                        totalDividends={summary?.total_dividends || 0}
+                        fmt={fmt}
+                    />
 
-                <HoldingsToolbar
-                    searchQuery={searchQuery}
-                    onSearchChange={setSearchQuery}
-                    sortBy={sortBy}
-                    onSortChange={setSortBy}
-                />
+                    {/* Kutusuz liste: grup sekmeleri ve araç çubuğu tek satırda, tablo doğrudan sayfa zemininde */}
+                    <section aria-label="Varlıklar" className="flex flex-col min-w-0">
+                        <div className="flex flex-col-reverse gap-3 border-b border-border lg:flex-row lg:items-center lg:gap-6">
+                            <GroupTabsBar
+                                className="lg:flex-1"
+                                groups={groups}
+                                assetGroups={assetGroups}
+                                holdings={holdings}
+                                activeTab={activeTab}
+                                onTabChange={setActiveTab}
+                                isGroupsWrapped={isGroupsWrapped}
+                                onToggleWrap={toggleWrap}
+                                isCustomGroup={activeGroupMetrics.isCustomGroup}
+                                activeGroupName={activeGroupMetrics.groupName}
+                                onDeleteActiveGroup={() => handleDeleteGroup(activeTab)}
+                                onOpenManage={() => setIsManageGroupsOpen(true)}
+                                onOpenCreate={() => setIsCreateGroupOpen(true)}
+                                onDropGroup={(targetId, sourceId) => reorderGroups(sourceId, targetId)}
+                            />
 
-                {activeTab === 'by_type' ? (
-                    // Türe göre bölümlenmiş liste
-                    <div className="space-y-6">
-                        {(['HISSE', 'FON', 'ALTIN', 'DOVIZ'] as const).map(typeKey => {
-                            const typeList = processedHoldings.filter(h => h.asset_type === typeKey);
-                            if (typeList.length === 0) return null;
-                            const typeTitle = typeKey === 'HISSE' ? 'Hisse Senetleri' : typeKey === 'FON' ? 'Yatırım Fonları' : typeKey === 'ALTIN' ? 'Altın & Emtia' : 'Döviz';
-                            const typeVal = typeList.reduce((s, h) => s + h.total_value, 0);
+                            <HoldingsToolbar
+                                className="lg:shrink-0"
+                                searchQuery={searchQuery}
+                                onSearchChange={setSearchQuery}
+                                sortBy={sortBy}
+                                onSortChange={setSortBy}
+                            />
+                        </div>
 
-                            return (
-                                <div key={typeKey} className="space-y-2.5">
-                                    <div className="flex items-center justify-between px-2">
-                                        <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
-                                            <span className="w-2 h-2 rounded-full bg-[#1A9FD3]"></span>
-                                            {typeTitle} ({typeList.length})
-                                        </h3>
-                                        <span className="text-xs sm:text-sm font-bold text-slate-300 font-mono tabular-nums">{fmt(typeVal)}</span>
-                                    </div>
-                                    <HoldingsTable items={typeList} {...tableProps} />
-                                </div>
-                            );
-                        })}
-                    </div>
-                ) : (
-                    // Tüm varlıklar ya da seçili grup
-                    <div>
-                        {processedHoldings.length > 0 ? (
+                        {activeTab === 'by_type' ? (
+                            // Türe göre bölümlenmiş liste: her türün üstünde sade bir ara başlık
+                            <div className="flex flex-col">
+                                {(['HISSE', 'FON', 'ALTIN', 'DOVIZ'] as const).map(typeKey => {
+                                    const typeList = processedHoldings.filter(h => h.asset_type === typeKey);
+                                    if (typeList.length === 0) return null;
+                                    const typeTitle = typeKey === 'HISSE' ? 'Hisse senetleri' : typeKey === 'FON' ? 'Yatırım fonları' : typeKey === 'ALTIN' ? 'Altın ve emtia' : 'Döviz';
+                                    const typeVal = typeList.reduce((s, h) => s + h.total_value, 0);
+
+                                    return (
+                                        <div key={typeKey} className="flex flex-col">
+                                            {/* Masaüstünde tablonun kendi başlık çizgisi var; ara başlığın çizgisi yalnızca mobilde */}
+                                            <div className="flex items-baseline justify-between gap-3 pt-6 pb-2 border-b border-border lg:border-b-0">
+                                                <h3 className="flex items-baseline gap-2 text-base font-semibold text-fg">
+                                                    {typeTitle}
+                                                    <span className="font-mono text-sm font-normal text-fg-muted">{typeList.length}</span>
+                                                </h3>
+                                                <span className="font-mono text-sm text-fg">{fmt(typeVal)}</span>
+                                            </div>
+                                            <HoldingsTable items={typeList} {...tableProps} />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : processedHoldings.length > 0 ? (
+                            // Tüm varlıklar ya da seçili grup
                             <HoldingsTable items={processedHoldings} {...tableProps} />
                         ) : (
-                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
-                                <p className="text-base font-semibold text-white mb-1">Bu grupta veya aramada varlık bulunamadı.</p>
-                                <p className="text-xs text-slate-500 mb-4">
-                                    {activeTab !== 'all' ? 'Aşağıdaki butona basarak varlıklarınızı bu gruba dahil edebilirsiniz.' : 'Portföyünüze yeni hisse veya fon işlemi ekleyin.'}
-                                </p>
-                                {activeTab !== 'all' && (
-                                    <button
-                                        onClick={() => setActiveTab('all')}
-                                        className="px-4 py-2 bg-[#1A9FD3] hover:bg-[#0C6991] text-white font-bold rounded-xl text-xs sm:text-sm transition cursor-pointer shadow-sm shadow-[#1A9FD3]/20"
-                                    >
-                                        Tüm Varlıklara Git ve Gruba Ata
-                                    </button>
-                                )}
+                            <div className="py-10">
+                                <EmptyState
+                                    icon={<SearchX />}
+                                    title="Bu grupta veya aramada varlık bulunamadı."
+                                    description={activeTab !== 'all' ? 'Aşağıdaki butona basarak varlıklarınızı bu gruba dahil edebilirsiniz.' : 'Portföyünüze yeni hisse veya fon işlemi ekleyin.'}
+                                    action={
+                                        activeTab !== 'all' ? (
+                                            <Button size="sm" variant="secondary" onClick={() => setActiveTab('all')}>
+                                                Tüm varlıklara git ve gruba ata
+                                            </Button>
+                                        ) : undefined
+                                    }
+                                />
                             </div>
                         )}
-                    </div>
-                )}
-                    </>
-                )}
-            </div>
+                    </section>
+                </div>
+            )}
 
             <CreateGroupModal
                 isOpen={isCreateGroupOpen}
@@ -470,6 +475,6 @@ export default function HoldingsPage() {
                 onConfirm={handleConfirmDeleteAsset}
                 fmt={fmt}
             />
-        </div>
+        </PageContainer>
     );
 }

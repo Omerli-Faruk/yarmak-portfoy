@@ -1,5 +1,6 @@
 import type { AssetSummaryMap, Period, UserHolding } from '@/types';
 import { isHoldingNewerThanPeriod } from '@/lib/periodUtils';
+import { seriesFromPeriodReturns } from '@/components/ui/Sparkline';
 
 export interface HoldingRowMetrics {
     pnl: number;                  // pozisyonun toplam K/Z'si (TL)
@@ -46,4 +47,14 @@ export function getHoldingRowMetrics(h: UserHolding, period: Period, assetSummar
         periodPnl,
         isPeriodPos: periodPnl !== null ? periodPnl >= 0 : true,
     };
+}
+
+// Satırdaki küçük çizgi grafik için varlığın dönem getirilerinden çıkan kaba fiyat serisi (1Y, 6A, 3A, 1A, 1H, 1G, bugün).
+// Veri yoksa ya da 3 noktadan azsa boş dizi döner; hiçbir değer uydurulmaz.
+export function getHoldingSparkline(h: UserHolding, assetSummaries: AssetSummaryMap): number[] {
+    const sum = assetSummaries[h.symbol];
+    if (!sum) return [];
+    // Getirisi tam 0 olan dönemler çoğu zaman eksik veridir (sayfa da 0'ı geçersiz sayar), bu yüzden atlanır
+    const returns = (['1Y', '6M', '3M', '1M', '1W', '1D'] as const).map(p => (sum[p] === 0 ? null : sum[p]));
+    return seriesFromPeriodReturns(h.current_price, returns);
 }

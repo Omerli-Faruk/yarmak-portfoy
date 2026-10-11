@@ -3,17 +3,12 @@
 import React, { useMemo } from 'react';
 import { NormalizedTransaction } from '@/types';
 import { ASSET_TYPE_LABELS, formatDate } from '@/lib/formatters';
-import {
-    Clock,
-    Plus,
-    Calendar,
-    ArrowDownRight,
-    ArrowUpRight,
-    Pencil,
-    Trash2,
-    ChevronLeft,
-    ChevronRight,
-} from 'lucide-react';
+import { Clock, Pencil, Trash2 } from 'lucide-react';
+import Button from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
+import IconButton from '@/components/ui/IconButton';
+import { cn } from '@/lib/cn';
+import ListPagination from './ListPagination';
 
 // Tabloda bir sayfada gösterilen işlem sayısı
 const ITEMS_PER_PAGE = 25;
@@ -24,17 +19,26 @@ interface TxTableProps {
     currentPage: number;
     onPageChange: (page: number) => void;
     fmt: (value: number, showPlus?: boolean) => string;
-    onAddTx: () => void;
     onEdit: (tx: NormalizedTransaction) => void;
     onDelete: (tx: NormalizedTransaction) => void;
 }
 
-function assetTypeBadgeClass(assetType: string): string {
-    if (assetType === 'FON') return 'bg-slate-700/40 text-slate-300 border-slate-600/40';
-    if (assetType === 'ALTIN') return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-    if (assetType === 'DOVIZ') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-    return 'bg-primary/10 text-primary border-primary/20';
+// Alış/satış: zeminsiz, renkli yazı (renk tek başına anlam taşımasın diye metin de yazılır)
+function TxTypeTag({ isBuy }: { isBuy: boolean }) {
+    return (
+        <span className={cn('text-sm font-medium', isBuy ? 'text-profit' : 'text-loss')}>
+            {isBuy ? 'Alış' : 'Satış'}
+        </span>
+    );
 }
+
+function formatAmount(amount: number): string {
+    return amount.toLocaleString('tr-TR', { maximumFractionDigits: 4 });
+}
+
+// Kutusuz tablo: başlık zemini sayfa zemini, satırlar 48px ve ince çizgiyle ayrılır
+const TH = 'sticky top-0 z-10 h-9 px-3 bg-bg text-xs font-normal text-fg-muted text-left whitespace-nowrap border-b border-border';
+const TD = 'h-12 px-3 whitespace-nowrap border-b border-border';
 
 export default function TxTable({
     rows,
@@ -42,7 +46,6 @@ export default function TxTable({
     currentPage,
     onPageChange,
     fmt,
-    onAddTx,
     onEdit,
     onDelete,
 }: TxTableProps) {
@@ -53,143 +56,180 @@ export default function TxTable({
         return rows.slice(start, start + ITEMS_PER_PAGE);
     }, [rows, currentPage]);
 
+    // Yeni işlem düğmesi sayfa başlığında ("İşlem ekle"); boş durumda ikinci bir düğme yok
     if (rows.length === 0) {
         return (
-            <div className="bg-slate-900/70 border border-slate-800 rounded-2xl overflow-hidden backdrop-blur-sm shadow-sm">
-                <div className="py-16 px-4 text-center flex flex-col items-center justify-center">
-                    <div className="size-14 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 mb-3">
-                        <Clock className="size-7" />
-                    </div>
-                    <h3 className="text-base font-bold text-white">İşlem Bulunamadı</h3>
-                    <p className="text-xs text-slate-400 max-w-sm mt-1">
-                        {hasActiveFilters
-                            ? 'Seçilen filtrelere uygun işlem geçmişi bulunamadı. Filtreleri temizlemeyi deneyin.'
-                            : 'Henüz hiç alım veya satım işlemi kaydetmediniz. İlk işleminizi ekleyerek portföyünüzü oluşturun.'}
-                    </p>
-                    <button
-                        onClick={onAddTx}
-                        className="mt-4 flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-primary hover:bg-primary-hover text-white transition shadow-sm cursor-pointer"
-                    >
-                        <Plus className="size-3.5" />
-                        <span>İlk İşlemi Ekle</span>
-                    </button>
-                </div>
-            </div>
+            <EmptyState
+                icon={<Clock />}
+                title="İşlem bulunamadı"
+                description={
+                    hasActiveFilters
+                        ? 'Seçilen filtrelere uygun işlem geçmişi bulunamadı. Filtreleri temizlemeyi deneyin.'
+                        : 'Henüz hiç alım veya satım işlemi kaydetmediniz. İlk işleminizi ekleyerek portföyünüzü oluşturun.'
+                }
+            />
         );
     }
 
     return (
-        <div className="bg-slate-900/70 border border-slate-800 rounded-2xl overflow-hidden backdrop-blur-sm shadow-sm">
-            <div className="overflow-x-auto custom-horizontal-scrollbar">
-                <table className="w-full text-left border-collapse">
+        <div className="flex flex-col">
+            {/* Mobil ve tablet: yığın satırlar */}
+            <ul className="flex flex-col border-y border-border divide-y divide-border lg:hidden">
+                {pageRows.map((tx, idx) => {
+                    const total = tx.amount * tx.price;
+                    const isBuy = tx.type === 'BUY';
+                    const showPnl = !isBuy && tx.realizedPnl !== 0;
+
+                    return (
+                        <li key={tx.id || idx} className="flex flex-col gap-1 py-3">
+                            {/* Sembol, tür ve toplam */}
+                            <div className="flex items-center gap-2 min-w-0">
+                                <span className="truncate font-mono text-sm font-semibold text-fg">{tx.symbol}</span>
+                                <TxTypeTag isBuy={isBuy} />
+                                <span className="ml-auto shrink-0 font-mono text-sm font-medium text-fg">{fmt(total)}</span>
+                            </div>
+
+                            {/* Tür, ad ve tarih */}
+                            <div className="flex items-center gap-2 min-w-0 text-xs">
+                                <span className="truncate text-fg-muted">
+                                    {ASSET_TYPE_LABELS[tx.assetType] ?? tx.assetType}
+                                    {tx.assetName ? ` · ${tx.assetName}` : ''}
+                                </span>
+                                <span className="ml-auto shrink-0 font-mono text-fg-muted">{formatDate(tx.date)}</span>
+                            </div>
+
+                            {/* Ayrıntılar ve eylemler */}
+                            <div className="flex items-center gap-2">
+                                <dl className="flex flex-wrap gap-x-4 gap-y-1 flex-1 min-w-0 text-sm">
+                                    <div className="flex gap-1.5">
+                                        <dt className="text-fg-muted">Adet</dt>
+                                        <dd className="font-mono text-fg">{formatAmount(tx.amount)}</dd>
+                                    </div>
+                                    <div className="flex gap-1.5">
+                                        <dt className="text-fg-muted">Fiyat</dt>
+                                        <dd className="font-mono text-fg">{fmt(tx.price)}</dd>
+                                    </div>
+                                    <div className="flex gap-1.5">
+                                        <dt className="text-fg-muted">Komisyon</dt>
+                                        <dd className="font-mono text-fg">{fmt(tx.commission)}</dd>
+                                    </div>
+                                    {showPnl && (
+                                        <div className="flex gap-1.5">
+                                            <dt className="text-fg-muted">K/Z</dt>
+                                            <dd className={cn('font-mono font-medium', tx.realizedPnl >= 0 ? 'text-profit' : 'text-loss')}>
+                                                {fmt(tx.realizedPnl, true)}
+                                            </dd>
+                                        </div>
+                                    )}
+                                </dl>
+                                <div className="flex items-center shrink-0 -mr-2">
+                                    <IconButton icon={<Pencil />} label={`${tx.symbol} işlemini düzenle`} size="sm" onClick={() => onEdit(tx)} />
+                                    <IconButton icon={<Trash2 />} label={`${tx.symbol} işlemini sil`} size="sm" onClick={() => onDelete(tx)} />
+                                </div>
+                            </div>
+                        </li>
+                    );
+                })}
+            </ul>
+
+            {/* Geniş ekran: sütunlu veri olduğu için table. Başlık, kayarken üstte sabit kalır.
+                Satır hover zemini kenara taşsın diye kap 8px dışarı açılır, ilk/son hücre aynı kadar içeri alınır. */}
+            <div className="hidden lg:block -mx-2 max-h-[70vh] overflow-auto custom-scrollbar">
+                <table className="w-full border-separate border-spacing-0 text-sm">
                     <thead>
-                        <tr className="border-b border-slate-800 bg-slate-950/40 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                            <th className="py-3 px-4">Tarih</th>
-                            <th className="py-3 px-4">Varlık</th>
-                            <th className="py-3 px-4 text-center">İşlem Türü</th>
-                            <th className="py-3 px-4 text-right">Adet / Lot</th>
-                            <th className="py-3 px-4 text-right">Birim Fiyat</th>
-                            <th className="py-3 px-4 text-right">Toplam Tutar</th>
-                            <th className="py-3 px-4 text-right">Realize K/Z</th>
-                            <th className="py-3 px-4 text-right">Komisyon</th>
-                            <th className="py-3 px-4 text-center">İşlem</th>
+                        <tr>
+                            <th scope="col" className={cn(TH, 'pl-2')}>Tarih</th>
+                            <th scope="col" className={TH}>Varlık</th>
+                            <th scope="col" className={TH}>Tür</th>
+                            <th scope="col" className={cn(TH, 'text-right')}>Adet</th>
+                            <th scope="col" className={cn(TH, 'text-right')}>Fiyat</th>
+                            <th scope="col" className={cn(TH, 'text-right')}>Tutar</th>
+                            <th scope="col" className={cn(TH, 'text-right')}>Gerçekleşen K/Z</th>
+                            <th scope="col" className={cn(TH, 'hidden xl:table-cell text-right')}>Komisyon</th>
+                            <th scope="col" className={cn(TH, 'pr-2 text-right')}>
+                                <span className="sr-only">Eylemler</span>
+                            </th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/60 text-xs sm:text-sm">
+                    <tbody>
                         {pageRows.map((tx, idx) => {
                             const total = tx.amount * tx.price;
                             const isBuy = tx.type === 'BUY';
 
                             return (
-                                <tr
-                                    key={tx.id || idx}
-                                    className="hover:bg-slate-800/40 transition group"
-                                >
+                                <tr key={tx.id || idx} className="transition-colors duration-[120ms] hover:bg-surface-2">
                                     {/* Tarih */}
-                                    <td className="py-3.5 px-4 font-mono text-xs text-slate-300 whitespace-nowrap">
-                                        <div className="flex items-center gap-1.5">
-                                            <Calendar className="size-3.5 text-slate-500" />
-                                            <span>{formatDate(tx.date)}</span>
-                                        </div>
+                                    <td className={cn(TD, 'pl-2 font-mono text-fg-muted')}>
+                                        {formatDate(tx.date)}
                                     </td>
 
-                                    {/* Varlık */}
-                                    <td className="py-3.5 px-4 whitespace-nowrap">
-                                        <div className="flex items-center gap-2.5">
-                                            <span className={`text-[10px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border ${assetTypeBadgeClass(tx.assetType)}`}>
-                                                {ASSET_TYPE_LABELS[tx.assetType] ?? tx.assetType}
-                                            </span>
-                                            <div className="flex flex-col">
-                                                <span className="font-bold text-white font-mono group-hover:text-primary transition">
-                                                    {tx.symbol}
-                                                </span>
-                                                <span className="text-[11px] text-slate-400 truncate max-w-[140px] sm:max-w-xs">
-                                                    {tx.assetName}
-                                                </span>
-                                            </div>
+                                    {/* Varlık: sembol ve ad tek satırda */}
+                                    <td className={TD}>
+                                        <div className="flex items-baseline gap-2 min-w-0 max-w-64 xl:max-w-72">
+                                            <span className="font-mono font-semibold text-fg">{tx.symbol}</span>
+                                            <span className="truncate text-xs text-fg-muted">{tx.assetName}</span>
                                         </div>
                                     </td>
 
                                     {/* Alış / satış */}
-                                    <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                                        <span className={`inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-full border ${
-                                            isBuy
-                                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                                                : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                                        }`}>
-                                            {isBuy ? <ArrowDownRight className="size-3" /> : <ArrowUpRight className="size-3" />}
-                                            {isBuy ? 'ALIŞ' : 'SATIŞ'}
-                                        </span>
+                                    <td className={TD}>
+                                        <TxTypeTag isBuy={isBuy} />
                                     </td>
 
                                     {/* Adet */}
-                                    <td className="py-3.5 px-4 text-right font-mono font-bold text-white whitespace-nowrap">
-                                        {tx.amount.toLocaleString('tr-TR', { maximumFractionDigits: 4 })}
+                                    <td className={cn(TD, 'text-right font-mono text-fg')}>
+                                        {formatAmount(tx.amount)}
                                     </td>
 
                                     {/* Birim fiyat */}
-                                    <td className="py-3.5 px-4 text-right font-mono text-slate-200 whitespace-nowrap">
+                                    <td className={cn(TD, 'text-right font-mono text-fg')}>
                                         {fmt(tx.price)}
                                     </td>
 
                                     {/* Toplam tutar */}
-                                    <td className="py-3.5 px-4 text-right font-mono font-bold text-white whitespace-nowrap">
+                                    <td className={cn(TD, 'text-right font-mono font-medium text-fg')}>
                                         {fmt(total)}
                                     </td>
 
                                     {/* Gerçekleşen kâr/zarar yalnızca satışlarda gösterilir */}
-                                    <td className="py-3.5 px-4 text-right font-mono whitespace-nowrap">
+                                    <td className={cn(TD, 'text-right font-mono')}>
                                         {!isBuy && tx.realizedPnl !== 0 ? (
-                                            <span className={`font-bold ${tx.realizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            <span className={cn('font-medium', tx.realizedPnl >= 0 ? 'text-profit' : 'text-loss')}>
                                                 {fmt(tx.realizedPnl, true)}
                                             </span>
                                         ) : (
-                                            <span className="text-slate-600">—</span>
+                                            <span className="text-fg-muted">—</span>
                                         )}
                                     </td>
 
-                                    {/* Komisyon */}
-                                    <td className="py-3.5 px-4 text-right font-mono text-xs text-slate-400 whitespace-nowrap">
+                                    {/* Komisyon: yalnızca geniş ekranda */}
+                                    <td className={cn(TD, 'hidden xl:table-cell text-right font-mono text-fg-muted')}>
                                         {fmt(tx.commission)}
                                     </td>
 
-                                    {/* Düzenle / sil */}
-                                    <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                                        <div className="flex items-center justify-center gap-1">
-                                            <button
+                                    {/* Düzenle / sil: masaüstünde yazılı düğmeler */}
+                                    <td className={cn(TD, 'pr-0')}>
+                                        <div className="flex items-center justify-end">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                leftIcon={<Pencil />}
                                                 onClick={() => onEdit(tx)}
-                                                className="p-1.5 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition cursor-pointer"
-                                                title="İşlemi Düzenle"
+                                                aria-label={`${tx.symbol} işlemini düzenle`}
+                                                className="px-2.5"
                                             >
-                                                <Pencil className="size-3.5" />
-                                            </button>
-                                            <button
+                                                Düzenle
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                leftIcon={<Trash2 />}
                                                 onClick={() => onDelete(tx)}
-                                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
-                                                title="İşlemi Sil"
+                                                aria-label={`${tx.symbol} işlemini sil`}
+                                                className="px-2.5 hover:bg-loss-soft hover:text-loss"
                                             >
-                                                <Trash2 className="size-3.5" />
-                                            </button>
+                                                Sil
+                                            </Button>
                                         </div>
                                     </td>
                                 </tr>
@@ -200,39 +240,14 @@ export default function TxTable({
             </div>
 
             {rows.length > ITEMS_PER_PAGE && (
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-slate-800 bg-slate-950/30 text-xs">
-                    <span className="text-slate-400 font-medium">
-                        Toplam <span className="text-white font-bold">{rows.length}</span> işlemden{' '}
-                        <span className="text-white font-bold">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> -{' '}
-                        <span className="text-white font-bold">{Math.min(currentPage * ITEMS_PER_PAGE, rows.length)}</span> arası gösteriliyor
-                    </span>
-
-                    <div className="flex items-center gap-1.5">
-                        <button
-                            type="button"
-                            onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-                            disabled={currentPage === 1}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:text-white hover:border-[#1A9FD3] disabled:opacity-40 disabled:pointer-events-none transition cursor-pointer"
-                        >
-                            <ChevronLeft className="size-3.5" />
-                            <span>Önceki</span>
-                        </button>
-
-                        <div className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 font-mono font-bold">
-                            {currentPage} / {totalPages}
-                        </div>
-
-                        <button
-                            type="button"
-                            onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-                            disabled={currentPage === totalPages}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:text-white hover:border-[#1A9FD3] disabled:opacity-40 disabled:pointer-events-none transition cursor-pointer"
-                        >
-                            <span>Sonraki</span>
-                            <ChevronRight className="size-3.5" />
-                        </button>
-                    </div>
-                </div>
+                <ListPagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalCount={rows.length}
+                    pageSize={ITEMS_PER_PAGE}
+                    unitLabel="işlemden"
+                    onPageChange={onPageChange}
+                />
             )}
         </div>
     );

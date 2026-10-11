@@ -1,4 +1,5 @@
-// Uygulama genelinde para ve yüzde gösterimi. TL tutarları "1.234,56 ₺" biçiminde yazılır.
+// Uygulama genelinde para ve yüzde gösterimi. TL tutarları "1.234,56 ₺" biçiminde yazılır
+// (sayı, normal boşluk, ₺). Eksi işareti her yerde gerçek eksi (−); yüzdelerle aynı genişlikte durur.
 
 function formatTrNumber(value: number, decimals: number): string {
     return new Intl.NumberFormat('tr-TR', {
@@ -8,7 +9,7 @@ function formatTrNumber(value: number, decimals: number): string {
 }
 
 function signPrefix(amount: number, showPlusSign: boolean): string {
-    if (amount < -0.000001) return '-';
+    if (amount < -0.000001) return '−';
     return showPlusSign && amount > 0.000001 ? '+' : '';
 }
 
@@ -40,18 +41,43 @@ export function formatTRY(amount: number, decimals: number = 2, showPlusSign: bo
     return `${signPrefix(amount, showPlusSign)}${formatTrNumber(Math.abs(amount), decimals)} ₺`;
 }
 
-// Birim fiyat: 1 TL altındaki fiyatlarda daha fazla ondalık gösterilir (0,01 altı 6, 1 altı 4, diğerleri 2 hane).
-export function formatPriceTR(price: number): string {
-    if (isNaN(price)) price = 0;
-    const decimals = price < 1 ? (price < 0.01 ? 6 : 4) : 2;
-    return `${formatTrNumber(price, decimals)} ₺`;
+// Birim fiyatın ondalık hane sayısı: 0,01 altı 6, 1 altı 4, diğerleri 2 hane.
+// Fiyat farkı da aynı varlığın fiyatıyla aynı hanede yazılsın diye ayrıca dışa açık.
+export function priceDecimals(price: number): number {
+    return price < 1 ? (price < 0.01 ? 6 : 4) : 2;
 }
 
-// Yüzde biçimi: işaret başta, virgüllü ondalık, % sonda ("+2,40%", "-1,05%", sıfırda "0,00%").
+// Birim fiyat: 1 TL altındaki fiyatlarda daha fazla ondalık gösterilir.
+export function formatPriceTR(price: number): string {
+    if (isNaN(price)) price = 0;
+    return `${formatTrNumber(price, priceDecimals(price))} ₺`;
+}
+
+// Yüzde biçimi (Türkçe yazım, % sayının önünde): "+%2,40", "−%1,05", sıfırda "%0,00".
+// Eksi için kısa çizgi değil gerçek eksi işareti (−) kullanılır.
 export function formatSignedPercent(value: number, decimals: number = 2): string {
     const rounded = isFinite(value) ? Number(value.toFixed(decimals)) : 0;
-    const sign = rounded > 0 ? '+' : rounded < 0 ? '-' : '';
-    return `${sign}${formatTrNumber(Math.abs(rounded), decimals)}%`;
+    const sign = rounded > 0 ? '+' : rounded < 0 ? '−' : '';
+    return `${sign}%${formatTrNumber(Math.abs(rounded), decimals)}`;
+}
+
+// İşaretsiz yüzde (pay, oran): formatPercent(12.5, 1) -> "%12,5"
+export function formatPercent(value: number, decimals: number = 1): string {
+    const safe = isFinite(value) ? value : 0;
+    return `%${formatTrNumber(safe, decimals)}`;
+}
+
+// Biçimlenmiş tutarı işaret, sayı ve para birimi simgesine ayırır (kahraman sayıda simge soluk yazılsın diye).
+// "1.234,56 ₺" -> { sign: '', symbol: '₺', number: '1.234,56', symbolFirst: false }
+// "-$1,234.56" -> { sign: '-', symbol: '$', number: '1,234.56', symbolFirst: true }
+// Simge yoksa symbol boş döner.
+export function splitCurrencySymbol(formatted: string): { sign: string; number: string; symbol: string; symbolFirst: boolean } {
+    const match = /^([+\-−]?)\s*([$₺€])?\s*(.*?)\s*([₺$€])?$/.exec(formatted.trim());
+    if (!match) return { sign: '', number: formatted, symbol: '', symbolFirst: false };
+    const [, sign, lead, number, trail] = match;
+    if (lead) return { sign, number, symbol: lead, symbolFirst: true };
+    if (trail) return { sign, number, symbol: trail, symbolFirst: false };
+    return { sign, number, symbol: '', symbolFirst: false };
 }
 
 // Varlık türü kodlarının ekranda görünen adları

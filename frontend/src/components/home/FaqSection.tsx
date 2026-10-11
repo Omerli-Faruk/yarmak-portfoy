@@ -1,48 +1,53 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+'use client';
+
+import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { faqItems } from '@/data/homeData';
+import Section from '@/components/ui/Section';
+import { cn } from '@/lib/cn';
 
+// Sıkça sorulan sorular: kalın bölüm başlığı, altında kutusuz açılır liste
 export default function FaqSection() {
     const [openFaq, setOpenFaq] = useState<number | null>(null);
 
     return (
-        <section id="destek" className="w-full max-w-3xl mx-auto px-4 py-24">
-            <div className="text-center mb-12">
-                <h2 className="text-3xl font-extrabold text-white mb-4">Sıkça sorulan sorular</h2>
-                <p className="text-slate-400">En çok sorulan soruların yanıtları.</p>
-            </div>
-            <div className="flex flex-col gap-4">
+        <Section
+            id="destek"
+            title="Sıkça sorulan sorular"
+            className="scroll-mt-16"
+        >
+            <div className="flex flex-col divide-y divide-border border-y border-border">
                 {faqItems.map((faq, idx) => {
                     const isOpen = openFaq === idx;
+                    const panelId = `sss-yanit-${idx}`;
                     return (
-                        <div key={idx} className="bg-surface border border-border/80 rounded-2xl overflow-hidden transition-colors hover:border-border">
+                        <div key={idx} className="flex flex-col">
                             <button
+                                type="button"
                                 onClick={() => setOpenFaq(isOpen ? null : idx)}
-                                className="w-full px-6 py-5 flex items-center justify-between text-left focus:outline-none cursor-pointer"
-                            >
-                                <span className="font-semibold text-slate-200">{faq.question}</span>
-                                <ChevronDown className={`w-5 h-5 text-slate-500 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
-                            </button>
-                            <AnimatePresence>
-                                {isOpen && (
-                                    <motion.div
-                                        initial={{ height: 0, opacity: 0 }}
-                                        animate={{ height: 'auto', opacity: 1 }}
-                                        exit={{ height: 0, opacity: 0 }}
-                                        transition={{ duration: 0.3 }}
-                                        className="px-6 pb-5 text-sm text-slate-400 leading-relaxed"
-                                    >
-                                        <div className="pt-2 border-t border-border/50 mt-2">
-                                            {faq.answer}
-                                        </div>
-                                    </motion.div>
+                                aria-expanded={isOpen}
+                                aria-controls={panelId}
+                                className={cn(
+                                    '-mx-2 flex min-h-12 cursor-pointer items-center justify-between gap-4 rounded px-2 py-2.5 text-left',
+                                    'transition-colors duration-[120ms] hover:bg-surface-2',
+                                    'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary',
                                 )}
-                            </AnimatePresence>
+                            >
+                                <span className="text-base font-medium text-fg">{faq.question}</span>
+                                <ChevronDown
+                                    aria-hidden
+                                    className={cn('size-5 shrink-0 text-fg-muted', isOpen && 'rotate-180 text-fg')}
+                                />
+                            </button>
+                            {isOpen && (
+                                <div id={panelId} className="max-w-[72ch] pb-4 pt-1 text-base leading-relaxed text-fg-muted">
+                                    {faq.answer}
+                                </div>
+                            )}
                         </div>
                     );
                 })}
             </div>
-        </section>
+        </Section>
     );
 }

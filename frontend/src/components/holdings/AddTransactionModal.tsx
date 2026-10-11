@@ -1,10 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import React, { useId, useState } from 'react';
 import api from '@/lib/api';
-import { formatTRY } from '@/lib/formatters';
+import { cn } from '@/lib/cn';
+import { ASSET_TYPE_LABELS, formatTRY } from '@/lib/formatters';
+import AssetSearchInput, { type AssetSearchItem } from '@/components/AssetSearchInput';
 import TransactionDatePicker from '@/components/TransactionDatePicker';
+import Modal from '@/components/ui/Modal';
+import Button from '@/components/ui/Button';
+import Field from '@/components/ui/Field';
+import Input from '@/components/ui/Input';
 
 interface AddTransactionModalProps {
     isOpen: boolean;
@@ -36,6 +41,14 @@ export default function AddTransactionModal({
     const [txDate, setTxDate] = useState(() => new Date().toISOString());
     const [isTxDateError, setIsTxDateError] = useState(false);
     const [txSubmitting, setTxSubmitting] = useState(false);
+    // Aramadan seçilen varlık; türü buradan gönderilir
+    const [pickedAsset, setPickedAsset] = useState<AssetSearchItem | null>(null);
+
+    const formId = useId();
+    const symbolId = useId();
+    const amountId = useId();
+    const priceId = useId();
+    const commissionId = useId();
 
     const [prevProps, setPrevProps] = useState({ isOpen, initialSymbol, initialPrice, initialType, maxLots });
     if (
@@ -53,12 +66,26 @@ export default function AddTransactionModal({
             setTxCommission('0');
             setTxDate(new Date().toISOString());
             setTxType(initialType);
+            setPickedAsset(null);
         }
     }
 
-    const isExceedingMax = txType === 'SELL' && maxLots !== undefined && parseFloat(txAmount) > maxLots;
+    // Sembolle açılmadıysa sembol alanı arama kutusudur
+    const searchable = !initialSymbol;
+    const symbolUpper = txSymbol.trim().toUpperCase();
+    const pickedMatches = pickedAsset !== null && pickedAsset.symbol.toUpperCase() === symbolUpper;
 
-    if (!isOpen) return null;
+    // Arama sonucundan seçim: sembol, tür ve son fiyat dolar (fiyat elle değiştirilebilir)
+    const handlePickAsset = (asset: AssetSearchItem) => {
+        setTxSymbol(asset.symbol.toUpperCase());
+        setPickedAsset(asset);
+        if (asset.price > 0) {
+            const decimals = asset.price >= 100 ? 2 : asset.price >= 0.01 ? 4 : 6;
+            setTxPrice(String(Number(asset.price.toFixed(decimals))));
+        }
+    };
+
+    const isExceedingMax = txType === 'SELL' && maxLots !== undefined && parseFloat(txAmount) > maxLots;
 
     const handleAddTx = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -69,11 +96,14 @@ export default function AddTransactionModal({
         }
         try {
             setTxSubmitting(true);
-            const symbol = txSymbol.toUpperCase();
+            const symbol = txSymbol.trim().toUpperCase();
+            // Tür: aramadan seçildiyse onun türü; sembolle açıldıysa verilen tür; elle yazıldıysa eskisi gibi HISSE
+            const txAssetType = pickedMatches && pickedAsset?.assetType
+                ? pickedAsset.assetType.toUpperCase()
+                : symbol === initialSymbol.toUpperCase() ? assetType : 'HISSE';
             await api.post('/transactions', {
                 symbol,
-                // Kullanıcı sembolü değiştirdiyse verilen tür artık geçerli değil; eskisi gibi HISSE gönderilir
-                asset_type: symbol === initialSymbol.toUpperCase() ? assetType : 'HISSE',
+                asset_type: txAssetType,
                 type: txType,
                 amount: txAmount,
                 price: txPrice,
@@ -90,161 +120,184 @@ export default function AddTransactionModal({
         }
     };
 
-    return (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[90dvh] overflow-y-auto">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <h3 className="text-base font-bold text-white">İşlem Ekle</h3>
-                    <button onClick={onClose} className="text-slate-400 hover:text-white cursor-pointer">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+    const amountNum = parseFloat(txAmount) || 0;
+    const priceNum = parseFloat(txPrice) || 0;
+    const commissionNum = parseFloat(txCommission) || 0;
 
-                <form onSubmit={handleAddTx} className="space-y-3.5">
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-300 mb-1">Sembol</label>
-                        <input
+    // Alış / Satış seçici: düz segment; seçili olanın yazısı kâr ya da zarar renginde
+    const typeButton = (value: 'BUY' | 'SELL', label: string) => {
+        const isActive = txType === value;
+        return (
+            <button
+                type="button"
+                aria-pressed={isActive}
+                onClick={() => setTxType(value)}
+                className={cn(
+                    'flex-1 h-10 sm:h-9 rounded-[3px] text-sm font-medium cursor-pointer transition-colors duration-[120ms]',
+                    'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary',
+                    isActive
+                        ? cn('bg-surface-3 ring-1 ring-inset ring-border-strong', value === 'BUY' ? 'text-profit' : 'text-loss')
+                        : 'text-fg-muted hover:text-fg',
+                )}
+            >
+                {label}
+            </button>
+        );
+    };
+
+    return (
+        <Modal
+            open={isOpen}
+            onClose={onClose}
+            dismissible={!txSubmitting}
+            title="İşlem ekle"
+            footer={
+                <>
+                    <Button variant="ghost" size="sm" onClick={onClose} disabled={txSubmitting}>
+                        İptal
+                    </Button>
+                    <Button
+                        type="submit"
+                        form={formId}
+                        size="sm"
+                        loading={txSubmitting}
+                        disabled={isTxDateError || Boolean(isExceedingMax)}
+                    >
+                        {txSubmitting ? 'Kaydediliyor...' : 'Kaydet'}
+                    </Button>
+                </>
+            }
+        >
+            <form id={formId} onSubmit={handleAddTx} className="flex flex-col gap-3">
+                <Field
+                    label="Sembol"
+                    htmlFor={symbolId}
+                    hint={pickedMatches && pickedAsset
+                        ? [pickedAsset.name, pickedAsset.assetType && (ASSET_TYPE_LABELS[pickedAsset.assetType.toUpperCase()] ?? pickedAsset.assetType)]
+                            .filter(Boolean).join(' · ')
+                        : undefined}
+                >
+                    {searchable ? (
+                        <AssetSearchInput
+                            id={symbolId}
+                            value={txSymbol}
+                            onChange={setTxSymbol}
+                            onSelect={handlePickAsset}
+                            placeholder="Sembol ya da ad yazın (örn. ASELS)"
+                            autoFocus
+                            required
+                            excludeTypes={['ENDEKS']}
+                            emptyText="Eşleşen varlık bulunamadı, sembolü tam yazarak da ekleyebilirsiniz"
+                        />
+                    ) : (
+                        <Input
+                            id={symbolId}
                             type="text"
                             required
                             value={txSymbol}
                             onChange={e => setTxSymbol(e.target.value.toUpperCase())}
                             placeholder="örn. ASELS, THYAO"
-                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white uppercase font-bold focus:outline-none focus:border-[#1A9FD3]"
+                            className="font-mono font-medium"
                         />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                        <button
-                            type="button"
-                            onClick={() => setTxType('BUY')}
-                            className={`py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
-                                txType === 'BUY' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'
-                            }`}
-                        >
-                            Alış
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setTxType('SELL')}
-                            className={`py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
-                                txType === 'SELL' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-400'
-                            }`}
-                        >
-                            Satış
-                        </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <div className="flex items-center justify-between mb-1">
-                                <label className="block text-xs font-semibold text-slate-300">Adet (Lot)</label>
-                                {txType === 'SELL' && maxLots !== undefined && maxLots > 0 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setTxAmount(String(maxLots))}
-                                        className="text-[11px] font-bold text-[#1A9FD3] hover:text-white bg-[#1A9FD3]/15 hover:bg-[#1A9FD3] px-1.5 py-0.5 rounded transition cursor-pointer"
-                                        title="Eldeki tüm lotları otomatik doldur"
-                                    >
-                                        Tümü: {maxLots.toLocaleString('tr-TR')}
-                                    </button>
-                                )}
-                            </div>
-                            <input
-                                type="number"
-                                step="any"
-                                min="0.000001"
-                                required
-                                value={txAmount}
-                                onChange={e => setTxAmount(e.target.value)}
-                                placeholder="100"
-                                className={`w-full bg-slate-800 border rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none ${
-                                    isExceedingMax ? 'border-rose-500 focus:border-rose-500' : 'border-slate-700 focus:border-[#1A9FD3]'
-                                }`}
-                            />
-                            {isExceedingMax && (
-                                <p className="text-[11px] text-rose-400 mt-1 font-medium leading-tight">
-                                    Mevcut {maxLots} lottan fazlasını satamazsınız.
-                                </p>
-                            )}
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-300 mb-1">Birim Fiyat (TL)</label>
-                            <input
-                                type="number"
-                                step="any"
-                                min="0.000001"
-                                required
-                                value={txPrice}
-                                onChange={e => setTxPrice(e.target.value)}
-                                placeholder="350.50"
-                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-[#1A9FD3]"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Tarih ve Saat Seçici */}
-                    <TransactionDatePicker value={txDate} onChange={setTxDate} onErrorChange={setIsTxDateError} />
-
-                    {/* Komisyon */}
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-300 mb-1">Ödenen Komisyon (₺) - Opsiyonel</label>
-                        <input
-                            type="number"
-                            step="any"
-                            min="0"
-                            value={txCommission}
-                            onChange={e => setTxCommission(e.target.value)}
-                            placeholder="0.00"
-                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-[#1A9FD3]"
-                        />
-                        <p className="text-[11px] text-slate-400 mt-1">Alışta girilen komisyon maliyete eklenir; satışta girilen komisyon gerçekleşen kârdan düşülür.</p>
-                    </div>
-
-                    {/* Toplam İşlem Tutarı Özeti */}
-                    {parseFloat(txAmount) > 0 && parseFloat(txPrice) > 0 && (
-                        <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1.5 text-xs sm:text-sm">
-                            <div className="flex justify-between items-center text-slate-400">
-                                <span>İşlem Tutarı:</span>
-                                <span className="font-mono text-slate-200 font-medium">
-                                    {formatTRY((parseFloat(txAmount) || 0) * (parseFloat(txPrice) || 0))}
-                                </span>
-                            </div>
-                            {parseFloat(txCommission) > 0 && (
-                                <div className="flex justify-between items-center text-slate-300">
-                                    <span>{txType === 'BUY' ? '+' : '-'} Komisyon:</span>
-                                    <span className="font-mono font-medium">
-                                        {formatTRY(parseFloat(txCommission))}
-                                    </span>
-                                </div>
-                            )}
-                            {/* Alışta komisyon maliyete eklenir, satışta hesaba geçecek tutardan düşülür */}
-                            <div className="pt-2 border-t border-slate-700 flex justify-between items-center">
-                                <span className="text-slate-300 font-medium">Toplam {txType === 'BUY' ? 'Maliyet' : 'Net Tutar'}:</span>
-                                <span className="font-bold text-white font-mono text-sm sm:text-base">
-                                    {formatTRY(((parseFloat(txAmount) || 0) * (parseFloat(txPrice) || 0)) + (txType === 'BUY' ? (parseFloat(txCommission) || 0) : -(parseFloat(txCommission) || 0)))}
-                                </span>
-                            </div>
-                        </div>
                     )}
+                </Field>
 
-                    <div className="flex items-center justify-end gap-3 pt-3">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white"
-                        >
-                            İptal
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={txSubmitting || isTxDateError || Boolean(isExceedingMax)}
-                            className="px-5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-[#1A9FD3] hover:bg-[#0C6991] text-white transition disabled:opacity-50 cursor-pointer shadow-sm shadow-[#1A9FD3]/20"
-                        >
-                            {txSubmitting ? 'Kaydediliyor...' : 'Kaydet'}
-                        </button>
+                <div role="group" aria-label="İşlem türü" className="flex gap-0.5 p-0.5 rounded border border-border bg-surface-2">
+                    {typeButton('BUY', 'Alış')}
+                    {typeButton('SELL', 'Satış')}
+                </div>
+
+                <div className="flex gap-3">
+                    <Field
+                        label="Adet (lot)"
+                        htmlFor={amountId}
+                        className="flex-1"
+                        error={isExceedingMax ? `Mevcut ${maxLots} lottan fazlasını satamazsınız.` : undefined}
+                        labelAction={
+                            txType === 'SELL' && maxLots !== undefined && maxLots > 0 ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setTxAmount(String(maxLots))}
+                                    className="inline-flex items-center min-h-11 sm:min-h-10 -my-2.5 sm:-my-2 px-1 rounded font-mono text-sm text-primary cursor-pointer hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                                    title="Eldeki tüm lotları otomatik doldur"
+                                >
+                                    Tümü: {maxLots.toLocaleString('tr-TR')}
+                                </button>
+                            ) : undefined
+                        }
+                    >
+                        <Input
+                            id={amountId}
+                            type="number"
+                            inputMode="decimal"
+                            step="any"
+                            min="0.000001"
+                            required
+                            value={txAmount}
+                            onChange={e => setTxAmount(e.target.value)}
+                            placeholder="100"
+                            invalid={Boolean(isExceedingMax)}
+                        />
+                    </Field>
+                    <Field label="Birim fiyat (₺)" htmlFor={priceId} className="flex-1">
+                        <Input
+                            id={priceId}
+                            type="number"
+                            inputMode="decimal"
+                            step="any"
+                            min="0.000001"
+                            required
+                            value={txPrice}
+                            onChange={e => setTxPrice(e.target.value)}
+                            placeholder="350.50"
+                        />
+                    </Field>
+                </div>
+
+                {/* Tarih ve Saat Seçici */}
+                <TransactionDatePicker value={txDate} onChange={setTxDate} onErrorChange={setIsTxDateError} />
+
+                {/* Komisyon */}
+                <Field
+                    label="Komisyon (₺, isteğe bağlı)"
+                    htmlFor={commissionId}
+                    hint="Alışta girilen komisyon maliyete eklenir; satışta girilen komisyon gerçekleşen kârdan düşülür."
+                >
+                    <Input
+                        id={commissionId}
+                        type="number"
+                        inputMode="decimal"
+                        step="any"
+                        min="0"
+                        value={txCommission}
+                        onChange={e => setTxCommission(e.target.value)}
+                        placeholder="0.00"
+                    />
+                </Field>
+
+                {/* Toplam İşlem Tutarı Özeti */}
+                {parseFloat(txAmount) > 0 && parseFloat(txPrice) > 0 && (
+                    <div className="flex flex-col gap-1.5 pt-3 border-t border-border text-sm">
+                        <div className="flex items-center justify-between gap-3 text-fg-muted">
+                            <span>İşlem tutarı</span>
+                            <span className="font-mono text-fg">{formatTRY(amountNum * priceNum)}</span>
+                        </div>
+                        {parseFloat(txCommission) > 0 && (
+                            <div className="flex items-center justify-between gap-3 text-fg-muted">
+                                <span>{txType === 'BUY' ? '+' : '-'} Komisyon</span>
+                                <span className="font-mono text-fg">{formatTRY(parseFloat(txCommission))}</span>
+                            </div>
+                        )}
+                        {/* Alışta komisyon maliyete eklenir, satışta hesaba geçecek tutardan düşülür */}
+                        <div className="flex items-center justify-between gap-3 border-t border-border pt-2">
+                            <span className="font-medium text-fg">{txType === 'BUY' ? 'Toplam maliyet' : 'Net tutar'}</span>
+                            <span className="font-mono text-base font-semibold text-fg">
+                                {formatTRY((amountNum * priceNum) + (txType === 'BUY' ? commissionNum : -commissionNum))}
+                            </span>
+                        </div>
                     </div>
-                </form>
-            </div>
-        </div>
+                )}
+            </form>
+        </Modal>
     );
 }

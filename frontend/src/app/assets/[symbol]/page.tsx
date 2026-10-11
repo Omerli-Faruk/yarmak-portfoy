@@ -1,12 +1,15 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useSyncExternalStore } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Activity, Bell, ShieldAlert } from 'lucide-react';
+import { Plus, Activity, Bell } from 'lucide-react';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import PageContainer from '@/components/ui/PageContainer';
+import Button, { buttonClasses } from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
 import { InteractiveAreaChart } from '@/components/InteractiveAreaChart';
 import AddTransactionModal from '@/components/holdings/AddTransactionModal';
 import AssetHeaderCard from '@/components/asset-detail/AssetHeaderCard';
@@ -20,7 +23,7 @@ import {
     formatIndexPoints,
     isIndexAsset,
 } from '@/components/asset-detail/types';
-import { formatPriceTR } from '@/lib/formatters';
+import { formatPriceTR, formatTRY, priceDecimals } from '@/lib/formatters';
 import { normalizeTransaction } from '@/lib/normalize';
 import { CHART_PERIODS } from '@/lib/periodUtils';
 import type { NormalizedTransaction, Transaction } from '@/types';
@@ -56,6 +59,17 @@ function calculateHolding(txs: NormalizedTransaction[]) {
     return { totalLots, avgCost, totalCost };
 }
 
+// Masaüstünde grafik daha uzun çizilir; sunucuda ve ilk çizimde dar ekran varsayılır
+const WIDE_QUERY = '(min-width: 1024px)';
+function subscribeWide(onChange: () => void) {
+    const mq = window.matchMedia(WIDE_QUERY);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+}
+function useIsWide() {
+    return useSyncExternalStore(subscribeWide, () => window.matchMedia(WIDE_QUERY).matches, () => false);
+}
+
 export default function AssetDetailPage() {
     const params = useParams();
     const router = useRouter();
@@ -75,6 +89,9 @@ export default function AssetDetailPage() {
 
     // Grafikte seçili dönemin getirisi (%)
     const [periodReturn, setPeriodReturn] = useState<number | null>(null);
+    // Önceki kapanış: 1G grafiğinde kesikli referans çizgisi, 1G getirisi buna göre
+    const [previousClose, setPreviousClose] = useState<number | null>(null);
+    const isWide = useIsWide();
 
     // AuthProvider oturum kontrolü bitene kadar sayfayı göstermediği için user burada güncel
     const isLoggedIn = !!user;
@@ -183,6 +200,7 @@ export default function AssetDetailPage() {
                         setAssetData(prev => prev ? { ...prev, current_price: formattedPrice } : prev);
                     }
                 }
+                setPreviousClose(typeof det.previousClose === 'number' && det.previousClose > 0 ? det.previousClose : null);
                 if (det.fundamentals) setFundamentals(det.fundamentals);
                 if (det.summary) setSummaryData(det.summary);
             }
@@ -225,9 +243,9 @@ export default function AssetDetailPage() {
     const isFund = assetData?.asset_type === 'FON';
     const isIndex = isIndexAsset(rawSymbol, assetData?.asset_type);
 
-    // Fonlarda gün içi fiyat olmadığı için 1G yok. Bu sayfada Tümü seçeneği gösterilmiyor.
+    // Fonlarda gün içi fiyat olmadığı için 1G yok
     const assetPeriods = useMemo(
-        () => CHART_PERIODS.filter(p => p.id !== 'ALL' && !(isFund && p.id === '1D')),
+        () => CHART_PERIODS.filter(p => !(isFund && p.id === '1D')),
         [isFund]
     );
 
@@ -246,125 +264,118 @@ export default function AssetDetailPage() {
 
     if (!assetData) {
         return (
-            <div className="min-h-screen  flex flex-col items-center justify-center text-white px-4">
-                <Activity className="w-16 h-16 mb-4 text-slate-600" />
-                <h1 className="text-3xl font-bold mb-2">Varlık bulunamadı</h1>
-                <p className="text-slate-400 mb-6 text-center max-w-md">Aradığınız varlık ({rawSymbol}) sistemimizde bulunmuyor veya geçici olarak ulaşılamıyor.</p>
-                <button onClick={() => router.push('/')} className="bg-[#1A9FD3] hover:bg-[#1589B7] px-6 py-2 rounded-lg font-medium transition cursor-pointer">Ana Sayfaya Dön</button>
-            </div>
+            <PageContainer width="narrow" className="min-h-[60vh] justify-center">
+                <EmptyState
+                    icon={<Activity />}
+                    title={<span role="heading" aria-level={1}>Varlık bulunamadı</span>}
+                    description={`Aradığınız varlık (${rawSymbol}) sistemimizde bulunmuyor veya geçici olarak ulaşılamıyor.`}
+                    action={<Button onClick={() => router.push('/')}>Ana sayfaya dön</Button>}
+                />
+            </PageContainer>
         );
     }
 
+    // Temel veriler yalnızca hisselerde gösterilir
+    const showFundamentals = !!fundamentals && assetData.asset_type === 'HISSE';
+
+    // Pozisyon yalnızca bu varlıkta işlemi olan kullanıcıya gösterilir. Misafirde ve hiç işlemi olmayanda
+    // "işlem yok" bilgisi zaten İşlemleriniz bölümünde yazdığı için ikinci bir boş kutu çıkmaz.
+    const showPosition = isLoggedIn && transactions.length > 0;
+    const position = showPosition ? (
+        <PositionCard
+            totalLots={totalLots}
+            avgCost={avgCost}
+            totalValue={currentTotalValue}
+            profitLoss={profitLoss}
+            profitLossPercent={profitLossPercent}
+        />
+    ) : null;
+
     return (
-        <div className="min-h-screen text-slate-100 py-6 sm:py-8 px-3 sm:px-6 lg:px-8">
-            <div className="max-w-7xl mx-auto space-y-6">
-
-                {/* Üst bar: geri dönüş, alarm ve işlem ekleme */}
-                <div className="flex items-center justify-between">
-                    <Link href="/" className="text-gray-500 hover:text-white flex items-center gap-2 text-xs font-bold uppercase tracking-widest transition-colors"> <ArrowLeft className="w-4 h-4" /> Ana Sayfa </Link>
-
-
-                    {isLoggedIn ? (
-                        <div className="flex items-center gap-2">
+        <PageContainer>
+            {/* Odak: sembol satırı, büyük fiyat, kutusuz grafik ve dönem getirileri */}
+            <AssetHeaderCard
+                assetData={assetData}
+                rawSymbol={rawSymbol}
+                fundamentals={fundamentals}
+                summaryData={summaryData}
+                periodReturn={periodReturn}
+                onRefreshStale={() => {
+                    chartCacheRef.current = {};
+                    void loadChartAndFundamentals();
+                }}
+                actions={
+                    isLoggedIn ? (
+                        <>
                             <Link
                                 href={`/alerts?symbol=${encodeURIComponent(rawSymbol)}`}
-                                className="bg-slate-800 hover:bg-slate-700 border border-slate-700/80 hover:border-amber-500/50 text-slate-200 hover:text-white font-bold px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center transition cursor-pointer gap-1.5"
-                                title="Fiyat Alarmı Kur"
+                                className={buttonClasses({ variant: 'secondary', size: 'sm' })}
                             >
-                                <Bell className="w-3.5 h-3.5 text-amber-400" />
-                                <span>Alarm Kur</span>
+                                <Bell aria-hidden />
+                                <span>Alarm kur</span>
                             </Link>
-                            <button
-                                onClick={() => setIsModalOpen(true)}
-                                className="bg-[#1A9FD3] hover:bg-[#0C6991] text-white font-bold px-4 py-2 rounded-xl text-xs sm:text-sm flex items-center transition cursor-pointer shadow-sm shadow-[#1A9FD3]/20"
-                            >
-                                <Plus className="w-4 h-4 mr-1 stroke-[2.5]" />
-                                İşlem Ekle
-                            </button>
-                        </div>
+                            <Button size="sm" leftIcon={<Plus />} onClick={() => setIsModalOpen(true)}>
+                                İşlem ekle
+                            </Button>
+                        </>
                     ) : (
-                        <button
-                            onClick={() => router.push('/register')}
-                            className="bg-slate-800 hover:bg-slate-700 text-white font-bold px-4 py-2 rounded-xl text-xs sm:text-sm flex items-center transition cursor-pointer"
-                        >
-                            Hesap Oluştur
-                        </button>
-                    )}
-                </div>
-
-                <AssetHeaderCard
-                    assetData={assetData}
-                    rawSymbol={rawSymbol}
-                    fundamentals={fundamentals}
-                    summaryData={summaryData}
-                    periodReturn={periodReturn}
-                    onRefreshStale={() => {
-                        chartCacheRef.current = {};
-                        void loadChartAndFundamentals();
-                    }}
+                        <Button variant="secondary" size="sm" onClick={() => router.push('/register')}>
+                            Hesap oluştur
+                        </Button>
+                    )
+                }
+            >
+                <InteractiveAreaChart
+                    frameless
+                    title="Fiyat grafiği"
+                    data={formattedChartData}
+                    dataKey="value"
+                    dateKey="date"
+                    periods={assetPeriods}
+                    activePeriod={timeRange}
+                    onPeriodChange={setTimeRange}
+                    currencySymbol={isIndex ? '' : '₺'}
+                    currency="TRY"
+                    valueFormatter={isIndex ? formatIndexPoints : formatPriceTR}
+                    referenceValue={timeRange === '1D' ? previousClose : null}
+                    referenceLabel="Önceki kapanış"
+                    // Dönem farkı fiyatla aynı hanede: "−11,75 ₺", kuruşluk fonda "+0,0012 ₺"
+                    changeFormatter={isIndex ? undefined : (v) => formatTRY(v, priceDecimals(currentPrice), true)}
+                    showBrush={true}
+                    showStats={true}
+                    isLoading={isChartLoading}
+                    height={isWide ? 380 : 260}
+                    emptyMessage={
+                        isFund
+                            ? "Fon fiyat verileri hazırlanıyor, lütfen birkaç saniye bekleyin..."
+                            : "Grafik verisi yükleniyor veya veri bulunamadı..."
+                    }
                 />
+            </AssetHeaderCard>
 
-                {/* Solda grafik ve pozisyon, sağda işlem geçmişi */}
-                <div className="flex flex-col lg:flex-row gap-6">
-                    <div className="flex-1 flex flex-col gap-6">
-                        <InteractiveAreaChart
-                            title="Fiyat Grafiği"
-                            data={formattedChartData}
-                            dataKey="value"
-                            dateKey="date"
-                            periods={assetPeriods}
-                            activePeriod={timeRange}
-                            onPeriodChange={setTimeRange}
-                            currencySymbol={isIndex ? '' : '₺'}
-                            currency="TRY"
-                            valueFormatter={isIndex ? formatIndexPoints : formatPriceTR}
-                            showBrush={true}
-                            showStats={true}
-                            isLoading={isChartLoading}
-                            emptyMessage={
-                                isFund
-                                    ? "Fon fiyat verileri hazırlanıyor, lütfen birkaç saniye bekleyin..."
-                                    : "Grafik verisi yükleniyor veya veri bulunamadı..."
-                            }
-                        />
+            {/* Ana sütunda pozisyon ve işlemler, dar yan sütunda temel veriler. Temel verisi olmayan
+                varlıklarda (altın, fon, endeks) kısa pozisyon listesi yan sütuna geçer; böylece etiket ile
+                değer tam genişlikte birbirinden kopmaz. Telefonda pozisyon yine işlemlerin üstündedir. */}
+            <div className="flex flex-col lg:flex-row lg:items-start gap-10">
+                <div className="flex flex-col gap-10 min-w-0 lg:basis-0 lg:grow">
+                    {showFundamentals && position}
 
-                        <PositionCard
-                            totalLots={totalLots}
-                            avgCost={avgCost}
-                            totalValue={currentTotalValue}
-                            profitLoss={profitLoss}
-                            profitLossPercent={profitLossPercent}
-                            canAdd={isLoggedIn}
-                            onAddTx={() => setIsModalOpen(true)}
-                        />
-                    </div>
-
+                    {/* Boş durumda ayrı düğme yok: "Hesap oluştur" / "İşlem ekle" fiyatın yanında */}
                     <AssetTxHistory
                         isLoggedIn={isLoggedIn}
                         transactions={transactions}
-                        onRegister={() => router.push('/register')}
-                        onAddTx={() => setIsModalOpen(true)}
                         onDelete={handleDelete}
                     />
                 </div>
 
-                {/* Temel veriler yalnızca hisselerde gösterilir */}
-                {fundamentals && assetData.asset_type === 'HISSE' && (
-                    <FundamentalsGrid fundamentals={fundamentals} />
+                {showFundamentals ? (
+                    <FundamentalsGrid fundamentals={fundamentals} className="w-full lg:w-[340px] shrink-0" />
+                ) : (
+                    position && <div className="order-first lg:order-none w-full lg:w-[340px] shrink-0">{position}</div>
                 )}
-
-                {/* Yasal uyarı ve gecikme notu */}
-                <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-400">
-                    <div className="flex items-center gap-2.5">
-                        <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span>Fiyatlar genel bilgilendirme amaçlıdır ve yatırım tavsiyesi değildir. BIST verileri en az 15 dakika gecikmelidir.</span>
-                    </div>
-                    <Link href="/disclaimer" className="text-primary hover:underline shrink-0 text-[11px] font-semibold">
-                        Yasal Uyarı &rarr;
-                    </Link>
-                </div>
             </div>
 
+            {/* Yasal uyarı ve gecikme notu sitenin alt bilgisinde; fiyatın yanında kaynağa göre kısa not var */}
             <AddTransactionModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
@@ -373,6 +384,6 @@ export default function AssetDetailPage() {
                 initialPrice={assetData.current_price ?? ''}
                 assetType={assetData.asset_type || 'HISSE'}
             />
-        </div>
+        </PageContainer>
     );
 }

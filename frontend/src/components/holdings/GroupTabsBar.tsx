@@ -2,7 +2,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    Layers,
     FolderPlus,
     ChevronLeft,
     ChevronRight,
@@ -10,9 +9,25 @@ import {
     Trash2,
     ChevronUp,
     ChevronDown,
-    GripVertical,
 } from 'lucide-react';
 import type { AssetGroup, UserHolding } from '@/types';
+import { cn } from '@/lib/cn';
+import Button from '@/components/ui/Button';
+import IconButton from '@/components/ui/IconButton';
+
+const SCROLL_ARROW =
+    'pointer-events-auto flex items-center justify-center size-11 sm:size-10 rounded text-fg-muted cursor-pointer transition-colors duration-[120ms] hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary';
+
+// Alt çizgili sekme: etkin olanın altında mavi çizgi. Aralık sekmeler arasındaki boşlukla verilir.
+const tabClasses = (isActive: boolean) =>
+    cn(
+        'inline-flex items-center gap-1.5 h-11 sm:h-10 px-0.5 shrink-0 border-b-2 text-sm font-medium whitespace-nowrap select-none cursor-pointer',
+        'transition-colors duration-[120ms] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary',
+        isActive ? 'border-primary text-fg' : 'border-transparent text-fg-muted hover:text-fg',
+    );
+
+const countClasses = (isActive: boolean) =>
+    cn('font-mono text-xs', isActive ? 'text-fg' : 'text-fg-muted');
 
 interface GroupTabsBarProps {
     groups: AssetGroup[];
@@ -28,10 +43,11 @@ interface GroupTabsBarProps {
     onOpenManage: () => void;
     onOpenCreate: () => void;
     onDropGroup: (targetId: string, sourceId: string) => void;
+    className?: string;
 }
 
-// Tüm Varlıklar / Türe Göre / kullanıcı grupları sekmeleri. Sekmeler tek satırda kaydırılabilir ya da
-// alt alta sarılabilir; grup sekmeleri sürükle-bırak ile sıralanır.
+// Tüm Varlıklar / Türe Göre / kullanıcı grupları sekmeleri ve sağda sade grup işlemleri, tek satırda.
+// Sekmeler tek satırda kaydırılabilir ya da alt alta sarılabilir; grup sekmeleri sürükle-bırak ile sıralanır.
 export default function GroupTabsBar({
     groups,
     assetGroups,
@@ -46,6 +62,7 @@ export default function GroupTabsBar({
     onOpenManage,
     onOpenCreate,
     onDropGroup,
+    className,
 }: GroupTabsBarProps) {
     const groupsContainerRef = useRef<HTMLDivElement>(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -119,88 +136,20 @@ export default function GroupTabsBar({
     }, [activeTab, isGroupsWrapped]);
 
     return (
-        <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <Layers className="w-3.5 h-3.5 text-slate-400" /> Gruplar & Listeler
-                    </span>
-                    {groups.length > 1 && (
-                        <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
-                            • Sıralamak için sekmeleri sürükleyip bırakabilirsiniz
-                        </span>
-                    )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    {isCustomGroup && (
-                        <button
-                            onClick={onDeleteActiveGroup}
-                            className="flex items-center gap-1.5 text-xs font-bold text-rose-400 hover:text-white transition cursor-pointer bg-rose-500/10 hover:bg-rose-600 px-3 py-1.5 rounded-xl border border-rose-500/25 active:scale-95"
-                            title={`"${activeGroupName}" Grubunu Sil`}
-                        >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Grubu Sil</span>
-                        </button>
-                    )}
-
-                    {groups.length > 0 && (
-                        <button
-                            onClick={onOpenManage}
-                            className="flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white transition cursor-pointer bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-xl border border-slate-700 active:scale-95"
-                            title="Grupların Sırasını Değiştir & Yönet"
-                        >
-                            <Settings2 className="w-3.5 h-3.5 text-slate-400" />
-                            <span>Grupları Yönet</span>
-                        </button>
-                    )}
-
-                    {/* Tek satır / çok satır görünümü */}
-                    {groups.length > 2 && (
-                        <button
-                            type="button"
-                            onClick={onToggleWrap}
-                            className={`flex items-center gap-1.5 text-xs font-bold transition cursor-pointer px-3 py-1.5 rounded-xl border active:scale-95 ${
-                                isGroupsWrapped
-                                    ? 'bg-slate-800 border-slate-700 text-slate-200'
-                                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border-slate-700'
-                            }`}
-                            title={isGroupsWrapped ? "Tek satırda kaydırmalı görünüme geç" : "Tüm grupları aynı anda göster (Çok satırlı)"}
-                        >
-                            {isGroupsWrapped ? (
-                                <>
-                                    <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
-                                    <span>Kompakt Satır</span>
-                                </>
-                            ) : (
-                                <>
-                                    <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                                    <span>Tümünü Göster</span>
-                                </>
-                            )}
-                        </button>
-                    )}
-
-                    <button
-                        onClick={onOpenCreate}
-                        className="flex items-center gap-1 text-xs font-bold text-white transition cursor-pointer bg-[#1A9FD3] hover:bg-[#0C6991] px-3 py-1.5 rounded-xl border border-[#1A9FD3]/30 shadow-sm shadow-[#1A9FD3]/20"
-                    >
-                        <FolderPlus className="w-3.5 h-3.5" />
-                        <span>+ Yeni Grup</span>
-                    </button>
-                </div>
-            </div>
-
-            <div className="relative group/tabs">
+        <nav className={cn('flex items-start gap-2 min-w-0', className)} aria-label="Gruplar">
+            {/* Sekmeler */}
+            <div className="relative flex-1 min-w-0">
                 {/* Sol ok: yalnızca tek satır modunda ve sola kaydırılabiliyorsa */}
                 {!isGroupsWrapped && canScrollLeft && (
-                    <div className="absolute left-0 top-0 bottom-0 z-10 flex items-center pr-3 bg-gradient-to-r from-slate-950 via-slate-950/90 to-transparent pointer-events-none">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pr-1 bg-bg">
                         <button
                             type="button"
                             onClick={() => scrollGroups('left')}
-                            className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-800/95 hover:bg-[#1A9FD3] text-slate-300 hover:text-white border border-slate-700/80 hover:border-[#1A9FD3] flex items-center justify-center shadow-lg transition active:scale-90 pointer-events-auto cursor-pointer"
-                            title="Sola Kaydır"
+                            className={SCROLL_ARROW}
+                            aria-label="Sola kaydır"
+                            title="Sola kaydır"
                         >
-                            <ChevronLeft className="w-4 h-4" />
+                            <ChevronLeft className="size-[18px]" />
                         </button>
                     </div>
                 )}
@@ -209,38 +158,34 @@ export default function GroupTabsBar({
                     ref={groupsContainerRef}
                     onScroll={checkGroupsScroll}
                     onWheel={handleGroupsWheel}
-                    className={`flex items-center gap-2 py-1 touch-pan-x transition-all duration-200 ${
-                        isGroupsWrapped
-                            ? 'flex-wrap'
-                            : 'overflow-x-auto custom-horizontal-scrollbar scroll-smooth'
-                    }`}
+                    className={cn(
+                        'flex items-center gap-x-5 touch-pan-x',
+                        isGroupsWrapped ? 'flex-wrap' : 'overflow-x-auto no-scrollbar scroll-smooth',
+                    )}
                 >
                     <button
+                        type="button"
                         data-tab-id="all"
                         onClick={() => onTabChange('all')}
-                        className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition shrink-0 cursor-pointer flex items-center gap-2 ${
-                            activeTab === 'all'
-                                ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white shadow-sm shadow-[#1A9FD3]/20'
-                                : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-[#1A9FD3]/50 hover:bg-[#1A9FD3]/20'
-                        }`}
+                        aria-pressed={activeTab === 'all'}
+                        className={tabClasses(activeTab === 'all')}
                     >
-                        <span>Tüm Varlıklar</span>
-                        <span className={`px-1.5 py-0.5 rounded-full text-xs font-mono ${activeTab === 'all' ? 'bg-white/20 text-white font-bold' : 'bg-black/20 text-slate-300'}`}>
-                            {holdings.length}
-                        </span>
+                        <span>Tüm varlıklar</span>
+                        <span className={countClasses(activeTab === 'all')}>{holdings.length}</span>
                     </button>
 
                     <button
+                        type="button"
                         data-tab-id="by_type"
                         onClick={() => onTabChange('by_type')}
-                        className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition shrink-0 cursor-pointer flex items-center gap-2 ${
-                            activeTab === 'by_type'
-                                ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white shadow-sm shadow-[#1A9FD3]/20'
-                                : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-[#1A9FD3]/50 hover:bg-[#1A9FD3]/20'
-                        }`}
+                        aria-pressed={activeTab === 'by_type'}
+                        className={tabClasses(activeTab === 'by_type')}
                     >
-                        <span>Türe Göre Grupla</span>
+                        <span>Türe göre</span>
                     </button>
+
+                    {/* Hazır görünümleri kullanıcı gruplarından ayıran ince çizgi */}
+                    {groups.length > 0 && <span aria-hidden className="h-4 w-px shrink-0 bg-border" />}
 
                     {/* Kullanıcı grupları (sürüklenebilir) */}
                     {groups.map(g => {
@@ -272,25 +217,24 @@ export default function GroupTabsBar({
                                     handleDrop(g.id);
                                 }}
                                 onDragEnd={resetDrag}
-                                className={`transition-all duration-150 shrink-0 cursor-grab active:cursor-grabbing rounded-xl ${
-                                    isDragging ? 'opacity-30 scale-95' : ''
-                                } ${isOver ? 'ring-2 ring-[#1A9FD3] ring-offset-2 ring-offset-slate-900' : ''}`}
+                                className={cn(
+                                    'relative shrink-0 cursor-grab active:cursor-grabbing',
+                                    isDragging && 'opacity-40',
+                                    // Bırakılacak yer: solda ince mavi çizgi
+                                    isOver && 'before:absolute before:inset-y-2 before:-left-2.5 before:w-0.5 before:bg-primary',
+                                )}
                                 title="Sırasını değiştirmek için sürükleyip bırakabilirsiniz"
                             >
                                 <button
+                                    type="button"
                                     onClick={() => onTabChange(g.id)}
-                                    className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 border select-none w-full ${
-                                        isActive
-                                            ? 'bg-[#1A9FD3] hover:bg-[#0C6991] text-white border-[#1A9FD3] shadow-sm shadow-[#1A9FD3]/20'
-                                            : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:border-[#1A9FD3]/50 hover:bg-[#1A9FD3]/20'
-                                    }`}
+                                    aria-pressed={isActive}
+                                    className={tabClasses(isActive)}
                                 >
-                                    <GripVertical className="w-3.5 h-3.5 text-slate-400 group-hover:text-white opacity-70 -ml-1 cursor-grab" />
-                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: g.color }}></span>
+                                    {/* Grup rengi kullanıcı verisidir; grubu tanıtan tek işaret */}
+                                    <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ backgroundColor: g.color }} />
                                     <span>{g.name}</span>
-                                    <span className={`px-1.5 py-0.5 rounded-full text-xs font-mono ${isActive ? 'bg-white/20 text-white font-bold' : 'bg-black/20 text-slate-300'}`}>
-                                        {count}
-                                    </span>
+                                    <span className={countClasses(isActive)}>{count}</span>
                                 </button>
                             </div>
                         );
@@ -299,18 +243,60 @@ export default function GroupTabsBar({
 
                 {/* Sağ ok: yalnızca tek satır modunda ve sağda başka grup varsa */}
                 {!isGroupsWrapped && canScrollRight && (
-                    <div className="absolute right-0 top-0 bottom-0 z-10 flex items-center pl-3 bg-gradient-to-l from-slate-950 via-slate-950/90 to-transparent pointer-events-none">
+                    <div className="pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center pl-1 bg-bg">
                         <button
                             type="button"
                             onClick={() => scrollGroups('right')}
-                            className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-800/95 hover:bg-[#1A9FD3] text-slate-200 hover:text-white border border-[#1A9FD3]/40 hover:border-[#1A9FD3] flex items-center justify-center shadow-lg shadow-[#1A9FD3]/10 transition active:scale-90 pointer-events-auto cursor-pointer"
-                            title="Daha Fazla Grubu Göster (Sağa Kaydır)"
+                            className={SCROLL_ARROW}
+                            aria-label="Sağa kaydır"
+                            title="Sağa kaydır"
                         >
-                            <ChevronRight className="w-4 h-4" />
+                            <ChevronRight className="size-[18px]" />
                         </button>
                     </div>
                 )}
             </div>
-        </div>
+
+            {/* Grup işlemleri: silme ve yeni grup masaüstünde yazılı, diğerleri simge (adları ipucu ve ekran okuyucu metninde) */}
+            <div className="flex items-center h-11 sm:h-10 shrink-0">
+                {isCustomGroup && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={<Trash2 />}
+                        onClick={onDeleteActiveGroup}
+                        aria-label={`"${activeGroupName}" grubunu sil`}
+                        title={`"${activeGroupName}" grubunu sil`}
+                        className="px-2 hover:bg-loss-soft hover:text-loss"
+                    >
+                        <span className="hidden sm:inline">Grubu sil</span>
+                    </Button>
+                )}
+
+                {groups.length > 0 && (
+                    <IconButton
+                        icon={<Settings2 />}
+                        label="Grupları yönet"
+                        size="sm"
+                        onClick={onOpenManage}
+                    />
+                )}
+
+                {/* Tek satır / çok satır görünümü */}
+                {groups.length > 2 && (
+                    <IconButton
+                        icon={isGroupsWrapped ? <ChevronUp /> : <ChevronDown />}
+                        label={isGroupsWrapped ? 'Tek satırda göster' : 'Tüm grupları göster'}
+                        size="sm"
+                        aria-pressed={isGroupsWrapped}
+                        onClick={onToggleWrap}
+                    />
+                )}
+
+                <Button variant="ghost" size="sm" leftIcon={<FolderPlus />} onClick={onOpenCreate} aria-label="Yeni grup" className="px-2">
+                    <span className="hidden sm:inline">Yeni grup</span>
+                </Button>
+            </div>
+        </nav>
     );
 }

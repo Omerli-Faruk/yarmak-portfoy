@@ -4,10 +4,28 @@ import {useAuth} from "@/context/AuthContext";
 import React, {useState} from "react";
 import axios from "axios";
 import Link from "next/link";
-import Image from "next/image";
-import {motion} from "motion/react";
-import {User, Mail, Lock, Eye, EyeOff} from "lucide-react";
+import {Eye, EyeOff, AlertCircle} from "lucide-react";
+import Field from "@/components/ui/Field";
+import Input from "@/components/ui/Input";
+import Button from "@/components/ui/Button";
+import AuthShell, {authLinkClass, authSwitchLinkClass, authToggleClass} from "../login/AuthShell";
 
+const checkboxClass = "mt-0.5 size-5 shrink-0 cursor-pointer rounded-sm accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
+
+// Şifre alanının sağındaki göster/gizle düğmesi
+function PasswordToggle({visible, onToggle}: { visible: boolean; onToggle: () => void }) {
+    return (
+        <button
+            type="button"
+            onClick={onToggle}
+            aria-label={visible ? "Şifreyi gizle" : "Şifreyi göster"}
+            aria-pressed={visible}
+            className={authToggleClass}
+        >
+            {visible ? <EyeOff/> : <Eye/>}
+        </button>
+    );
+}
 
 export default function RegisterPage() {
     const {register} = useAuth();
@@ -61,158 +79,134 @@ export default function RegisterPage() {
     }
 
     return (
-        <div className="flex-1 flex flex-col items-center justify-center px-4 pt-12 pb-24 sm:pt-16 sm:pb-32 lg:pt-20 lg:pb-36 my-auto">
-            <motion.div
-                initial={{opacity: 0, y: 16}}
-                animate={{opacity: 1, y: 0}}
-                transition={{duration: 0.35, ease: "easeOut"}}
-                className="w-full max-w-md border border-border bg-surface rounded-3xl p-7 sm:p-10 shadow-2xl flex items-center justify-center flex-col my-auto"
-            >
-                <Link href="/">
-                    <Image src="/logo.png" alt="Yarmak Logo" width={64} height={64}
-                           className="size-16 object-contain mb-2"/>
-                </Link>
-                <div className="flex flex-col items-center justify-center text-center">
-                    <span className="font-black text-2xl">Portföyünüzü oluşturun</span>
-                    <p className="text-slate-400 text-xs mt-1">Yatırımlarınızı tek ekrandan takip etmeye başlayın.</p>
+        <AuthShell
+            title="Portföyünüzü oluşturun"
+            footer={
+                <>
+                    <span>Zaten bir hesabınız var mı?</span>
+                    <Link href="/login" className={authSwitchLinkClass}>
+                        Giriş yap
+                    </Link>
+                </>
+            }
+        >
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                {error && (
+                    <div role="alert" className="flex items-start gap-2 rounded bg-loss-soft px-3 py-2.5 text-sm text-loss">
+                        <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden/>
+                        <span>{error}</span>
+                    </div>
+                )}
+
+                <Field label="Kullanıcı adı" htmlFor="register-username">
+                    <Input
+                        id="register-username"
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="kullanici_adi"
+                        maxLength={15}
+                        autoComplete="username"
+                        required
+                    />
+                </Field>
+
+                <Field label="E-posta" htmlFor="register-email">
+                    <Input
+                        id="register-email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="ornek@email.com"
+                        autoComplete="email"
+                        required
+                    />
+                </Field>
+
+                <Field label="Şifre" htmlFor="register-password">
+                    <Input
+                        id="register-password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        autoComplete="new-password"
+                        required
+                        rightSlot={<PasswordToggle visible={showPassword} onToggle={() => setShowPassword(!showPassword)}/>}
+                    />
+                </Field>
+
+                <Field label="Şifre tekrarı" htmlFor="register-password-confirm">
+                    <Input
+                        id="register-password-confirm"
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={passwordConfirm}
+                        onChange={(e) => setPasswordConfirm(e.target.value)}
+                        placeholder="••••••••"
+                        autoComplete="new-password"
+                        required
+                        rightSlot={<PasswordToggle visible={showConfirmPassword} onToggle={() => setShowConfirmPassword(!showConfirmPassword)}/>}
+                    />
+                </Field>
+
+                {/* Kullanım şartları kabul edilir; aydınlatma metni için yalnızca okunduğu işaretlenir. İkisi ayrı tutulur. */}
+                <div className="flex flex-col gap-3 pt-1">
+                    <label className="flex cursor-pointer select-none items-start gap-3 text-sm leading-relaxed text-fg">
+                        <input
+                            type="checkbox"
+                            checked={acceptedTerms}
+                            onChange={(e) => setAcceptedTerms(e.target.checked)}
+                            className={checkboxClass}
+                            required
+                        />
+                        <span>
+                            <Link
+                                href="/terms"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={authLinkClass}
+                            >
+                                Kullanım Şartları
+                            </Link>
+                            &apos;nı ve{' '}
+                            <Link
+                                href="/disclaimer"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={authLinkClass}
+                            >
+                                Yasal Uyarı
+                            </Link>
+                            &apos;yı okudum, kabul ediyorum.
+                        </span>
+                    </label>
+
+                    <label className="flex cursor-pointer select-none items-start gap-3 text-sm leading-relaxed text-fg">
+                        <input
+                            type="checkbox"
+                            checked={acceptedKVKK}
+                            onChange={(e) => setAcceptedKVKK(e.target.checked)}
+                            className={checkboxClass}
+                            required
+                        />
+                        <span>
+                            <Link
+                                href="/privacy"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={authLinkClass}
+                            >
+                                Gizlilik Politikası ve KVKK Aydınlatma Metni
+                            </Link>
+                            &apos;ni okudum, anladım.
+                        </span>
+                    </label>
                 </div>
-                <form onSubmit={handleSubmit} className="w-full space-y-4 mt-10">
-                    {error && <div
-                        className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs p-3 rounded-xl text-center">{error}</div>}
-                    <label className="text-xs text-slate-400 hover:text-primary">Kullanıcı Adı</label>
-                    <div
-                        className="flex items-center gap-4 bg-black/30 border border-border rounded-xl px-4 py-3 focus-within:border-primary transition mt-1">
-                        <User className="size-4 text-slate-500 shrink-0"/>
-                        <input
-                            type="text"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            placeholder="kullanici_adi"
-                            maxLength={15}
-                            required
-                            className="w-full bg-transparent border-none outline-none text-sm text-foreground placeholder:text-slate-500 focus:outline-none"
-                        />
-                    </div>
-                    <label className="text-xs text-slate-400 hover:text-primary">E-posta</label>
-                    <div
-                        className="flex items-center gap-4 bg-black/30 border border-border rounded-xl px-4 py-3 focus-within:border-primary transition mt-1">
-                        <Mail className="size-4 text-slate-500 shrink-0"/>
-                        <input
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            placeholder="ornek@email.com"
-                            required
-                            className="w-full bg-transparent border-none outline-none text-sm text-foreground placeholder:text-slate-500 focus:outline-none"
-                        />
-                    </div>
-                    <div className="flex justify-between items-center mb-1 ">
-                        <label className="text-xs text-slate-400 hover:text-primary">Şifre</label>
-                    </div>
-                    <div
-                        className="flex items-center gap-4 bg-black/30 border border-border rounded-xl px-4 py-3 focus-within:border-primary transition mt-1">
-                        <Lock className="size-4 text-slate-500 shrink-0"/>
-                        <input
-                            type={showPassword ? "text" : "password"}
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="••••••••"
-                            required
-                            className="w-full bg-transparent border-none outline-none text-sm text-foreground placeholder:text-slate-500 focus:outline-none"
-                        />
-                        <button
-                            type="button"
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="text-slate-500 hover:text-slate-300 transition cursor-pointer shrink-0"
-                        >
-                            {showPassword ? <EyeOff className="size-4"/> : <Eye className="size-4"/>}
-                        </button>
-                    </div>
-                    <label className="text-xs text-slate-400 hover:text-primary">Şifre Tekrarı</label>
-                    <div
-                        className="flex items-center gap-4 bg-black/30 border border-border rounded-xl px-4 py-3 focus-within:border-primary transition mt-1">
-                        <Lock className="size-4 text-slate-500 shrink-0"/>
-                        <input
-                            type={showConfirmPassword ? "text" : "password"}
-                            value={passwordConfirm}
-                            onChange={(e) => setPasswordConfirm(e.target.value)}
-                            placeholder="••••••••"
-                            required
-                            className="w-full bg-transparent border-none outline-none text-sm text-foreground placeholder:text-slate-500 focus:outline-none"
-                        />
-                        <button
-                            type="button"
-                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                            className="text-slate-500 hover:text-slate-300 transition cursor-pointer shrink-0"
-                        >
-                            {showConfirmPassword ? <EyeOff className="size-4"/> : <Eye className="size-4"/>}
-                        </button>
-                    </div>
 
-                    {/* Kullanım şartları kabul edilir; aydınlatma metni için yalnızca okunduğu işaretlenir. İkisi ayrı tutulur. */}
-                    <div className="pt-2 space-y-3">
-                        <label className="flex items-start gap-2.5 cursor-pointer group text-xs text-slate-400 select-none">
-                            <input
-                                type="checkbox"
-                                checked={acceptedTerms}
-                                onChange={(e) => setAcceptedTerms(e.target.checked)}
-                                className="mt-0.5 w-4 h-4 rounded border-slate-700 bg-black/40 text-primary focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#1A9FD3]"
-                                required
-                            />
-                            <span className="leading-relaxed">
-                                <Link
-                                    href="/terms"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-slate-200 hover:text-primary underline font-medium transition"
-                                >
-                                    Kullanım Şartları
-                                </Link>
-                                &apos;nı ve{' '}
-                                <Link
-                                    href="/disclaimer"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-slate-200 hover:text-primary underline font-medium transition"
-                                >
-                                    Yasal Uyarı
-                                </Link>
-                                &apos;yı okudum, kabul ediyorum.
-                            </span>
-                        </label>
-
-                        <label className="flex items-start gap-2.5 cursor-pointer group text-xs text-slate-400 select-none">
-                            <input
-                                type="checkbox"
-                                checked={acceptedKVKK}
-                                onChange={(e) => setAcceptedKVKK(e.target.checked)}
-                                className="mt-0.5 w-4 h-4 rounded border-slate-700 bg-black/40 text-primary focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#1A9FD3]"
-                                required
-                            />
-                            <span className="leading-relaxed">
-                                <Link
-                                    href="/privacy"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-slate-200 hover:text-primary underline font-medium transition"
-                                >
-                                    Gizlilik Politikası ve KVKK Aydınlatma Metni
-                                </Link>
-                                &apos;ni okudum, anladım.
-                            </span>
-                        </label>
-                    </div>
-
-                    <button type="submit" disabled={loading}
-                            className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-3 rounded-xl transition shadow-lg shadow-primary/20 cursor-pointer disabled:opacity-50 mt-4">{loading ? 'Hesap Oluşturuluyor...' : 'Ücretsiz Kayıt Ol'}
-                    </button>
-                    <p className="text-center text-xs text-slate-400 mt-6">Zaten bir hesabınız var mı?{" "}
-                        <Link href="/login" className="text-xs font-bold text-white hover:text-primary transition cursor-pointer ml-2">
-                            Giriş Yap
-                        </Link>
-                    </p>
-                </form>
-            </motion.div>
-        </div>
+                <Button type="submit" fullWidth loading={loading} className="mt-1">
+                    {loading ? 'Hesap oluşturuluyor...' : 'Ücretsiz kayıt ol'}
+                </Button>
+            </form>
+        </AuthShell>
     );
 }

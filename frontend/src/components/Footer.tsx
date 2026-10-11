@@ -4,97 +4,75 @@ import Link from "next/link";
 import React from "react";
 import { useAuth } from "@/context/AuthContext";
 import Image from "next/image";
-import { Mail, ShieldAlert } from "lucide-react";
+import { cn } from "@/lib/cn";
+import Disclosure from "@/components/ui/Disclosure";
 
+// Bağlantılar 13-15px ve dokunmaya uygun yükseklikte (mobilde 44px, masaüstünde 40px)
+const linkClass = "inline-flex items-center min-h-11 sm:min-h-10 hover:text-fg transition-colors duration-[120ms]";
+
+// Sakin alt bilgi: marka + bağlantılar tek satır. Yasal uyarının ilk cümleleri görünür, devamı açılır bölümde;
+// metnin hiçbir cümlesi iki kez yazılmaz, hiçbiri kısaltılmaz.
 export default function Footer() {
     const { user } = useAuth();
 
     return (
-        <footer className="w-full border-t border-slate-800 bg-[#0A0E14] pt-14 pb-8">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
-                    {/* Marka */}
-                    <div className="flex flex-col gap-3">
-                        <div className="flex items-center gap-2">
-                            <Image src="/logo.png" alt="Yarmak Logo" width={26} height={26} className="size-6 object-contain" loading="eager"/>
-                            <span className="font-bold text-white text-lg">
-                                Yarmak
-                            </span>
-                        </div>
-                        <p className="text-slate-400 text-xs sm:text-sm leading-relaxed mt-1">
-                            BIST hisseleri, TEFAS fonları, altın ve döviz yatırımlarınızı tek ekranda takip edin.
-                        </p>
+        // Giriş yapılmışsa mobilde alt sekme çubuğu için ek boşluk bırakılır
+        <footer className={cn("w-full border-t border-border mt-auto", user ? "pb-20 sm:pb-0" : "pb-0")}>
+            <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-6 flex flex-col gap-4 text-xs text-fg-muted">
+                {/* Marka ve bağlantılar */}
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <Image src="/logo.png" alt="Yarmak Logo" width={20} height={20} className="size-5 object-contain" loading="eager"/>
+                        <span className="font-display text-base font-bold text-fg tracking-tight">yarmak</span>
                     </div>
-
-                    {/* Platform */}
-                    <div>
-                        <h4 className="text-white font-semibold text-sm mb-4 uppercase tracking-wider">Platform</h4>
-                        <ul className="flex flex-col gap-2.5 text-xs sm:text-sm text-slate-400">
-                            <li><Link href="/markets" className="hover:text-white transition-colors">Piyasalar &amp; Keşif</Link></li>
-                            <li><Link href="/#ozellikler" className="hover:text-white transition-colors">Özellikler</Link></li>
-                            {user ? (
-                                <>
-                                    <li><Link href="/dashboard" className="hover:text-white transition-colors">Portföyüm</Link></li>
-                                    <li><Link href="/holdings" className="hover:text-white transition-colors">Varlıklarım</Link></li>
-                                    <li><Link href="/alerts" className="hover:text-white transition-colors">Fiyat Alarmları</Link></li>
-                                </>
-                            ) : (
-                                <li><Link href="/register" className="hover:text-white transition-colors">Ücretsiz Hesap Oluştur</Link></li>
-                            )}
-                        </ul>
-                    </div>
-
-                    {/* Yardım ve yasal metinler */}
-                    <div>
-                        <h4 className="text-white font-semibold text-sm mb-4 uppercase tracking-wider">Kurumsal &amp; Yasal</h4>
-                        <ul className="flex flex-col gap-2.5 text-xs sm:text-sm text-slate-400">
-                            <li><Link href="/#destek" className="hover:text-white transition-colors">Sıkça Sorulan Sorular</Link></li>
-                            <li><Link href="/disclaimer" className="hover:text-white transition-colors text-amber-400/90 hover:text-amber-300">Yasal Uyarı &amp; SPK</Link></li>
-                            <li><Link href="/terms" className="hover:text-white transition-colors">Kullanım Şartları</Link></li>
-                            <li><Link href="/privacy" className="hover:text-white transition-colors">Gizlilik &amp; KVKK</Link></li>
-                        </ul>
-                    </div>
-
-                    {/* İletişim */}
-                    <div>
-                        <h4 className="text-white font-semibold text-sm mb-4 uppercase tracking-wider">İletişim &amp; Destek</h4>
-                        <ul className="flex flex-col gap-2.5 text-xs sm:text-sm text-slate-400">
-                            <li className="flex items-center gap-2">
-                                <Mail className="w-4 h-4 text-slate-400 shrink-0" />
-                                <a href="mailto:destek@yarmak.com" className="hover:text-white transition-colors font-mono">destek@yarmak.com</a>
-                            </li>
-                            <li className="text-xs text-slate-400 pt-2 leading-relaxed">
-                                Sorularınız, hata bildirimleri veya önerileriniz için dilediğiniz an e-posta gönderebilirsiniz.
-                            </li>
-                        </ul>
-                    </div>
+                    <nav aria-label="Alt menü" className="flex flex-wrap items-center gap-x-5 text-sm">
+                        <Link href="/markets" className={linkClass}>Piyasalar</Link>
+                        {user ? (
+                            <>
+                                <Link href="/dashboard" className={linkClass}>Portföyüm</Link>
+                                <Link href="/holdings" className={linkClass}>Varlıklarım</Link>
+                                <Link href="/alerts" className={linkClass}>Alarmlar</Link>
+                            </>
+                        ) : (
+                            <Link href="/#ozellikler" className={linkClass}>Özellikler</Link>
+                        )}
+                        <Link href="/#destek" className={linkClass}>Sıkça sorulan sorular</Link>
+                        <a href="mailto:destek@yarmak.com" className={linkClass} title="Sorularınız, hata bildirimleri veya önerileriniz için dilediğiniz an e-posta gönderebilirsiniz.">
+                            destek@yarmak.com
+                        </a>
+                    </nav>
                 </div>
 
-                {/* Yatırım danışmanlığı çekincesi ve veri gecikmesi notu */}
-                <div className="pt-6 pb-6 border-t border-slate-800">
-                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/50 border border-slate-800/80 space-y-2.5">
-                        <div className="flex items-center gap-2 text-slate-300 font-bold text-xs">
-                            <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
-                            <span>Yasal uyarı ve yatırım danışmanlığı çekincesi</span>
-                        </div>
-                        <p className="text-[11px] sm:text-xs text-slate-400 leading-relaxed font-mono">
-                            Burada yer alan bilgiler yatırım danışmanlığı kapsamında değildir. Yatırım danışmanlığı hizmeti; aracı kurumlar, portföy yönetim şirketleri, yatırım ve kalkınma bankaları ile müşteri arasında imzalanacak yatırım danışmanlığı sözleşmesi çerçevesinde sunulmaktadır. Burada yer alan bilgiler mali durumunuz ile risk ve getiri tercihlerinize uygun olmayabilir. Bu nedenle, sadece bu bilgilere dayanılarak yatırım kararı verilmesi beklentilerinize uygun sonuçlar doğurmayabilir.
+                {/* Yasal çekince: iki paragrafın ilk cümleleri hep görünür, devamları açılır bölümde (tekrar yok) */}
+                <div className="flex flex-col gap-1 text-xs leading-relaxed">
+                    <p>
+                        <strong className="font-medium text-fg">Yasal uyarı: </strong>
+                        Burada yer alan bilgiler yatırım danışmanlığı kapsamında değildir.
+                        {' '}Borsa İstanbul (BIST) pay piyasası verileri en az 15 dakika gecikmelidir; fon fiyatları TEFAS&apos;ta yayımlanan günlük fiyatlardır.
+                    </p>
+                    <Disclosure
+                        summary="Yasal uyarının devamı"
+                        className="[&>summary]:text-xs"
+                        contentClassName="gap-2 pt-1"
+                    >
+                        <p>
+                            <strong className="font-medium text-fg">Yatırım danışmanlığı çekincesi: </strong>
+                            Yatırım danışmanlığı hizmeti; aracı kurumlar, portföy yönetim şirketleri, yatırım ve kalkınma bankaları ile müşteri arasında imzalanacak yatırım danışmanlığı sözleşmesi çerçevesinde sunulmaktadır. Burada yer alan bilgiler mali durumunuz ile risk ve getiri tercihlerinize uygun olmayabilir. Bu nedenle, sadece bu bilgilere dayanılarak yatırım kararı verilmesi beklentilerinize uygun sonuçlar doğurmayabilir.
                         </p>
-                        <p className="text-[11px] sm:text-xs text-slate-400 leading-relaxed pt-2 border-t border-slate-800/60">
-                            <strong>Veri gecikmesi ve fiyat farkları:</strong> Borsa İstanbul (BIST) pay piyasası verileri en az 15 dakika gecikmelidir; fon fiyatları TEFAS&apos;ta yayımlanan günlük fiyatlardır. Gösterilen fiyatlar ve getiri hesapları; gecikmeler, veri sağlayıcı kaynaklı hatalar veya yuvarlamalar nedeniyle gerçek işlem fiyatlarından ya da aracı kurum ekstrelerinizden farklı olabilir. Yarmak, içerikteki olası hata, eksiklik veya gecikmelerden kaynaklanabilecek doğrudan ya da dolaylı zararlardan hiçbir suretle sorumlu tutulamaz.
+                        <p>
+                            <strong className="font-medium text-fg">Veri gecikmesi ve fiyat farkları: </strong>
+                            Gösterilen fiyatlar ve getiri hesapları; gecikmeler, veri sağlayıcı kaynaklı hatalar veya yuvarlamalar nedeniyle gerçek işlem fiyatlarından ya da aracı kurum ekstrelerinizden farklı olabilir. Yarmak, içerikteki olası hata, eksiklik veya gecikmelerden kaynaklanabilecek doğrudan ya da dolaylı zararlardan hiçbir suretle sorumlu tutulamaz.
                         </p>
-                    </div>
+                    </Disclosure>
                 </div>
 
-                {/* Alt satır */}
-                <div className="pt-4 border-t border-slate-800/80 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+                {/* Telif ve yasal bağlantılar */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-x-4 pt-3 border-t border-border text-xs">
                     <p>© 2026 Yarmak. Tüm hakları saklıdır.</p>
-                    <div className="flex flex-wrap items-center justify-center gap-4 text-xs">
-                        <Link href="/disclaimer" className="hover:text-slate-300 transition">Yasal Uyarı (SPK)</Link>
-                        <span>•</span>
-                        <Link href="/terms" className="hover:text-slate-300 transition">Kullanım Şartları</Link>
-                        <span>•</span>
-                        <Link href="/privacy" className="hover:text-slate-300 transition">Gizlilik Politikası</Link>
+                    <div className="flex flex-wrap items-center gap-x-5">
+                        <Link href="/disclaimer" className={`${linkClass} text-warning hover:underline`}>Yasal uyarı &amp; SPK</Link>
+                        <Link href="/terms" className={linkClass}>Kullanım şartları</Link>
+                        <Link href="/privacy" className={linkClass}>Gizlilik &amp; KVKK</Link>
                     </div>
                 </div>
             </div>

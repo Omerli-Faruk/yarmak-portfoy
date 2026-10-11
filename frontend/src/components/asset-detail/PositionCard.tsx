@@ -1,7 +1,9 @@
 'use client';
 
-import { TrendingUp } from 'lucide-react';
-import { formatSignedPercent, formatTRY } from '@/lib/formatters';
+import type { ReactNode } from 'react';
+import { formatTRY } from '@/lib/formatters';
+import Section from '@/components/ui/Section';
+import ChangePill from '@/components/ui/ChangePill';
 
 interface PositionCardProps {
     totalLots: number;
@@ -9,65 +11,43 @@ interface PositionCardProps {
     totalValue: number;
     profitLoss: number;
     profitLossPercent: number;
-    canAdd: boolean;
-    onAddTx: () => void;
+    className?: string;
 }
 
-// Kullanıcının bu varlıktaki pozisyonu: lot, ortalama maliyet, güncel değer ve kâr/zarar
+// Etiket solda, değer sağda mono
+function Row({ label, children }: { label: string; children: ReactNode }) {
+    return (
+        <div className="flex items-center justify-between gap-4 min-h-12 py-1">
+            <dt className="text-sm text-fg-muted">{label}</dt>
+            <dd className="flex flex-wrap items-baseline justify-end gap-x-3 font-mono text-sm text-fg text-right">{children}</dd>
+        </div>
+    );
+}
+
+// Kullanıcının bu varlıktaki pozisyonu: lot, ortalama maliyet, güncel değer ve kâr/zarar.
+// "İşlem ekle" fiyatın yanında olduğu için burada ikinci bir düğme yok.
 export default function PositionCard({
     totalLots,
     avgCost,
     totalValue,
     profitLoss,
     profitLossPercent,
-    canAdd,
-    onAddTx,
+    className,
 }: PositionCardProps) {
-    const isProfit = profitLoss >= 0;
-
     return (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shrink-0">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center">
-                <TrendingUp className="w-5 h-5 mr-2 text-[#1A9FD3]" />
-                Pozisyonum & Kâr / Zarar
-            </h3>
-            {totalLots > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <p className="text-slate-400 text-xs mb-1">Mevcut Lot</p>
-                        <p className="text-lg font-bold text-white">{totalLots.toLocaleString('tr-TR')}</p>
-                    </div>
-                    <div>
-                        <p className="text-slate-400 text-xs mb-1">Maliyet (AOF)</p>
-                        <p className="text-lg font-bold text-white">{formatTRY(avgCost, 3)}</p>
-                    </div>
-                    <div>
-                        <p className="text-slate-400 text-xs mb-1">Toplam Değer</p>
-                        <p className="text-lg font-bold text-white">{formatTRY(totalValue)}</p>
-                    </div>
-                    <div>
-                        <p className="text-slate-400 text-xs mb-1">Güncel Kâr / Zarar</p>
-                        <p className={`text-lg font-bold flex items-center ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {formatTRY(profitLoss, 2, true)}
-                            <span className="text-xs ml-2 px-1.5 py-0.5 rounded bg-black/20">
-                                {formatSignedPercent(profitLossPercent)}
-                            </span>
-                        </p>
-                    </div>
-                </div>
+        <Section title="Pozisyonunuz" className={className}>
+            {totalLots <= 0 ? (
+                <p className="py-3 border-y border-border text-sm text-fg-muted">Bu varlıktan portföyünüzde henüz lot bulunmuyor.</p>
             ) : (
-                <div className="flex items-center justify-between py-1 text-slate-500 text-sm">
-                    <span>Bu varlıktan portföyünüzde henüz lot bulunmuyor.</span>
-                    {canAdd && (
-                        <button
-                            onClick={onAddTx}
-                            className="text-xs font-semibold text-[#1A9FD3] hover:text-[#1589B7] transition underline cursor-pointer"
-                        >
-                            İşlem Ekle
-                        </button>
-                    )}
-                </div>
+                <dl className="flex flex-col border-y border-border divide-y divide-border">
+                    <Row label="Lot">{totalLots.toLocaleString('tr-TR')}</Row>
+                    <Row label="Ortalama maliyet">{formatTRY(avgCost, 3)}</Row>
+                    <Row label="Değer">{formatTRY(totalValue)}</Row>
+                    <Row label="Kâr/zarar">
+                        <ChangePill value={profitLossPercent} amount={formatTRY(profitLoss, 2, true)} />
+                    </Row>
+                </dl>
             )}
-        </div>
+        </Section>
     );
 }

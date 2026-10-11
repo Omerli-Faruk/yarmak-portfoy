@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useId } from 'react';
+import { AlertTriangle } from 'lucide-react';
+import { cn } from '@/lib/cn';
 
 interface TransactionDatePickerProps {
     value: string; // ISO metin ya da 'YYYY-MM-DDTHH:mm'
@@ -10,6 +11,9 @@ interface TransactionDatePickerProps {
 }
 
 export default function TransactionDatePicker({ value, onChange, onErrorChange }: TransactionDatePickerProps) {
+    const dateId = useId();
+    const timeId = useId();
+
     // Yerel saate göre YYYY-MM-DD
     const getLocalDateStr = (d: Date): string => {
         const year = d.getFullYear();
@@ -147,55 +151,41 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
         emitChange(currentDate, safeTime);
     };
 
-    // Özet satırı için biçim, örnek: "21 Eyl 2026 Pzt • 14:30"
-    const formatPreview = (dateStr: string, timeStr: string): string => {
-        try {
-            const [y, m, d] = dateStr.split('-').map(Number);
-            const [hh, mm] = timeStr.split(':').map(Number);
-            const dateObj = new Date(y, m - 1, d, hh || 0, mm || 0);
-            const formattedDate = dateObj.toLocaleDateString('tr-TR', {
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric',
-                weekday: 'short',
-            });
-            return `${formattedDate} • ${timeStr}`;
-        } catch {
-            return `${dateStr} • ${timeStr}`;
-        }
-    };
+    // Hızlı seçim düğmesinin görünümü
+    const chipClass = (isActive: boolean, isDisabled = false) => cn(
+        'h-11 sm:h-10 px-3 rounded border text-sm font-medium whitespace-nowrap transition-colors duration-[120ms]',
+        'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary',
+        isDisabled
+            ? 'opacity-40 cursor-not-allowed border-border bg-surface-2 text-fg-subtle'
+            : isActive
+                ? 'border-primary bg-primary-soft text-primary cursor-pointer'
+                : 'border-border bg-surface-2 text-fg-muted hover:text-fg hover:border-border-strong cursor-pointer',
+    );
+
+    const inputClass = 'w-full h-11 sm:h-10 rounded bg-surface-2 border border-border px-3 font-mono text-base text-fg outline-none transition-colors duration-[120ms] hover:border-border-strong focus:border-primary cursor-pointer';
 
     return (
-        <div className="space-y-3 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/80">
+        <div className="flex flex-col gap-3">
             {/* Tarih */}
-            <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-[#1A9FD3]" />
-                        <span>İşlem Tarihi</span>
+            <div className="flex flex-col gap-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label htmlFor={dateId} className="text-13 font-medium text-fg">
+                        İşlem tarihi
                     </label>
 
-                    {/* Hızlı Tarih Butonları */}
-                    <div className="flex items-center gap-1">
+                    {/* Hızlı tarih düğmeleri */}
+                    <div className="flex flex-wrap items-center gap-1.5">
                         <button
                             type="button"
                             onClick={() => handleDateChange(todayStr)}
-                            className={`px-2 py-0.5 rounded text-[11px] font-bold transition cursor-pointer ${
-                                currentDate === todayStr
-                                    ? 'bg-[#1A9FD3] text-white shadow-sm'
-                                    : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-                            }`}
+                            className={chipClass(currentDate === todayStr)}
                         >
                             Bugün
                         </button>
                         <button
                             type="button"
                             onClick={() => handleDateChange(yesterdayStr)}
-                            className={`px-2 py-0.5 rounded text-[11px] font-bold transition cursor-pointer ${
-                                currentDate === yesterdayStr
-                                    ? 'bg-[#1A9FD3] text-white shadow-sm'
-                                    : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-                            }`}
+                            className={chipClass(currentDate === yesterdayStr)}
                         >
                             Dün
                         </button>
@@ -203,42 +193,38 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
                             <button
                                 type="button"
                                 onClick={() => handleDateChange(lastTradingDayStr)}
-                                className={`px-2 py-0.5 rounded text-[11px] font-bold transition cursor-pointer ${
-                                    currentDate === lastTradingDayStr
-                                        ? 'bg-[#1A9FD3] text-white shadow-sm'
-                                        : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-                                }`}
+                                className={chipClass(currentDate === lastTradingDayStr)}
                             >
-                                Son Seans
+                                Son seans
                             </button>
                         )}
                     </div>
                 </div>
 
                 <input
+                    id={dateId}
                     type="date"
                     required
                     max={todayStr}
                     value={currentDate}
                     onChange={(e) => handleDateChange(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs font-medium text-white focus:outline-none focus:border-[#1A9FD3] focus:ring-1 focus:ring-[#1A9FD3] [color-scheme:dark] cursor-pointer"
+                    className={inputClass}
                 />
             </div>
 
             {/* Saat */}
-            <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-[#1A9FD3]" />
-                        <span>İşlem Saati</span>
+            <div className="flex flex-col gap-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label htmlFor={timeId} className="text-13 font-medium text-fg">
+                        İşlem saati
                     </label>
 
-                    {/* Hızlı Saat Butonları */}
-                    <div className="flex items-center gap-1">
+                    {/* Hızlı saat düğmeleri */}
+                    <div className="flex flex-wrap items-center gap-1.5">
                         <button
                             type="button"
                             onClick={() => handleTimeChange(getLocalTimeStr(new Date()))}
-                            className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-400 hover:text-[#1A9FD3] hover:bg-slate-700 transition cursor-pointer"
+                            className={chipClass(false)}
                             title="Şu anki saati seç"
                         >
                             Şimdi
@@ -247,63 +233,39 @@ export default function TransactionDatePicker({ value, onChange, onErrorChange }
                             type="button"
                             disabled={is10FutureToday}
                             onClick={() => handleTimeChange('10:00')}
-                            className={`px-2 py-0.5 rounded text-[11px] font-bold transition ${
-                                is10FutureToday
-                                    ? 'opacity-40 cursor-not-allowed bg-slate-800/50 text-slate-600'
-                                    : currentTime === '10:00'
-                                        ? 'bg-[#1A9FD3] text-white shadow-sm cursor-pointer'
-                                        : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 cursor-pointer'
-                            }`}
-                            title={is10FutureToday ? "Bugün seans açılış saati (10:00) henüz gelmedi" : "Borsa İstanbul Açılışı (10:00)"}
+                            className={chipClass(currentTime === '10:00', is10FutureToday)}
+                            title={is10FutureToday ? "Bugün seans açılış saati (10:00) henüz gelmedi" : "Borsa İstanbul açılışı (10:00)"}
                         >
-                            10:00 Açılış
+                            10:00 açılış
                         </button>
                         <button
                             type="button"
                             disabled={is18FutureToday}
                             onClick={() => handleTimeChange('18:00')}
-                            className={`px-2 py-0.5 rounded text-[11px] font-bold transition ${
-                                is18FutureToday
-                                    ? 'opacity-40 cursor-not-allowed bg-slate-800/50 text-slate-600'
-                                    : currentTime === '18:00'
-                                        ? 'bg-[#1A9FD3] text-white shadow-sm cursor-pointer'
-                                        : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 cursor-pointer'
-                            }`}
-                            title={is18FutureToday ? "Bugün seans kapanış saati (18:00) henüz gelmedi" : "Borsa İstanbul Kapanışı (18:00)"}
+                            className={chipClass(currentTime === '18:00', is18FutureToday)}
+                            title={is18FutureToday ? "Bugün seans kapanış saati (18:00) henüz gelmedi" : "Borsa İstanbul kapanışı (18:00)"}
                         >
-                            18:00 Kapanış
+                            18:00 kapanış
                         </button>
                     </div>
                 </div>
 
                 <input
+                    id={timeId}
                     type="time"
                     required
                     max={isToday ? nowTimeStr : undefined}
                     value={currentTime}
                     onChange={(e) => handleTimeChange(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs font-medium text-white focus:outline-none focus:border-[#1A9FD3] focus:ring-1 focus:ring-[#1A9FD3] [color-scheme:dark] cursor-pointer"
+                    className={inputClass}
                 />
             </div>
 
             {/* İleri tarih uyarısı */}
             {isFuture && (
-                <div className="flex items-center gap-1.5 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 px-3 py-2 rounded-lg font-bold">
-                    <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                <div role="alert" className="flex items-center gap-2 text-sm font-medium text-loss bg-loss-soft px-3 py-2.5 rounded">
+                    <AlertTriangle className="size-4 shrink-0" aria-hidden />
                     <span>Gelecekteki bir tarih veya saat seçilemez.</span>
-                </div>
-            )}
-
-            {/* Seçilen zamanın özeti */}
-            {!isFuture && (
-                <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg px-3 py-1.5 flex items-center justify-between text-[11px]">
-                    <span className="text-slate-400 flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-slate-400" />
-                        İşlem zamanı:
-                    </span>
-                    <span className="font-bold text-[#1A9FD3] font-mono">
-                        {formatPreview(currentDate, currentTime)}
-                    </span>
                 </div>
             )}
         </div>

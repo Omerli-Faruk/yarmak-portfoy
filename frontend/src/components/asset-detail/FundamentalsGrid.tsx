@@ -1,65 +1,48 @@
 'use client';
 
-import { Activity } from 'lucide-react';
+import type { ReactNode } from 'react';
+import Section from '@/components/ui/Section';
+import Badge from '@/components/ui/Badge';
 import type { AssetFundamentals } from './types';
 
-// Hisseler için Yahoo'dan gelen temel veriler. Değerler API'den biçimlenmiş metin olarak gelir.
-export default function FundamentalsGrid({ fundamentals }: { fundamentals: AssetFundamentals }) {
+// Etiket/değer satırı: etiket solda, değer sağda mono
+function Row({ label, value }: { label: ReactNode; value?: string }) {
     return (
-        <div className="mt-6 bg-slate-900 border border-slate-800 rounded-2xl p-6">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center">
-                <Activity className="w-5 h-5 mr-2 text-[#1A9FD3]" />
-                Temel Bilgiler & İstatistikler
-            </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-y-6 gap-x-4">
-                <div>
-                    <p className="text-xs text-slate-500 mb-1">Piyasa Değeri</p>
-                    <p className="font-semibold text-slate-200">{fundamentals.marketCap}</p>
-                </div>
-                <div>
-                    <p className="text-xs text-slate-500 mb-1">F/K Oranı</p>
-                    <p className="font-semibold text-slate-200">{fundamentals.peRatio}</p>
-                </div>
-                <div>
-                    <p className="text-xs text-slate-500 mb-1">Temettü Verimi</p>
-                    <p className="font-semibold text-slate-200">{fundamentals.dividendYield}</p>
-                </div>
+        <div className="flex items-center justify-between gap-3 min-h-11 py-1">
+            <dt className="flex items-center gap-2 min-w-0 text-sm text-fg-muted">{label}</dt>
+            <dd className="font-mono text-sm text-fg text-right truncate">{value}</dd>
+        </div>
+    );
+}
+
+// Hisseler için Yahoo'dan gelen temel veriler. Değerler API'den biçimlenmiş metin olarak gelir.
+export default function FundamentalsGrid({ fundamentals, className }: { fundamentals: AssetFundamentals; className?: string }) {
+    return (
+        <Section title="Temel veriler" size="sm" className={className}>
+            <dl className="flex flex-col border-y border-border divide-y divide-border">
+                <Row label="Piyasa değeri" value={fundamentals.marketCap} />
+                <Row label="F/K oranı" value={fundamentals.peRatio} />
+                <Row label="Temettü verimi" value={fundamentals.dividendYield} />
                 {fundamentals.dividendRate !== '-' && (
-                    <div>
-                        <p className="text-xs text-slate-500 mb-1">Hisse Başı Temettü</p>
-                        <p className="font-semibold text-slate-200">{fundamentals.dividendRate}</p>
-                    </div>
+                    <Row label="Hisse başı temettü" value={fundamentals.dividendRate} />
                 )}
                 {fundamentals.exDividendDate !== '-' && (
-                    <div>
-                        <p className="text-xs text-slate-500 mb-1 flex items-center gap-1.5">
-                            <span>{fundamentals.exDividendLabel || (fundamentals.isExDateFuture === 'true' ? 'Açıklanan Temettü' : 'Son Temettü Tarihi')}</span>
-                            {fundamentals.isExDateFuture === 'true' && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                                    Planlanan
-                                </span>
-                            )}
-                        </p>
-                        <p className="font-semibold text-slate-200">{fundamentals.exDividendDate}</p>
-                    </div>
+                    <Row
+                        label={
+                            <>
+                                <span className="truncate">{fundamentals.exDividendLabel || (fundamentals.isExDateFuture === 'true' ? 'Açıklanan temettü' : 'Son temettü tarihi')}</span>
+                                {/* Bu alandaki tek durum rozeti */}
+                                {fundamentals.isExDateFuture === 'true' && <Badge tone="warning">Planlanan</Badge>}
+                            </>
+                        }
+                        value={fundamentals.exDividendDate}
+                    />
                 )}
-                <div>
-                    <p className="text-xs text-slate-500 mb-1">Beta (Risk)</p>
-                    <p className="font-semibold text-slate-200">{fundamentals.beta}</p>
-                </div>
-                <div>
-                    <p className="text-xs text-slate-500 mb-1">52 Hafta Zirve</p>
-                    <p className="font-semibold text-slate-200">{fundamentals.fiftyTwoWeekHigh}</p>
-                </div>
-                <div>
-                    <p className="text-xs text-slate-500 mb-1">52 Hafta Dip</p>
-                    <p className="font-semibold text-slate-200">{fundamentals.fiftyTwoWeekLow}</p>
-                </div>
-                <div>
-                    <p className="text-xs text-slate-500 mb-1">Hacim</p>
-                    <p className="font-semibold text-slate-200">{fundamentals.volume}</p>
-                </div>
-            </div>
-        </div>
+                <Row label="Beta (risk)" value={fundamentals.beta} />
+                <Row label="52 hafta zirve" value={fundamentals.fiftyTwoWeekHigh} />
+                <Row label="52 hafta dip" value={fundamentals.fiftyTwoWeekLow} />
+                <Row label="Hacim" value={fundamentals.volume} />
+            </dl>
+        </Section>
     );
 }

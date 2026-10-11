@@ -6,14 +6,12 @@ import { fetchAssetSummariesBulk, invalidateAssetCache } from '@/lib/assetCache'
 import type {
     AssetSummaryMap,
     Dividend,
-    PortfolioSnapshot,
     PortfolioSummary,
     User,
     UserHolding,
 } from '@/types';
 
 interface PortfolioDataOptions {
-    withHistory?: boolean;          // /portfolio/history de yüklensin
     withDividends?: boolean;        // /dividends de yüklensin
     awaitAssetSummaries?: boolean;  // yükleniyor durumu varlık getirileri gelene kadar sürsün
 }
@@ -21,7 +19,6 @@ interface PortfolioDataOptions {
 export interface PortfolioData {
     summary: PortfolioSummary | null;
     holdings: UserHolding[];
-    history: PortfolioSnapshot[];   // withHistory yoksa boş kalır
     dividends: Dividend[];          // withDividends yoksa boş kalır
     assetSummaries: AssetSummaryMap;
     usdRate: number | null;         // backend geçerli kur döndürmezse null
@@ -34,11 +31,10 @@ export interface PortfolioData {
 // Portföyüm ve Varlıklarım sayfalarının ortak veri yüklemesi.
 // Kullanıcı yoksa istek atılmaz; giriş sayfasına yönlendirme sayfalarda yapılır.
 export function usePortfolioData(user: User | null, opts: PortfolioDataOptions = {}): PortfolioData {
-    const { withHistory = false, withDividends = false, awaitAssetSummaries = false } = opts;
+    const { withDividends = false, awaitAssetSummaries = false } = opts;
 
     const [summary, setSummary] = useState<PortfolioSummary | null>(null);
     const [holdings, setHoldings] = useState<UserHolding[]>([]);
-    const [history, setHistory] = useState<PortfolioSnapshot[]>([]);
     const [dividends, setDividends] = useState<Dividend[]>([]);
     const [assetSummaries, setAssetSummaries] = useState<AssetSummaryMap>({});
     const [loading, setLoading] = useState(true);
@@ -52,16 +48,14 @@ export function usePortfolioData(user: User | null, opts: PortfolioDataOptions =
                 invalidateAssetCache();
             }
             // Biri hata verse de diğerleri gösterilsin diye her istek kendi hatasını yutuyor
-            const [sumRes, holdRes, histRes, divRes] = await Promise.all([
+            const [sumRes, holdRes, divRes] = await Promise.all([
                 api.get<PortfolioSummary>('/portfolio/summary').catch(() => null),
                 api.get<UserHolding[]>('/portfolio/holdings').catch(() => null),
-                withHistory ? api.get<PortfolioSnapshot[]>('/portfolio/history').catch(() => null) : null,
                 withDividends ? api.get<Dividend[]>('/dividends').catch(() => null) : null,
             ]);
 
             setLoadError(!sumRes?.data || !holdRes?.data);
             if (sumRes?.data) setSummary(sumRes.data);
-            if (histRes?.data) setHistory(histRes.data);
             if (divRes?.data) setDividends(divRes.data);
             if (holdRes?.data) {
                 const holds = holdRes.data;
@@ -86,7 +80,7 @@ export function usePortfolioData(user: User | null, opts: PortfolioDataOptions =
             setLoading(false);
             setRefreshing(false);
         }
-    }, [withHistory, withDividends, awaitAssetSummaries]);
+    }, [withDividends, awaitAssetSummaries]);
 
     useEffect(() => {
         if (user) {
@@ -97,5 +91,5 @@ export function usePortfolioData(user: User | null, opts: PortfolioDataOptions =
 
     const usdRate = summary && summary.usd_rate > 0 ? summary.usd_rate : null;
 
-    return { summary, holdings, history, dividends, assetSummaries, usdRate, loading, refreshing, loadError, reload };
+    return { summary, holdings, dividends, assetSummaries, usdRate, loading, refreshing, loadError, reload };
 }

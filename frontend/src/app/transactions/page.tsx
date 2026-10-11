@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 export default function TransactionsRedirectPage() {
     const router = useRouter();
@@ -11,11 +12,8 @@ export default function TransactionsRedirectPage() {
     }, [router]);
 
     return (
-        <div className="min-h-[60vh] flex items-center justify-center text-slate-400">
-            <div className="flex flex-col items-center gap-3">
-                <span className="size-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                <span className="text-xs font-mono">İşlem geçmişine yönlendiriliyorsunuz...</span>
-            </div>
+        <div className="flex min-h-[60vh] flex-1 flex-col items-center justify-center px-4">
+            <LoadingSpinner fullScreen={false} message="İşlem geçmişine yönlendiriliyorsunuz..." />
         </div>
     );
 }

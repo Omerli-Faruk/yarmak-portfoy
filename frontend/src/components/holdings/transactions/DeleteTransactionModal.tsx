@@ -3,7 +3,10 @@
 import React from 'react';
 import { NormalizedTransaction } from '@/types';
 import { formatDate } from '@/lib/formatters';
-import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
+import { AlertTriangle, Trash2 } from 'lucide-react';
+import Modal from '@/components/ui/Modal';
+import Button from '@/components/ui/Button';
+import { cn } from '@/lib/cn';
 
 interface DeleteTransactionModalProps {
     tx: NormalizedTransaction;
@@ -12,6 +15,15 @@ interface DeleteTransactionModalProps {
     error: string | null;
     onCancel: () => void;
     onConfirm: () => void;
+}
+
+function SummaryRow({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <div className="flex items-baseline justify-between gap-4 py-2">
+            <dt className="shrink-0 text-sm text-fg-muted">{label}</dt>
+            <dd className="min-w-0 text-right font-mono text-sm text-fg break-words">{children}</dd>
+        </div>
+    );
 }
 
 export default function DeleteTransactionModal({
@@ -25,87 +37,52 @@ export default function DeleteTransactionModal({
     const isBuy = tx.type === 'BUY';
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-                <div className="flex items-center gap-3 text-rose-400">
-                    <div className="p-3 bg-rose-500/10 rounded-xl border border-rose-500/20">
-                        <AlertTriangle className="size-6 text-rose-400" />
-                    </div>
-                    <div>
-                        <h3 className="text-base font-bold text-white">İşlemi Sil</h3>
-                        <p className="text-xs text-slate-400">Bu işlem geri alınamaz.</p>
-                    </div>
-                </div>
-
-                <div className="bg-slate-950/60 rounded-xl p-3.5 border border-slate-800 space-y-2 text-xs font-mono">
-                    <div className="flex justify-between">
-                        <span className="text-slate-400">Varlık:</span>
-                        <span className="font-bold text-white">
-                            {tx.symbol} ({tx.assetName})
-                        </span>
-                    </div>
-                    <div className="flex justify-between">
-                        <span className="text-slate-400">İşlem Türü:</span>
-                        <span className={`font-bold ${isBuy ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {isBuy ? 'ALIŞ' : 'SATIŞ'}
-                        </span>
-                    </div>
-                    <div className="flex justify-between">
-                        <span className="text-slate-400">Miktar:</span>
-                        <span className="text-white">
-                            {tx.amount.toLocaleString('tr-TR')} Adet
-                        </span>
-                    </div>
-                    <div className="flex justify-between">
-                        <span className="text-slate-400">Birim Fiyat:</span>
-                        <span className="text-white">
-                            {fmt(tx.price)}
-                        </span>
-                    </div>
-                    <div className="flex justify-between">
-                        <span className="text-slate-400">Tarih:</span>
-                        <span className="text-white">
-                            {formatDate(tx.date)}
-                        </span>
-                    </div>
-                </div>
-
-                {error && (
-                    <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-start gap-2">
-                        <AlertTriangle className="size-4 shrink-0 mt-0.5" />
-                        <span>{error}</span>
-                    </div>
-                )}
-
-                <div className="flex items-center justify-end gap-3 pt-2">
-                    <button
-                        type="button"
-                        onClick={onCancel}
-                        disabled={submitting}
-                        className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:bg-slate-800 transition cursor-pointer"
-                    >
+        <Modal
+            open
+            onClose={onCancel}
+            title="İşlemi sil"
+            description="Bu işlem geri alınamaz."
+            icon={<AlertTriangle />}
+            iconTone="loss"
+            size="md"
+            dismissible={!submitting}
+            footer={
+                <>
+                    <Button variant="secondary" onClick={onCancel} disabled={submitting}>
                         Vazgeç
-                    </button>
-                    <button
-                        type="button"
+                    </Button>
+                    <Button
+                        variant="danger"
                         onClick={onConfirm}
-                        disabled={submitting}
-                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition shadow-sm cursor-pointer disabled:opacity-50"
+                        loading={submitting}
+                        leftIcon={<Trash2 />}
                     >
-                        {submitting ? (
-                            <>
-                                <RefreshCw className="size-3.5 animate-spin" />
-                                <span>Siliniyor...</span>
-                            </>
-                        ) : (
-                            <>
-                                <Trash2 className="size-3.5" />
-                                <span>İşlemi Kesin Olarak Sil</span>
-                            </>
-                        )}
-                    </button>
+                        {submitting ? 'Siliniyor...' : 'Evet, sil'}
+                    </Button>
+                </>
+            }
+        >
+            {/* Kutusuz özet: ince çizgilerle ayrılmış etiket/değer satırları */}
+            <dl className="flex flex-col border-y border-border divide-y divide-border">
+                <SummaryRow label="Varlık">
+                    <span className="font-semibold">{tx.symbol}</span> <span className="font-sans text-fg-muted">{tx.assetName}</span>
+                </SummaryRow>
+                <SummaryRow label="Tür">
+                    <span className={cn('font-sans font-medium', isBuy ? 'text-profit' : 'text-loss')}>
+                        {isBuy ? 'Alış' : 'Satış'}
+                    </span>
+                </SummaryRow>
+                <SummaryRow label="Adet">{tx.amount.toLocaleString('tr-TR')}</SummaryRow>
+                <SummaryRow label="Birim fiyat">{fmt(tx.price)}</SummaryRow>
+                <SummaryRow label="Tarih">{formatDate(tx.date)}</SummaryRow>
+            </dl>
+
+            {error && (
+                <div role="alert" className="flex items-start gap-2 rounded bg-loss-soft px-3 py-2 text-sm text-loss">
+                    <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+                    <span>{error}</span>
                 </div>
-            </div>
-        </div>
+            )}
+        </Modal>
     );
 }
