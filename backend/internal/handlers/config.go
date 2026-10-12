@@ -10,5 +10,7 @@ type ApiConfig struct {
 	DB        *database.Queries
 	DBConn    *sql.DB
 	JWTSecret string
-	Services  *services.Services
+	// CookieSecure, oturum çerezlerine Secure bayrağı ekler (COOKIE_SECURE=true). HTTPS arkasında açılmalı.
+	CookieSecure bool
+	Services     *services.Services
 }

@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+build
+coverage
+.env*
+!.env.example
+*.log
+*.tsbuildinfo
+next-env.d.ts
+Dockerfile
+.dockerignore
+CLAUDE.md
+AGENTS.md

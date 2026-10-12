@@ -7,24 +7,6 @@ import (
 	"yarmak/internal/database"
 )
 
-// clearAuthCookies — Tarayıcıdaki access_token ve refresh_token çerezlerini derhal siler (MaxAge: -1).
-func clearAuthCookies(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     "access_token",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		MaxAge:   -1,
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		MaxAge:   -1,
-	})
-}
-
 // HandlerRefreshToken — refresh_token çerezinden yeni bir access/refresh token çifti üretir ve çerezlere yazar.
 // Eski token iptal edilir; aynı anda gelen isteklerde oturum düşmesin diye 30 saniyelik tolerans vardır.
 // @Summary Access Token Yenile (Refresh)
@@ -37,7 +19,7 @@ func clearAuthCookies(w http.ResponseWriter) {
 func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("refresh_token")
 	if err != nil {
-		clearAuthCookies(w)
+		cfg.clearAuthCookies(w)
 		respondWithError(w, http.StatusUnauthorized, "Refresh token bulunamadı", nil)
 		return
 	}
@@ -71,14 +53,14 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 		// bu tolerans aralığından yararlanır.
 		userID, err = qtx.GetUserFromRecentlyRevokedToken(r.Context(), hashedToken)
 		if err != nil {
-			clearAuthCookies(w)
+			cfg.clearAuthCookies(w)
 			respondWithError(w, http.StatusUnauthorized, "Geçersiz, süresi dolmuş veya daha önce kullanılmış token", nil)
 			return
 		}
 	} else {
 		userID, err = qtx.GetUserIDFromRefreshToken(r.Context(), hashedToken)
 		if err != nil {
-			clearAuthCookies(w)
+			cfg.clearAuthCookies(w)
 			respondWithError(w, http.StatusUnauthorized, "Kullanıcı bulunamadı", err)
 			return
 		}
@@ -111,24 +93,7 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "access_token",
-		Value:    accessToken,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   3600,
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
-		Value:    newRefreshToken,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   60 * 24 * 3600,
-	})
+	cfg.setAuthCookies(w, accessToken, newRefreshToken)
 
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Oturum yenilendi"})
 }
@@ -143,7 +108,7 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 // @Router /revoke [post]
 func (cfg *ApiConfig) HandlerRevokeToken(w http.ResponseWriter, r *http.Request) {
 	// Her durumda istemci tarafındaki auth çerezlerini temizle
-	clearAuthCookies(w)
+	cfg.clearAuthCookies(w)
 
 	cookie, err := r.Cookie("refresh_token")
 	if err == nil && cookie.Value != "" {

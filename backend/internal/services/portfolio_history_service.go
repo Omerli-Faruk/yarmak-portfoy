@@ -157,11 +157,11 @@ func (c *valueHistoryCache) put(key string, fp uint64, now time.Time, res ValueH
 func valueHistoryFingerprint(txs []database.Transaction, divs []HistoryDividend) uint64 {
 	h := fnv.New64a()
 	for _, tx := range txs {
-		fmt.Fprintf(h, "t%d|%d|%s|%s|%s|%s|%s|%d;", tx.ID, tx.AssetID, tx.Type, tx.Amount, tx.Price,
+		_, _ = fmt.Fprintf(h, "t%d|%d|%s|%s|%s|%s|%s|%d;", tx.ID, tx.AssetID, tx.Type, tx.Amount, tx.Price,
 			tx.Commission, tx.RealizedPnl, tx.TransactionDate.UnixNano())
 	}
 	for _, d := range divs {
-		fmt.Fprintf(h, "d%d|%g;", d.Date.UnixNano(), d.Net)
+		_, _ = fmt.Fprintf(h, "d%d|%g;", d.Date.UnixNano(), d.Net)
 	}
 	return h.Sum64()
 }
@@ -312,7 +312,7 @@ func (s *PortfolioService) GetValueHistory(ctx context.Context, userID int64, rn
 	}
 	ctx, cancel := context.WithTimeout(ctx, valueHistoryTimeout)
 	defer cancel()
-	now := time.Now()
+	now := s.now()
 	rangeStart := valueHistoryRangeStart(rng, now)
 
 	txs, err := s.DB.GetAllUserTransactions(ctx, userID)
@@ -517,15 +517,15 @@ collect:
 }
 
 // fetchAssetSeries, varlığın fiyat geçmişini HandlerGetAssetPriceHistory ile aynı kaynaklardan çeker:
-// FON dışındakiler önce Yahoo (altın için scraper.FetchGoldHistoryInterval'a yönlenir), olmazsa veritabanı.
+// FON dışındakiler önce Yahoo (altın, ons × dolar kurundan türetilir), olmazsa veritabanı.
 // withDaily ise (1G) önceki kapanış için Yahoo'dan ayrıca günlük kapanışlar çekilir; veritabanı serisi zaten günlüktür.
 func (s *PortfolioService) fetchAssetSeries(ctx context.Context, asset database.Asset, plan yahooPlan, dbCutoff time.Time, withDaily bool) (assetSeries, error) {
 	if asset.AssetType != "FON" {
-		pts, err := fetchYahooSeries(asset.Symbol, plan)
+		pts, err := s.fetchYahooSeries(asset.Symbol, plan)
 		if err == nil {
 			res := assetSeries{Main: pts}
 			if withDaily {
-				daily, dErr := fetchYahooSeries(asset.Symbol, oneDayDailyPlan)
+				daily, dErr := s.fetchYahooSeries(asset.Symbol, oneDayDailyPlan)
 				if dErr != nil {
 					slog.Debug("Portföy geçmişi: günlük kapanışlar alınamadı", "symbol", asset.Symbol, "error", dErr)
 				}
@@ -557,8 +557,8 @@ func (s *PortfolioService) fetchAssetSeries(ctx context.Context, asset database.
 }
 
 // fetchYahooSeries, Yahoo geçmişini sıralı PricePoint listesine çevirir. Tek noktalık sonuç (Bigpara yedeği) geçmiş sayılmaz.
-func fetchYahooSeries(symbol string, plan yahooPlan) ([]PricePoint, error) {
-	_, hist, err := scraper.FetchBISTHistoryInterval(symbol, plan.Range, plan.Interval)
+func (s *PortfolioService) fetchYahooSeries(symbol string, plan yahooPlan) ([]PricePoint, error) {
+	hist, err := s.Prices.History(symbol, plan.Range, plan.Interval)
 	if err != nil {
 		return nil, err
 	}

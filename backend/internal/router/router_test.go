@@ -62,3 +62,11 @@ func TestParseTrustedProxiesSkipsInvalid(t *testing.T) {
 		t.Fatalf("2 geçerli adres bekleniyordu, gelen: %v", got)
 	}
 }
+
+func TestSwaggerEnabled(t *testing.T) {
+	for raw, want := range map[string]bool{"": true, "true": true, "1": true, "bozuk": true, "false": false, "0": false} {
+		if got := swaggerEnabled(raw); got != want {
+			t.Errorf("swaggerEnabled(%q) = %v, beklenen %v", raw, got, want)
+		}
+	}
+}

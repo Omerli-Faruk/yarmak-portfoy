@@ -97,7 +97,7 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, userID int64
 	}
 
 	var transaction database.Transaction
-	err = s.inTx(ctx, func(q *database.Queries) error {
+	err = s.inTx(ctx, func(q database.Querier) error {
 		if params.Type == "SELL" {
 			userTxs, err := q.GetUserTransactionsForAsset(ctx, database.GetUserTransactionsForAssetParams{
 				UserID:  userID,
@@ -159,7 +159,7 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, userID int64
 
 func (s *TransactionService) UpdateTransaction(ctx context.Context, userID int64, txID int64, params UpdateTransactionDTO) (database.Transaction, error) {
 	var updatedTx database.Transaction
-	err := s.inTx(ctx, func(q *database.Queries) error {
+	err := s.inTx(ctx, func(q database.Querier) error {
 		// 1. Mevcut işlemi doğrula ve varlık ID'sini öğren
 		tx, err := q.GetTransactionByIDAndUser(ctx, database.GetTransactionByIDAndUserParams{
 			ID:     txID,
@@ -221,7 +221,7 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, userID int64
 }
 
 func (s *TransactionService) DeleteTransaction(ctx context.Context, userID int64, txID int64) error {
-	return s.inTx(ctx, func(q *database.Queries) error {
+	return s.inTx(ctx, func(q database.Querier) error {
 		tx, err := q.GetTransactionByIDAndUser(ctx, database.GetTransactionByIDAndUserParams{
 			ID:     txID,
 			UserID: userID,

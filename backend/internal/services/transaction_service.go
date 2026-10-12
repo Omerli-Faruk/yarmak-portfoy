@@ -40,32 +40,37 @@ func LockUser(userID int64) func() {
 	}
 }
 
+// TxRunner, verilen işi tek bir veritabanı transaction'ı içinde çalıştırır; hata olursa hepsi geri alınır.
+type TxRunner func(ctx context.Context, fn func(q database.Querier) error) error
+
 type TransactionService struct {
-	DB   *database.Queries
-	Conn *sql.DB
+	DB   database.Querier
+	inTx TxRunner
 }
 
 func NewTransactionService(db *database.Queries, conn *sql.DB) *TransactionService {
-	return &TransactionService{DB: db, Conn: conn}
+	return &TransactionService{DB: db, inTx: SQLTxRunner(db, conn)}
 }
 
-// inTx, verilen işi tek bir veritabanı transaction'ı içinde çalıştırır; hata olursa hepsi geri alınır.
-func (s *TransactionService) inTx(ctx context.Context, fn func(q *database.Queries) error) error {
-	tx, err := s.Conn.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("veritabanı işlemi başlatılamadı: %w", err)
+// SQLTxRunner, conn üzerinde transaction açan varsayılan TxRunner.
+func SQLTxRunner(db *database.Queries, conn *sql.DB) TxRunner {
+	return func(ctx context.Context, fn func(q database.Querier) error) error {
+		tx, err := conn.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("veritabanı işlemi başlatılamadı: %w", err)
+		}
+		defer func() { _ = tx.Rollback() }()
+		if err := fn(db.WithTx(tx)); err != nil {
+			// Sarmadan dönüyoruz; handler hata metnine bakarak 400/500 ayrımı yapıyor.
+			return err
+		}
+		return tx.Commit()
 	}
-	defer func() { _ = tx.Rollback() }()
-	if err := fn(s.DB.WithTx(tx)); err != nil {
-		// Sarmadan dönüyoruz; handler hata metnine bakarak 400/500 ayrımı yapıyor.
-		return err
-	}
-	return tx.Commit()
 }
 
 // recalculateRealizedPnL, varlığın tüm satışlarının gerçekleşen kâr/zararını baştan hesaplar.
 // Alım, satım, düzenleme ve silme ile aynı transaction içinde çağrılır.
-func recalculateRealizedPnL(ctx context.Context, q *database.Queries, userID, assetID int64) error {
+func recalculateRealizedPnL(ctx context.Context, q database.Querier, userID, assetID int64) error {
 	userTxs, err := q.GetUserTransactionsForAsset(ctx, database.GetUserTransactionsForAssetParams{
 		UserID:  userID,
 		AssetID: assetID,

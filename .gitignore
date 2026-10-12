@@ -39,3 +39,5 @@ Thumbs.db
 *.log
 *.out
 coverage/
+# Claude Code yerel çalışma dosyaları (worktree, ayarlar)
+.claude/

@@ -12,9 +12,10 @@ type Services struct {
 }
 
 func NewServices(db *database.Queries, dbConn *sql.DB) *Services {
+	prices := NewScraperPriceSource()
 	return &Services{
 		Transaction: NewTransactionService(db, dbConn),
-		Asset:       NewAssetService(db),
-		Portfolio:   NewPortfolioService(db),
+		Asset:       NewAssetService(db, prices),
+		Portfolio:   NewPortfolioService(db, prices),
 	}
 }

@@ -6,18 +6,21 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 	"yarmak/internal/database"
-	"yarmak/internal/scraper"
 )
 
 type PortfolioService struct {
-	DB *database.Queries
+	DB     database.Querier
+	Prices PriceSource
+	// now, şimdiki zaman; testlerde sabitlenebilsin diye alan.
+	now func() time.Time
 	// historyCache, /portfolio/value-history sonuçlarını kısa süre tutar.
 	historyCache valueHistoryCache
 }
 
-func NewPortfolioService(db *database.Queries) *PortfolioService {
-	return &PortfolioService{DB: db}
+func NewPortfolioService(db database.Querier, prices PriceSource) *PortfolioService {
+	return &PortfolioService{DB: db, Prices: prices, now: time.Now}
 }
 
 func parseFloatSafe(s string) float64 {
@@ -107,7 +110,7 @@ func (s *PortfolioService) CalculatePortfolioSummary(ctx context.Context, userID
 		usdRate = parseFloatSafe(usdAsset.CurrentPrice)
 	}
 	if usdRate <= 0 {
-		usdRate, _ = scraper.FetchBISTPrice("USDTRY")
+		usdRate, _ = s.Prices.Price("USDTRY")
 	}
 
 	var totalValueUSD float64

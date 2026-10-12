@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -22,6 +23,9 @@ type seedAsset struct {
 }
 
 func main() {
+	// -demo: yalnızca yerel deneme için demo hesabı ve örnek portföy oluşturur (varlık listesini yüklemez).
+	demo := flag.Bool("demo", false, "demo kullanıcısını (demo / demo12345) ve örnek portföyü oluştur")
+	flag.Parse()
 	_ = godotenv.Load(".env")
 	dbURL := os.Getenv("DB_URL")
 	if dbURL == "" {
@@ -38,6 +42,14 @@ func main() {
 	servicesPkg := services.NewServices(queries, conn)
 	cfg := &handlers.ApiConfig{DB: queries, DBConn: conn, Services: servicesPkg}
 	ctx := context.Background()
+
+	if *demo {
+		fmt.Println("=== Demo hesabı hazırlanıyor ===")
+		if err := seedDemo(ctx, queries, servicesPkg); err != nil {
+			log.Fatalf("Demo verisi yüklenemedi: %v", err)
+		}
+		return
+	}
 
 	// 📊 BIST 100 (TAM 100 HİSSE) + TEFAS TOP 30 (TAM 30 FON)
 	assets := []seedAsset{

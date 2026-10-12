@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 	"yarmak/internal/handlers"
@@ -95,6 +96,12 @@ func keyByClientIP(r *http.Request) (string, error) {
 		}
 	}
 	return httprate.CanonicalizeIP(ip), nil
+}
+
+// swaggerEnabled, ENABLE_SWAGGER boşsa ya da okunamıyorsa true döner; yalnızca açıkça false verilirse kapanır.
+func swaggerEnabled(raw string) bool {
+	v, err := strconv.ParseBool(strings.TrimSpace(raw))
+	return err != nil || v
 }
 
 func SetupRouter(apiCFG *handlers.ApiConfig) chi.Router {
@@ -187,7 +194,10 @@ func SetupRouter(apiCFG *handlers.ApiConfig) chi.Router {
 
 	// Alt router'ı ana router'a bağla
 	r.Mount("/v1", v1Router)
-	r.Get("/swagger/*", httpSwagger.WrapHandler)
+	// Swagger arayüzü yerelde açık; ENABLE_SWAGGER=false ile kapatılır.
+	if swaggerEnabled(os.Getenv("ENABLE_SWAGGER")) {
+		r.Get("/swagger/*", httpSwagger.WrapHandler)
+	}
 
 	return r
 }

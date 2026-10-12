@@ -54,7 +54,8 @@ type userHoldingResponse struct {
 	FirstBuyDate *time.Time `json:"first_buy_date,omitempty"`
 }
 
-type portfolioSummaryResponse struct {
+// Portföy özeti (yalnızca Swagger şeması için; asıl tip services.PortfolioSummaryResult)
+type portfolioSummaryResponse struct { //nolint:unused // swag yorumlarından okunuyor
 	TotalValue                  float64                          `json:"total_value"`
 	TotalCost                   float64                          `json:"total_cost"`
 	CapitalProfitLoss           float64                          `json:"capital_profit_loss"`
@@ -74,14 +75,14 @@ type portfolioSummaryResponse struct {
 }
 
 // Portföy değer geçmişi (Swagger için; asıl tip services.ValueHistoryResult)
-type portfolioValueHistoryPoint struct {
+type portfolioValueHistoryPoint struct { //nolint:unused // swag yorumlarından okunuyor
 	T     time.Time `json:"t" example:"2026-10-09T07:00:00Z"`
 	Value float64   `json:"value" example:"125000.50"`
 	Cost  float64   `json:"cost" example:"118000.00"`
 	PnL   float64   `json:"pnl" example:"7300.25"`
 }
 
-type portfolioValueHistoryResponse struct {
+type portfolioValueHistoryResponse struct { //nolint:unused // swag yorumlarından okunuyor
 	Range  string                       `json:"range" example:"1Y"`
 	Points []portfolioValueHistoryPoint `json:"points"`
 	// Yalnızca 1D: önceki kapanıştaki portföy; pnl_change buna göre ölçülür, points'te yer almaz

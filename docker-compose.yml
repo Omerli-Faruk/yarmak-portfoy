@@ -53,8 +53,13 @@ services:
     environment:
       PORT: "8080"
       DB_URL: "postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-yarmak}?sslmode=disable"
-      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key_at_least_32_characters_long}
+      # Varsayılan anahtar YALNIZCA yerel geliştirme içindir; sunucuda mutlaka .env ile değiştirin.
+      JWT_SECRET: ${JWT_SECRET:-yalnizca_yerel_gelistirme_icin_degistirin_0123456789}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000}
+      # HTTPS arkasında true yapın; yerelde (http://localhost) false kalmalı, yoksa giriş çerezi yazılmaz.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # Swagger arayüzü (/swagger/index.html) yerelde açık; kapatmak için false.
+      ENABLE_SWAGGER: ${ENABLE_SWAGGER:-true}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -63,7 +68,29 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # 4. Başlangıç Varlıkları Yükleyici (Seed Profile - İsteğe Bağlı)
+  # 4. Next.js Arayüzü (http://localhost:3000)
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Tarayıcının API adresi; derleme anında koda gömülür.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080/v1}
+    container_name: yarmak_frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      # Next.js sunucu tarafı (API route'ları) backend'e Docker ağı üzerinden gider.
+      BACKEND_INTERNAL_URL: http://api:8080/v1
+    depends_on:
+      - api
+    networks:
+      - yarmak-network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # 5. Başlangıç Varlıkları Yükleyici (Seed Profile - İsteğe Bağlı)
   # ---------------------------------------------------------------------------
   seed:
     build:
@@ -82,7 +109,26 @@ services:
       - seed
 
   # ---------------------------------------------------------------------------
-  # 5. Derin Veri Tarayıcı (Deep Seeder - Arka planda 5 yıllık data çeker)
+  # 6. Demo Hesabı (İsteğe Bağlı): docker compose run --rm demo_seed
+  #    demo / demo12345 ile giriş yapılan örnek portföy; yalnızca yerel deneme için.
+  # ---------------------------------------------------------------------------
+  demo_seed:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["/app/seed", "-demo"]
+    environment:
+      DB_URL: "postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-yarmak}?sslmode=disable"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - yarmak-network
+    profiles:
+      - demo
+
+  # ---------------------------------------------------------------------------
+  # 7. Derin Veri Tarayıcı (Deep Seeder - Arka planda 5 yıllık data çeker)
   # ---------------------------------------------------------------------------
   deep_seeder:
     build:

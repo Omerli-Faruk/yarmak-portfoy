@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -80,11 +81,15 @@ func main() {
 
 	servicesPkg := services.NewServices(queries, conn)
 
+	// HTTPS arkasında COOKIE_SECURE=true verilmeli; yerelde http://localhost için false kalır.
+	cookieSecure, _ := strconv.ParseBool(os.Getenv("COOKIE_SECURE"))
+
 	apiCFG := &handlers.ApiConfig{
-		DB:        queries,
-		DBConn:    conn,
-		JWTSecret: jwtSecret,
-		Services:  servicesPkg,
+		DB:           queries,
+		DBConn:       conn,
+		JWTSecret:    jwtSecret,
+		CookieSecure: cookieSecure,
+		Services:     servicesPkg,
 	}
 
 	r := router.SetupRouter(apiCFG)

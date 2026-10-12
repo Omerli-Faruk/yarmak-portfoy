@@ -8,3 +8,4 @@ sql:
         package: "database"
         out: "internal/database"
         sql_package: "database/sql"
+        emit_interface: true

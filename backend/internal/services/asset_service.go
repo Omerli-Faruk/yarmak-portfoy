@@ -7,22 +7,23 @@ import (
 	"sync"
 	"time"
 	"yarmak/internal/database"
-	"yarmak/internal/scraper"
 )
 
 // AssetService — Varlık verileri, fiyat geçmişi ve harici piyasa sorgulamalarını yöneten servis.
 // Thread-safe in-memory cache içerir; tekrarlanan varlık aramalarında veritabanı yükünü sıfıra indirir.
 type AssetService struct {
-	DB         *database.Queries
+	DB         database.Querier
+	Prices     PriceSource
 	cacheMu    sync.RWMutex
 	assetCache map[string]database.Asset // key: symbol
 	idCache    map[int64]database.Asset  // key: id
 }
 
 // NewAssetService — Yeni AssetService örneği oluşturur ve bellek içi önbelleği ilklendirir.
-func NewAssetService(db *database.Queries) *AssetService {
+func NewAssetService(db database.Querier, prices PriceSource) *AssetService {
 	return &AssetService{
 		DB:         db,
+		Prices:     prices,
 		assetCache: make(map[string]database.Asset),
 		idCache:    make(map[int64]database.Asset),
 	}
@@ -113,9 +114,9 @@ func (s *AssetService) GetOrCreateAssetBySymbol(ctx context.Context, symbol, ass
 	var livePrice float64
 	var fetchErr error
 	if assetType == "HISSE" || assetType == "ALTIN" || assetType == "DOVIZ" {
-		livePrice, fetchErr = scraper.FetchBISTPrice(symbol)
+		livePrice, fetchErr = s.Prices.Price(symbol)
 	} else if assetType == "FON" {
-		livePrice, fetchErr = scraper.FetchTEFASPrice(symbol)
+		livePrice, fetchErr = s.Prices.FundPrice(symbol)
 	} else {
 		return database.Asset{}, fmt.Errorf("varlık piyasada bulunamadı: %s", symbol)
 	}
