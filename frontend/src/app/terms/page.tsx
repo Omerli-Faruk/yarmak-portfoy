@@ -40,13 +40,13 @@ export default function TermsPage() {
 
             <LegalSection title="Fikri mülkiyet hakları">
                 <p className={legalTextClass}>
-                    Yarmak arayüz tasarımı, logo, yazılım kodları, portföy hesaplama algoritmaları ve platform mimarisi fikri mülkiyet mevzuatıyla korunmaktadır. Yazılı izin olmaksızın platformun kopyalanması, tersine mühendisliğe tabi tutulması veya ticari amaçla izinsiz dağıtılması yasaktır.
+                    Yarmak&apos;ın kaynak kodu MIT lisansıyla yayımlanır. Kodu kopyalayabilir, değiştirebilir ve dağıtabilirsiniz; bunu yaparken lisans metnini ve telif bildirimini korumanız gerekir.
                 </p>
             </LegalSection>
 
             <LegalSection title="Hizmette değişiklik ve fesih">
                 <p className={legalTextClass}>
-                    Yarmak, platform özelliklerini önceden bildirmeksizin güncelleme, değiştirme veya askıya alma hakkını saklı tutar. Kullanıcı dilediği zaman kayıtlı e-posta adresinden <a href="mailto:destek@yarmak.com" className={legalInlineLinkClass}>destek@yarmak.com</a> adresine yazarak hesabının kapatılmasını ve verilerinin silinmesini isteyebilir.
+                    Yarmak, platform özelliklerini önceden bildirmeksizin güncelleme, değiştirme veya askıya alma hakkını saklı tutar. Kullanıcı dilediği zaman, kullandığı Yarmak kurulumunu işleten kişiden hesabının kapatılmasını ve verilerinin silinmesini isteyebilir.
                 </p>
             </LegalSection>
         </LegalDocument>

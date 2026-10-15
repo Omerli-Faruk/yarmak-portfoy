@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import LegalDocument, { LegalSection, legalTextClass, legalListClass, legalInlineLinkClass } from '../terms/LegalDocument';
+import LegalDocument, { LegalSection, legalTextClass, legalListClass } from '../terms/LegalDocument';
 
 export const metadata: Metadata = {
     title: 'Gizlilik ve KVKK Aydınlatma Metni',
@@ -67,7 +67,7 @@ export default function PrivacyPage() {
                     KVKK&apos;nın 11. maddesi uyarınca; kişisel verilerinizin işlenip işlenmediğini öğrenme, işlenmişse buna ilişkin bilgi talep etme, işlenme amacını ve amacına uygun kullanılıp kullanılmadığını öğrenme, yurt içinde veya yurt dışında aktarıldığı üçüncü kişileri bilme, eksik veya yanlış işlenmişse düzeltilmesini isteme, KVKK&apos;nın 7. maddesindeki şartlar çerçevesinde silinmesini veya yok edilmesini isteme, düzeltme ve silme işlemlerinin verilerin aktarıldığı üçüncü kişilere bildirilmesini isteme, münhasıran otomatik sistemlerle analiz edilmesi sonucu aleyhinize bir sonuç çıkmasına itiraz etme ve kanuna aykırı işleme nedeniyle zarara uğramanız hâlinde zararın giderilmesini talep etme haklarına sahipsiniz.
                 </p>
                 <p className={legalTextClass}>
-                    Başvurularınızı sistemde kayıtlı e-posta adresinizden <a href="mailto:destek@yarmak.com" className={legalInlineLinkClass}>destek@yarmak.com</a> adresine iletebilirsiniz. Başvurular en geç 30 gün içinde sonuçlandırılır; işlem ayrıca bir maliyet gerektirmedikçe ücret alınmaz.
+                    Başvurularınızı, kullandığınız Yarmak kurulumunu işleten kişiye iletebilirsiniz. Başvurular en geç 30 gün içinde sonuçlandırılır; işlem ayrıca bir maliyet gerektirmedikçe ücret alınmaz.
                 </p>
             </LegalSection>
         </LegalDocument>

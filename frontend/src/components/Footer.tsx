@@ -37,9 +37,6 @@ export default function Footer() {
                             <Link href="/#ozellikler" className={linkClass}>Özellikler</Link>
                         )}
                         <Link href="/#destek" className={linkClass}>Sıkça sorulan sorular</Link>
-                        <a href="mailto:destek@yarmak.com" className={linkClass} title="Sorularınız, hata bildirimleri veya önerileriniz için dilediğiniz an e-posta gönderebilirsiniz.">
-                            destek@yarmak.com
-                        </a>
                     </nav>
                 </div>
 
