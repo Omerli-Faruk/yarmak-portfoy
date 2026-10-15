@@ -42,7 +42,7 @@ export default function LoginPage() {
             footer={
                 <>
                     <span>Hesabınız yok mu?</span>
-                    <Link href="/register" className={authSwitchLinkClass}>
+                    <Link href="/kayit" className={authSwitchLinkClass}>
                         Kayıt ol
                     </Link>
                 </>
@@ -52,7 +52,7 @@ export default function LoginPage() {
                 <p className="border-b border-border pb-3 text-sm text-fg">
                     Şu anda <span className="font-medium">{user.username}</span> hesabıyla oturumunuz açık.{' '}
                     <Link
-                        href="/dashboard"
+                        href="/portfoy"
                         className="inline-flex min-h-11 items-center gap-1 rounded font-medium text-primary hover:text-primary-hover sm:min-h-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                     >
                         Portföyüme git <ArrowRight className="size-4" aria-hidden/>
@@ -110,15 +110,15 @@ export default function LoginPage() {
                 {/* Aydınlatma metni onaylatılmaz, yalnızca bilgi verilir */}
                 <p className="text-sm leading-relaxed text-fg-muted">
                     Giriş yaparak{' '}
-                    <Link href="/terms" target="_blank" rel="noopener noreferrer" className={authLinkClass}>
+                    <Link href="/kullanim-sartlari" target="_blank" rel="noopener noreferrer" className={authLinkClass}>
                         Kullanım Şartları
                     </Link>
                     &apos;nı kabul etmiş olursunuz. Kişisel verilerinizin nasıl işlendiğini{' '}
-                    <Link href="/privacy" target="_blank" rel="noopener noreferrer" className={authLinkClass}>
+                    <Link href="/gizlilik" target="_blank" rel="noopener noreferrer" className={authLinkClass}>
                         Gizlilik ve KVKK Aydınlatma Metni
                     </Link>
                     &apos;nde, kullandığımız zorunlu çerezleri{' '}
-                    <Link href="/privacy#cerezler" target="_blank" rel="noopener noreferrer" className={authLinkClass}>
+                    <Link href="/gizlilik#cerezler" target="_blank" rel="noopener noreferrer" className={authLinkClass}>
                         çerezler
                     </Link>
                     {' '}bölümünde bulabilirsiniz.

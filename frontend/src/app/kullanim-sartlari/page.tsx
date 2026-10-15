@@ -15,7 +15,7 @@ export default function TermsPage() {
             intro={
                 <>
                     Yarmak&apos;a kayıt olarak bu Kullanım Şartları&apos;nı kabul etmiş olursunuz. Kişisel verilerinizin nasıl işlendiği{' '}
-                    <Link href="/privacy" className={legalInlineLinkClass}>Gizlilik ve KVKK Aydınlatma Metni</Link>
+                    <Link href="/gizlilik" className={legalInlineLinkClass}>Gizlilik ve KVKK Aydınlatma Metni</Link>
                     &apos;nde açıklanmıştır. Lütfen hizmet kapsamını ve yükümlülüklerinizi dikkatle inceleyiniz.
                 </>
             }

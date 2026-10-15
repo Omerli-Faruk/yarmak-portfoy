@@ -61,7 +61,7 @@ export default function MarketLeaderColumn({
                             className="flex h-12 items-center gap-2 transition-colors duration-[120ms] hover:bg-surface-2 sm:gap-3"
                         >
                             <Link
-                                href={`/assets/${item.symbol}`}
+                                href={`/varlik/${item.symbol}`}
                                 className={cn(
                                     'group flex h-full min-w-0 flex-1 items-center gap-3 rounded sm:gap-4',
                                     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',

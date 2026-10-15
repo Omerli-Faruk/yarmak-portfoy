@@ -89,7 +89,7 @@ export default function MarketsPage() {
 
     const handleOpenQuickModal = (asset: MarketAssetItem) => {
         if (!user) {
-            router.push('/login');
+            router.push('/giris');
             return;
         }
         setSuccessMessage(null);
@@ -170,7 +170,7 @@ export default function MarketsPage() {
                         </p>
                     </div>
                 </div>
-                <Link href="/disclaimer" className={buttonClasses({ variant: 'ghost', size: 'sm', className: 'shrink-0 self-start sm:self-auto' })}>
+                <Link href="/yasal-uyari" className={buttonClasses({ variant: 'ghost', size: 'sm', className: 'shrink-0 self-start sm:self-auto' })}>
                     <span>Yasal uyarı</span>
                     <ArrowRight aria-hidden />
                 </Link>

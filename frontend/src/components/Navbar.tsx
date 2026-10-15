@@ -16,15 +16,15 @@ import { cn } from '@/lib/cn';
 
 // Giriş yapmış kullanıcının menüsü
 const USER_LINKS = [
-    { href: '/dashboard', label: 'Portföyüm' },
-    { href: '/holdings', label: 'Varlıklarım' },
-    { href: '/markets', label: 'Piyasalar' },
-    { href: '/alerts', label: 'Alarmlar' },
+    { href: '/portfoy', label: 'Portföyüm' },
+    { href: '/varliklar', label: 'Varlıklarım' },
+    { href: '/piyasalar', label: 'Piyasalar' },
+    { href: '/alarmlar', label: 'Alarmlar' },
 ];
 
 // Ziyaretçi menüsü; # ile başlayanlar ana sayfadaki bölümlere gider
 const GUEST_LINKS = [
-    { href: '/markets', label: 'Piyasalar' },
+    { href: '/piyasalar', label: 'Piyasalar' },
     { href: '/#ozellikler', label: 'Özellikler' },
     { href: '/#destek', label: 'Destek' },
 ];
@@ -39,7 +39,7 @@ export default function Navbar() {
     const pathname = usePathname();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-    if (pathname?.startsWith("/login") || pathname?.startsWith("/register")) {
+    if (pathname?.startsWith("/giris") || pathname?.startsWith("/kayit")) {
         return (
             <header className="relative z-20 flex items-center justify-between px-4 sm:px-6 pt-4">
                 <Link href="/" className={buttonClasses({ variant: 'ghost', size: 'sm', className: '-ml-2' })}>
@@ -59,7 +59,7 @@ export default function Navbar() {
                 <div className="flex items-stretch gap-8 min-w-0">
                     <Link
                         className="flex items-center gap-2 shrink-0 self-center min-h-11 sm:min-h-10 rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                        href={user ? "/dashboard" : "/"}
+                        href={user ? "/portfoy" : "/"}
                     >
                         <Image src="/logo.png" alt="Yarmak Logo" width={28} height={28} className="size-7 object-contain" loading="eager"/>
                         <span className="font-display text-xl font-bold tracking-tight text-fg">yarmak</span>
@@ -99,7 +99,7 @@ export default function Navbar() {
                             <>
                                 {/* Dar masaüstünde yalnızca simge görünür; kullanıcı adı ekran okuyucuya yine okunur */}
                                 <Link
-                                    href="/profile"
+                                    href="/profil"
                                     title="Profil"
                                     className="flex items-center gap-2 h-10 px-2.5 rounded text-sm font-medium text-fg-muted hover:text-fg hover:bg-surface-2 transition-colors duration-[120ms] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                                 >
@@ -116,10 +116,10 @@ export default function Navbar() {
                             </>
                         ) : (
                             <>
-                                <Link href="/login" className={buttonClasses({ variant: 'ghost', size: 'sm' })}>
+                                <Link href="/giris" className={buttonClasses({ variant: 'ghost', size: 'sm' })}>
                                     Giriş yap
                                 </Link>
-                                <Link href="/register" className={buttonClasses({ variant: 'primary', size: 'sm' })}>
+                                <Link href="/kayit" className={buttonClasses({ variant: 'primary', size: 'sm' })}>
                                     Ücretsiz kaydol
                                 </Link>
                             </>
@@ -167,7 +167,7 @@ export default function Navbar() {
                         {user ? (
                             <div className="flex items-center justify-between gap-2">
                                 <Link
-                                    href="/profile"
+                                    href="/profil"
                                     onClick={closeMobileMenu}
                                     className="flex items-center gap-2 h-12 px-3 rounded text-base font-medium text-fg hover:bg-surface-2 min-w-0"
                                 >
@@ -184,10 +184,10 @@ export default function Navbar() {
                             </div>
                         ) : (
                             <div className="flex flex-col gap-1.5 p-1">
-                                <Link href="/login" onClick={closeMobileMenu} className={buttonClasses({ variant: 'secondary', fullWidth: true })}>
+                                <Link href="/giris" onClick={closeMobileMenu} className={buttonClasses({ variant: 'secondary', fullWidth: true })}>
                                     Giriş yap
                                 </Link>
-                                <Link href="/register" onClick={closeMobileMenu} className={buttonClasses({ variant: 'primary', fullWidth: true })}>
+                                <Link href="/kayit" onClick={closeMobileMenu} className={buttonClasses({ variant: 'primary', fullWidth: true })}>
                                     Ücretsiz kaydol
                                 </Link>
                             </div>

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import LegalDocument, { LegalSection, legalTextClass, legalListClass } from '../terms/LegalDocument';
+import LegalDocument, { LegalSection, legalTextClass, legalListClass } from '../kullanim-sartlari/LegalDocument';
 
 export const metadata: Metadata = {
     title: 'Yasal Uyarı ve SPK Çekincesi',

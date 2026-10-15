@@ -147,7 +147,7 @@ export default function NotificationBell() {
 
     const handleNotificationClick = (symbol: string) => {
         setIsOpen(false);
-        router.push(`/assets/${encodeURIComponent(symbol)}`);
+        router.push(`/varlik/${encodeURIComponent(symbol)}`);
     };
 
     if (!user) return null;
@@ -219,7 +219,7 @@ export default function NotificationBell() {
                                 description="Alarm kurduğunuz bir varlık hedef fiyata ulaştığında burada görünür."
                                 action={
                                     <Link
-                                        href="/alerts"
+                                        href="/alarmlar"
                                         onClick={() => setIsOpen(false)}
                                         className={buttonClasses({ variant: 'primary', size: 'sm' })}
                                     >
@@ -244,7 +244,7 @@ export default function NotificationBell() {
                     {triggeredAlerts.length > 0 && (
                         <div className="p-1 border-t border-border">
                             <Link
-                                href="/alerts"
+                                href="/alarmlar"
                                 onClick={() => setIsOpen(false)}
                                 className="flex items-center justify-between w-full h-11 sm:h-10 px-3 rounded text-sm font-medium text-fg-muted hover:text-fg hover:bg-surface-2 transition-colors duration-[120ms]"
                             >

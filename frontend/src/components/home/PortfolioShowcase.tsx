@@ -159,7 +159,7 @@ export default function PortfolioShowcase() {
                     </div>
 
                     <div className="flex flex-col gap-2">
-                        <Link href="/register" className={buttonClasses({ fullWidth: true })}>
+                        <Link href="/kayit" className={buttonClasses({ fullWidth: true })}>
                             <span>Kendi portföyünü oluştur</span>
                             <ArrowRight aria-hidden />
                         </Link>

@@ -6,10 +6,10 @@ import { Bell, BriefcaseBusiness, ChartCandlestick, Layers } from 'lucide-react'
 import { cn } from '@/lib/cn';
 
 const TABS = [
-    { href: '/dashboard', label: 'Portföy', icon: BriefcaseBusiness },
-    { href: '/holdings', label: 'Varlıklar', icon: Layers },
-    { href: '/markets', label: 'Piyasalar', icon: ChartCandlestick },
-    { href: '/alerts', label: 'Alarmlar', icon: Bell },
+    { href: '/portfoy', label: 'Portföy', icon: BriefcaseBusiness },
+    { href: '/varliklar', label: 'Varlıklar', icon: Layers },
+    { href: '/piyasalar', label: 'Piyasalar', icon: ChartCandlestick },
+    { href: '/alarmlar', label: 'Alarmlar', icon: Bell },
 ];
 
 // Mobilde giriş yapmış kullanıcı için alt sekme çubuğu (sm ve üstünde gizli). Etkin sekmenin üstünde ince mavi çizgi.

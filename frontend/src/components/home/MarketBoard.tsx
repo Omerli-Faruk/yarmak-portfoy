@@ -50,7 +50,7 @@ export default function MarketBoard({ assets, className }: { assets: CatalogAsse
                     {rows.map((row) => (
                         <li key={row.symbol}>
                             <Link
-                                href={`/assets/${row.symbol}`}
+                                href={`/varlik/${row.symbol}`}
                                 className="flex h-12 items-center gap-3 rounded px-3 transition-colors duration-[120ms] hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
                             >
                                 <span className="flex min-w-0 flex-1 items-baseline gap-2">

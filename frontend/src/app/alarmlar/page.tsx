@@ -21,7 +21,7 @@ import Skeleton from '@/components/ui/Skeleton';
 
 function AlertsContent() {
     const searchParams = useSearchParams();
-    const querySymbol = searchParams.get('symbol');
+    const querySymbol = searchParams.get('sembol');
 
     const [alerts, setAlerts] = useState<NormalizedAlert[]>([]);
     const [loading, setLoading] = useState(true);
@@ -31,7 +31,7 @@ function AlertsContent() {
     const [deleteModalId, setDeleteModalId] = useState<number | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    // Modal her açılışta yeniden kurulur. prefillSymbol yalnızca ?symbol= ile açılınca dolu olur.
+    // Modal her açılışta yeniden kurulur. prefillSymbol yalnızca ?sembol= ile açılınca dolu olur.
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [prefillSymbol, setPrefillSymbol] = useState<string | null>(null);
 
@@ -54,7 +54,7 @@ function AlertsContent() {
         void fetchAlerts();
     }, []);
 
-    // Varlık sayfasından /alerts?symbol=THYAO ile gelindiyse modal o sembolle açılır
+    // Varlık sayfasından /alarmlar?sembol=THYAO ile gelindiyse modal o sembolle açılır
     useEffect(() => {
         if (querySymbol) {
             // eslint-disable-next-line react-hooks/set-state-in-effect

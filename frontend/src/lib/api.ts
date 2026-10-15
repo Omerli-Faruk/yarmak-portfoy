@@ -39,9 +39,9 @@ api.interceptors.response.use(
                 if (typeof window !== 'undefined') {
                     // Oturum çerezleri HttpOnly olduğu için JS'den silinemez; süresi dolmuş ya da geçersiz durumdalar.
                     localStorage.removeItem('is_logged_in');
-                    if (!window.location.pathname.startsWith('/login')) {
+                    if (!window.location.pathname.startsWith('/giris')) {
                         // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-                        window.location.href = '/login';
+                        window.location.href = '/giris';
                     }
                 }
                 return Promise.reject(refreshErr);

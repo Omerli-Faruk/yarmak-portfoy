@@ -1,8 +1,8 @@
 User-agent: *
 Allow: /
 Disallow: /api/
-Disallow: /dashboard
-Disallow: /transactions
-Disallow: /holdings
-Disallow: /alerts
-Disallow: /profile
+Disallow: /portfoy
+Disallow: /islemler
+Disallow: /varliklar
+Disallow: /alarmlar
+Disallow: /profil

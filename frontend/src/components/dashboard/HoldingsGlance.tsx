@@ -55,7 +55,7 @@ export default function HoldingsGlance({ holdings, assetSummaries, fmt, equityVa
             className={className}
             action={
                 <Link
-                    href="/holdings"
+                    href="/varliklar"
                     className="inline-flex items-center gap-1 min-h-11 sm:min-h-10 rounded text-sm font-medium text-primary hover:text-primary-hover transition-colors duration-[120ms] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 >
                     {truncated ? 'Tümünü gör' : 'Yönet ve grupla'}
@@ -78,7 +78,7 @@ export default function HoldingsGlance({ holdings, assetSummaries, fmt, equityVa
                 {rows.map(({ h, metrics, trend, weight }) => (
                     <li key={h.asset_id ?? h.symbol}>
                         <Link
-                            href={`/assets/${h.symbol}`}
+                            href={`/varlik/${h.symbol}`}
                             className="flex items-center gap-4 h-16 sm:h-12 px-3 rounded text-sm hover:bg-surface-2 transition-colors duration-[120ms] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
                         >
                             <span className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2 grow min-w-0">

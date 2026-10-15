@@ -8,7 +8,7 @@ import {Eye, EyeOff, AlertCircle} from "lucide-react";
 import Field from "@/components/ui/Field";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
-import AuthShell, {authLinkClass, authSwitchLinkClass, authToggleClass} from "../login/AuthShell";
+import AuthShell, {authLinkClass, authSwitchLinkClass, authToggleClass} from "../giris/AuthShell";
 
 const checkboxClass = "mt-0.5 size-5 shrink-0 cursor-pointer rounded-sm accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
 
@@ -84,7 +84,7 @@ export default function RegisterPage() {
             footer={
                 <>
                     <span>Zaten bir hesabınız var mı?</span>
-                    <Link href="/login" className={authSwitchLinkClass}>
+                    <Link href="/giris" className={authSwitchLinkClass}>
                         Giriş yap
                     </Link>
                 </>
@@ -161,7 +161,7 @@ export default function RegisterPage() {
                         />
                         <span>
                             <Link
-                                href="/terms"
+                                href="/kullanim-sartlari"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className={authLinkClass}
@@ -170,7 +170,7 @@ export default function RegisterPage() {
                             </Link>
                             &apos;nı ve{' '}
                             <Link
-                                href="/disclaimer"
+                                href="/yasal-uyari"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className={authLinkClass}
@@ -191,7 +191,7 @@ export default function RegisterPage() {
                         />
                         <span>
                             <Link
-                                href="/privacy"
+                                href="/gizlilik"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className={authLinkClass}

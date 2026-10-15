@@ -50,7 +50,7 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
         const {data} = await api.post<AuthResponse>('/login', {email: identifier, password});
         localStorage.setItem('is_logged_in', 'true');
         setUser(data.user);
-        router.push('/dashboard')
+        router.push('/portfoy')
     }
 
     const register = async (email: string, password: string, username: string) =>
@@ -66,7 +66,7 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
         }
         localStorage.removeItem('is_logged_in');
         setUser(null);
-        router.push('/login');
+        router.push('/giris');
     }
 
     // Oturum kontrolü bitmeden alt bileşenler render edilmez; bu yüzden useAuth kullananlar loading'i hep false görür.

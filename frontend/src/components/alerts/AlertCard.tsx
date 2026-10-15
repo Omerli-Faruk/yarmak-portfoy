@@ -75,7 +75,7 @@ function StatusText({ alert }: { alert: NormalizedAlert }) {
 function SymbolLink({ symbol }: { symbol: string }) {
     return (
         <Link
-            href={`/assets/${encodeURIComponent(symbol)}`}
+            href={`/varlik/${encodeURIComponent(symbol)}`}
             className="relative shrink-0 rounded font-mono text-sm font-medium text-fg after:absolute after:-inset-x-1 after:-inset-y-3 hover:text-primary transition-colors duration-[120ms] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         >
             {symbol}

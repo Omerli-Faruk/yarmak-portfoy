@@ -106,7 +106,7 @@ export default function AssetHeaderCard({
                             )}
                             {/* Fon fiyatları gün içinde değişmez, TEFAS'ta günlük yayımlanır */}
                             <Link
-                                href="/disclaimer"
+                                href="/yasal-uyari"
                                 title={
                                     isFund
                                         ? "Fon fiyatları TEFAS'ta yayımlanan günlük fiyatlardır. Yatırım tavsiyesi değildir."

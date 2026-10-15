@@ -58,7 +58,7 @@ export default function DashboardPage() {
 
     useEffect(() => {
         if (!authLoading && !user) {
-            router.push('/login');
+            router.push('/giris');
         }
     }, [authLoading, user, router]);
 
@@ -266,7 +266,7 @@ export default function DashboardPage() {
                     * BIST fiyatları en az 15 dakika gecikmelidir; fon fiyatları TEFAS&apos;ta yayımlanan günlük fiyatlardır, altın ve döviz kurları gösterge niteliğindedir. Bilgilendirme amaçlıdır, yatırım tavsiyesi değildir.
                 </p>
                 <Link
-                    href="/disclaimer"
+                    href="/yasal-uyari"
                     className="inline-flex items-center min-h-11 sm:min-h-10 shrink-0 self-start rounded text-sm text-fg-muted underline underline-offset-2 hover:text-fg transition-colors duration-[120ms] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 >
                     Yasal uyarı ve çekince

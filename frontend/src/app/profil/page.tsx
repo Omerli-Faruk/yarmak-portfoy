@@ -16,7 +16,7 @@ export default function ProfilePage() {
 
     useEffect(() => {
         if (!loading && !user) {
-            router.push('/login');
+            router.push('/giris');
         }
     }, [user, loading, router]);
 

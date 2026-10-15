@@ -8,7 +8,7 @@ export default function TransactionsRedirectPage() {
     const router = useRouter();
 
     useEffect(() => {
-        router.replace('/holdings?tab=transactions');
+        router.replace('/varliklar?sekme=islemler');
     }, [router]);
 
     return (

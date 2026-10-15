@@ -186,7 +186,7 @@ export default function MarketScreener({
                                 >
                                     {/* Mobilde: üstte sembol + tür, altta ad. Masaüstünde tek satır. */}
                                     <Link
-                                        href={`/assets/${item.symbol}`}
+                                        href={`/varlik/${item.symbol}`}
                                         className={cn(
                                             'group flex min-w-0 flex-1 flex-col justify-center self-stretch rounded md:flex-row md:items-center md:justify-start md:gap-6',
                                             'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',

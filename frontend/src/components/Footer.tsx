@@ -26,12 +26,12 @@ export default function Footer() {
                         <span className="font-display text-base font-bold text-fg tracking-tight">yarmak</span>
                     </div>
                     <nav aria-label="Alt menü" className="flex flex-wrap items-center gap-x-5 text-sm">
-                        <Link href="/markets" className={linkClass}>Piyasalar</Link>
+                        <Link href="/piyasalar" className={linkClass}>Piyasalar</Link>
                         {user ? (
                             <>
-                                <Link href="/dashboard" className={linkClass}>Portföyüm</Link>
-                                <Link href="/holdings" className={linkClass}>Varlıklarım</Link>
-                                <Link href="/alerts" className={linkClass}>Alarmlar</Link>
+                                <Link href="/portfoy" className={linkClass}>Portföyüm</Link>
+                                <Link href="/varliklar" className={linkClass}>Varlıklarım</Link>
+                                <Link href="/alarmlar" className={linkClass}>Alarmlar</Link>
                             </>
                         ) : (
                             <Link href="/#ozellikler" className={linkClass}>Özellikler</Link>
@@ -67,9 +67,9 @@ export default function Footer() {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-x-4 pt-3 border-t border-border text-xs">
                     <p>© 2026 Yarmak. Tüm hakları saklıdır.</p>
                     <div className="flex flex-wrap items-center gap-x-5">
-                        <Link href="/disclaimer" className={`${linkClass} text-warning hover:underline`}>Yasal uyarı &amp; SPK</Link>
-                        <Link href="/terms" className={linkClass}>Kullanım şartları</Link>
-                        <Link href="/privacy" className={linkClass}>Gizlilik &amp; KVKK</Link>
+                        <Link href="/yasal-uyari" className={`${linkClass} text-warning hover:underline`}>Yasal uyarı &amp; SPK</Link>
+                        <Link href="/kullanim-sartlari" className={linkClass}>Kullanım şartları</Link>
+                        <Link href="/gizlilik" className={linkClass}>Gizlilik &amp; KVKK</Link>
                     </div>
                 </div>
             </div>

@@ -227,7 +227,7 @@ export default function HoldingsTable({
 
             {withDetailLink && (
                 <Link
-                    href={`/assets/${h.symbol}`}
+                    href={`/varlik/${h.symbol}`}
                     className={cn(ACTION_TEXT, 'text-fg hover:bg-surface-3')}
                     aria-label={`${h.symbol} grafik ve detay`}
                 >
@@ -309,7 +309,7 @@ export default function HoldingsTable({
                                         <td className={TD}>
                                             <div className="flex flex-col min-w-0 leading-tight">
                                                 <Link
-                                                    href={`/assets/${h.symbol}`}
+                                                    href={`/varlik/${h.symbol}`}
                                                     className="w-fit rounded font-mono text-sm font-semibold text-fg underline-offset-2 transition-colors duration-[120ms] hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                                                     title={`${h.symbol} grafik ve detay`}
                                                 >

@@ -20,7 +20,7 @@ export default function Home() {
     // Giriş yapmış kullanıcıyı panele yönlendir
     useEffect(() => {
         if (!authLoading && user) {
-            router.replace('/dashboard');
+            router.replace('/portfoy');
         }
     }, [user, authLoading, router]);
 

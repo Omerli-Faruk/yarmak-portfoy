@@ -49,15 +49,15 @@ export default function HoldingsPage() {
 
     const [mainViewTab, setMainViewTab] = useState<MainViewTab>('positions');
 
-    // Sekme adres çubuğundan da seçilebilir: ?tab=transactions ya da ?tab=dividends
+    // Sekme adres çubuğundan da seçilebilir: ?sekme=islemler ya da ?sekme=temettuler
     useEffect(() => {
         const checkTab = () => {
             if (typeof window !== 'undefined') {
                 const params = new URLSearchParams(window.location.search);
-                const tab = params.get('tab');
-                if (tab === 'transactions' || tab === 'history') {
+                const tab = params.get('sekme');
+                if (tab === 'islemler') {
                     setMainViewTab('transactions');
-                } else if (tab === 'dividends' || tab === 'temettu') {
+                } else if (tab === 'temettuler') {
                     setMainViewTab('dividends');
                 } else {
                     setMainViewTab('positions');
@@ -72,7 +72,8 @@ export default function HoldingsPage() {
     const changeMainTab = (tab: MainViewTab) => {
         setMainViewTab(tab);
         if (typeof window !== 'undefined') {
-            window.history.replaceState(null, '', tab === 'positions' ? '/holdings' : `/holdings?tab=${tab}`);
+            const slug = tab === 'transactions' ? 'islemler' : 'temettuler';
+            window.history.replaceState(null, '', tab === 'positions' ? '/varliklar' : `/varliklar?sekme=${slug}`);
         }
     };
 
@@ -121,7 +122,7 @@ export default function HoldingsPage() {
 
     useEffect(() => {
         if (!authLoading && !user) {
-            router.push('/login');
+            router.push('/giris');
         }
     }, [user, authLoading, router]);
 

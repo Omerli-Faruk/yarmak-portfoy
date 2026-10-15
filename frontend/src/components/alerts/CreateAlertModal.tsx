@@ -31,7 +31,7 @@ interface ApiAssetResponse {
 }
 
 interface CreateAlertModalProps {
-    // Varlık sayfasından ?symbol= ile gelindiğinde dolu olur
+    // Varlık sayfasından ?sembol= ile gelindiğinde dolu olur
     initialSymbol?: string;
     onClose: () => void;
     onCreated: () => void;

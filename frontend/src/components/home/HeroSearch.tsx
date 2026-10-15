@@ -115,7 +115,7 @@ export default function HeroSearch({ assets }: { assets: CatalogAsset[] }) {
                 onSubmit={(e) => {
                     e.preventDefault();
                     if (searchQuery.trim() !== '') {
-                        router.push(`/assets/${searchQuery.trim().toUpperCase()}`);
+                        router.push(`/varlik/${searchQuery.trim().toUpperCase()}`);
                     }
                 }}
                 className="flex items-stretch gap-2"
@@ -181,7 +181,7 @@ export default function HeroSearch({ assets }: { assets: CatalogAsset[] }) {
                                             onClick={() => {
                                                 setSearchQuery(asset.symbol);
                                                 setIsSearchFocused(false);
-                                                router.push(`/assets/${asset.symbol}`);
+                                                router.push(`/varlik/${asset.symbol}`);
                                             }}
                                             className="flex min-h-12 w-full cursor-pointer items-center gap-3 px-3 py-1.5 text-left transition-colors duration-[120ms] hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none"
                                         >

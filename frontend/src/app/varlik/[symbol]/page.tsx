@@ -308,7 +308,7 @@ export default function AssetDetailPage() {
                     isLoggedIn ? (
                         <>
                             <Link
-                                href={`/alerts?symbol=${encodeURIComponent(rawSymbol)}`}
+                                href={`/alarmlar?sembol=${encodeURIComponent(rawSymbol)}`}
                                 className={buttonClasses({ variant: 'secondary', size: 'sm' })}
                             >
                                 <Bell aria-hidden />
@@ -319,7 +319,7 @@ export default function AssetDetailPage() {
                             </Button>
                         </>
                     ) : (
-                        <Button variant="secondary" size="sm" onClick={() => router.push('/register')}>
+                        <Button variant="secondary" size="sm" onClick={() => router.push('/kayit')}>
                             Hesap oluştur
                         </Button>
                     )
