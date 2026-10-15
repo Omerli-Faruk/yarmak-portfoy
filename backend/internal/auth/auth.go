@@ -12,7 +12,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// HashPassword — Kullanıcının düz metin şifresini bcrypt algoritması ile güvenli şekilde hash'ler.
+// HashPassword, kullanıcının düz metin şifresini bcrypt algoritması ile güvenli şekilde hash'ler.
 func HashPassword(password string) (string, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -21,13 +21,13 @@ func HashPassword(password string) (string, error) {
 	return string(hashedPassword), nil
 }
 
-// CheckPasswordHash — Kullanıcının girdiği şifre ile veritabanındaki hash'lenmiş şifrenin eşleşip eşleşmediğini kontrol eder.
+// CheckPasswordHash, kullanıcının girdiği şifre ile veritabanındaki hash'lenmiş şifrenin eşleşip eşleşmediğini kontrol eder.
 func CheckPasswordHash(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }
 
-// MakeJWT — Kullanıcı oturumu için kısa ömürlü (ör. 1 saat) bir JSON Web Token (JWT) oluşturur ve imzalar.
+// MakeJWT, kullanıcı oturumu için kısa ömürlü (ör. 1 saat) bir JSON Web Token (JWT) oluşturur ve imzalar.
 func MakeJWT(userID int64, tokenSecret string, expiresIn time.Duration) (string, error) {
 	signingKey := []byte(tokenSecret)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
@@ -43,7 +43,7 @@ func MakeJWT(userID int64, tokenSecret string, expiresIn time.Duration) (string,
 	return signedToken, nil
 }
 
-// ValidateJWT — Gelen JWT'nin süresinin geçip geçmediğini, imzasının doğruluğunu ve issuer (yayıncı) bilgisini kontrol eder. Geçerliyse UserID'yi döner.
+// ValidateJWT, gelen JWT'nin süresinin geçip geçmediğini, imzasının doğruluğunu ve issuer (yayıncı) bilgisini kontrol eder. Geçerliyse UserID'yi döner.
 func ValidateJWT(tokenString, tokenSecret string) (int64, error) {
 	claims := &jwt.RegisteredClaims{}
 	_, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
@@ -51,7 +51,7 @@ func ValidateJWT(tokenString, tokenSecret string) (int64, error) {
 			return nil, fmt.Errorf("beklenmeyen imzalama yöntemi")
 		}
 		return []byte(tokenSecret), nil
-	})
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithExpirationRequired())
 	if err != nil {
 		return 0, fmt.Errorf("token doğrulanırken hata oluştu: %w", err)
 	}
@@ -65,17 +65,37 @@ func ValidateJWT(tokenString, tokenSecret string) (int64, error) {
 	return userID, nil
 }
 
-// MakeRefreshToken — Kullanıcının oturumunu uzun süre açık tutmak için rastgele, güvenli bir 32 baytlık (64 karakter hex) yenileme token'ı üretir.
-func MakeRefreshToken() (string, error) {
+// publicExampleSecrets, repoda ve geçmişinde örnek olarak yer almış anahtarlar. Herkese açık oldukları için kabul edilmezler.
+var publicExampleSecrets = map[string]bool{
+	"yalnizca_yerel_gelistirme_icin_degistirin_0123456789":  true,
+	"your_super_secret_jwt_key_at_least_32_characters_long": true,
+	"super_secret_jwt_key_at_least_32_characters_long":      true,
+}
+
+// IsPublicExampleSecret, verilen JWT anahtarının repodaki örnek değerlerden biri olup olmadığını söyler.
+func IsPublicExampleSecret(secret string) bool {
+	return publicExampleSecrets[secret]
+}
+
+// GenerateSecret, 32 rastgele bayttan oluşan hex bir anahtar üretir.
+func GenerateSecret() (string, error) {
 	b := make([]byte, 32)
-	_, err := rand.Read(b)
-	if err != nil {
-		return "", fmt.Errorf("refresh token üretilemedi: %w", err)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("anahtar üretilemedi: %w", err)
 	}
 	return hex.EncodeToString(b), nil
 }
 
-// HashToken — Veritabanında plain-text token saklamamak için, Refresh Token'ı SHA-256 ile hash'leyerek geri döndürür.
+// MakeRefreshToken, kullanıcının oturumunu uzun süre açık tutmak için rastgele, güvenli bir 32 baytlık (64 karakter hex) yenileme token'ı üretir.
+func MakeRefreshToken() (string, error) {
+	token, err := GenerateSecret()
+	if err != nil {
+		return "", fmt.Errorf("refresh token üretilemedi: %w", err)
+	}
+	return token, nil
+}
+
+// HashToken, veritabanında plain-text token saklamamak için, Refresh Token'ı SHA-256 ile hash'leyerek geri döndürür.
 func HashToken(token string) string {
 	hash := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(hash[:])

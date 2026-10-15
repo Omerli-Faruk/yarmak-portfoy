@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import {
     BACKEND_URL,
     type BackendAsset,
-    clientIpHeader,
+    backendAuthHeaders,
     fetchSpotGold,
     formatApiPrice,
     getYahooAuth,
@@ -459,7 +459,7 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Sembol belirtilmedi' }, { status: 400 });
     }
 
-    const backendHeaders = clientIpHeader(request);
+    const backendHeaders = backendAuthHeaders(request);
     const encodedSymbol = encodeURIComponent(rawSymbol);
 
     // Aynı sembol ve aralık için 2 dakika boyunca hazır yanıt döner

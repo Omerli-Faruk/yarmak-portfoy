@@ -16,7 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// HandlerCreateTransaction — Kullanıcı portföyüne yeni bir alım (BUY) veya satım (SELL) işlemi kaydeder. İleri tarihli işlemleri engeller, split (bölünme) geçmişini hesaba katar.
+// HandlerCreateTransaction, kullanıcı portföyüne yeni bir alım (BUY) veya satım (SELL) işlemi kaydeder. İleri tarihli işlemleri engeller, split (bölünme) geçmişini hesaba katar.
 // @Summary Alım/Satım İşlemi Yap
 // @Description Kullanıcı portföyüne yeni bir alım (BUY) veya satım (SELL) işlemi kaydeder
 // @Tags Transactions
@@ -93,7 +93,7 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 	respondWithJSON(w, http.StatusCreated, transaction)
 }
 
-// HandlerGetUserHoldings — Kullanıcının portföyündeki varlıkları özet olarak listeler. Ortalama maliyet ve anlık fiyat farkına göre anlık Kâr/Zarar durumunu hesaplar.
+// HandlerGetUserHoldings, kullanıcının portföyündeki varlıkları özet olarak listeler. Ortalama maliyet ve anlık fiyat farkına göre anlık Kâr/Zarar durumunu hesaplar.
 // @Summary Kullanıcının Varlıklarını (Holdings) Listele
 // @Description Kullanıcının sahip olduğu tüm varlıkları, lot sayılarını ve kâr/zararlarını döner
 // @Tags Portfolio
@@ -120,7 +120,7 @@ func (cfg *ApiConfig) HandlerGetUserHoldings(w http.ResponseWriter, r *http.Requ
 	respondWithJSON(w, http.StatusOK, holdings)
 }
 
-// HandlerGetUserTransactions — Kullanıcının işlem geçmişini sayfalayarak (pagination) getirir.
+// HandlerGetUserTransactions, kullanıcının işlem geçmişini sayfalayarak (pagination) getirir.
 // @Summary İşlem Geçmişi (Pagination)
 // @Description Kullanıcının geçmiş alım/satım işlemlerini sayfalanmış olarak listeler
 // @Tags Transactions
@@ -165,7 +165,7 @@ func (cfg *ApiConfig) HandlerGetUserTransactions(w http.ResponseWriter, r *http.
 	respondWithJSON(w, http.StatusOK, transactions)
 }
 
-// HandlerDeleteTransaction — Kullanıcının bir işlemini siler. Silinecek alım, sonraki satışlarda bakiyeyi eksiye düşürecekse silmeye izin vermez.
+// HandlerDeleteTransaction, kullanıcının bir işlemini siler. Silinecek alım, sonraki satışlarda bakiyeyi eksiye düşürecekse silmeye izin vermez.
 // @Summary Alım/Satım İşlemini Sil
 // @Description Kullanıcının gerçekleştirdiği bir alım veya satım işlemini siler
 // @Tags Transactions
@@ -213,7 +213,7 @@ func (cfg *ApiConfig) HandlerDeleteTransaction(w http.ResponseWriter, r *http.Re
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "İşlem başarıyla silindi"})
 }
 
-// updateTransactionRequest — İşlem güncelleme gövdesi
+// updateTransactionRequest, işlem güncelleme gövdesi
 type updateTransactionRequest struct {
 	Type            string    `json:"type" example:"BUY" enums:"BUY,SELL"`
 	Amount          float64   `json:"amount" example:"100"`
@@ -222,7 +222,7 @@ type updateTransactionRequest struct {
 	Commission      float64   `json:"commission" example:"10.0"`
 }
 
-// HandlerUpdateTransaction — Kullanıcının mevcut alım/satım işlemini günceller ve WAC / K-Z hesaplarını otomatik yeniler.
+// HandlerUpdateTransaction, kullanıcının mevcut alım/satım işlemini günceller ve WAC / K-Z hesaplarını otomatik yeniler.
 // @Summary Alım/Satım İşlemini Güncelle
 // @Description Kullanıcının gerçekleştirdiği bir alım veya satım işleminin adet, fiyat, komisyon veya tarihini günceller
 // @Tags Transactions
@@ -314,7 +314,7 @@ func (cfg *ApiConfig) HandlerUpdateTransaction(w http.ResponseWriter, r *http.Re
 	respondWithJSON(w, http.StatusOK, updatedTx)
 }
 
-// HandlerDeleteUserAssetHoldings — Kullanıcının bir varlıktaki tüm alım-satım işlemlerini siler, yani varlığı portföyden tamamen kaldırır.
+// HandlerDeleteUserAssetHoldings, kullanıcının bir varlıktaki tüm alım-satım işlemlerini siler, yani varlığı portföyden tamamen kaldırır.
 // @Summary Varlığı Portföyden Tamamen Sil
 // @Description Kullanıcının belirtilen sembole ait tüm işlemlerini soft-delete yaparak portföyünden kaldırır.
 // @Tags Portfolio
@@ -361,7 +361,7 @@ func (cfg *ApiConfig) HandlerDeleteUserAssetHoldings(w http.ResponseWriter, r *h
 	})
 }
 
-// resolveAssetID — İşlem yapılmak istenen varlığın (asset) ID'si yoksa sembolü üzerinden veritabanından bulur veya yenisini oluşturur.
+// resolveAssetID, işlem yapılmak istenen varlığın (asset) ID'si yoksa sembolü üzerinden veritabanından bulur veya yenisini oluşturur.
 func (cfg *ApiConfig) resolveAssetID(ctx context.Context, params *createTransactionRequest) error {
 	if params.AssetID > 0 {
 		if cfg.DB != nil {

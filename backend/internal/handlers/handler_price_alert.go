@@ -10,7 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// HandlerCreatePriceAlert — Belirli bir varlık hedef fiyata ulaştığında tetiklenecek fiyat alarmı oluşturur.
+// HandlerCreatePriceAlert, belirli bir varlık hedef fiyata ulaştığında tetiklenecek fiyat alarmı oluşturur.
 // @Summary Fiyat Alarmı Kur
 // @Description Belirli bir hisse veya fon hedef fiyata ulaştığında tetiklenecek alarm kurar
 // @Tags Alerts
@@ -66,7 +66,7 @@ func (cfg *ApiConfig) HandlerCreatePriceAlert(w http.ResponseWriter, r *http.Req
 	respondWithJSON(w, http.StatusCreated, priceAlert)
 }
 
-// HandlerGetUserPriceAlerts — Kullanıcının oluşturduğu tüm aktif ve tetiklenmiş fiyat alarmlarını varlık bilgileriyle birlikte listeler.
+// HandlerGetUserPriceAlerts, kullanıcının oluşturduğu tüm aktif ve tetiklenmiş fiyat alarmlarını varlık bilgileriyle birlikte listeler.
 // @Summary Kullanıcının Alarmlarını Listele
 // @Description Kullanıcının aktif ve tetiklenmiş tüm fiyat alarmlarını listeler
 // @Tags Alerts
@@ -89,7 +89,7 @@ func (cfg *ApiConfig) HandlerGetUserPriceAlerts(w http.ResponseWriter, r *http.R
 	respondWithJSON(w, http.StatusOK, priceAlert)
 }
 
-// HandlerDeletePriceAlert — Kullanıcının belirli bir fiyat alarmını güvenli biçimde siler/iptal eder.
+// HandlerDeletePriceAlert, kullanıcının belirli bir fiyat alarmını güvenli biçimde siler/iptal eder.
 // @Summary Fiyat Alarmını Sil
 // @Description Kullanıcının kurduğu bir fiyat alarmını iptal eder/siler
 // @Tags Alerts

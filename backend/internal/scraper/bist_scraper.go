@@ -234,7 +234,7 @@ type StockHistoricalRecord struct {
 	Price float64
 }
 
-// FetchGoldHistory — Gram Altın (TL) geçmiş fiyat verisini Ons Altın (GC=F) ve Dolar/TL (USDTRY=X)
+// FetchGoldHistory, gram Altın (TL) geçmiş fiyat verisini Ons Altın (GC=F) ve Dolar/TL (USDTRY=X)
 // kurlarını zaman damgalarına göre eşleştirip çarparak (Ons * Dolar / 31.1034768) dinamik üretir.
 func FetchGoldHistory(rangeStr string) (float64, []StockHistoricalRecord, error) {
 	return FetchGoldHistoryInterval(rangeStr, yahooInterval(rangeStr))

@@ -45,6 +45,15 @@ export function clientIpHeader(request: Request): Record<string, string> {
     return ip ? { 'X-Real-IP': ip } : {};
 }
 
+// clientIpHeader'a ek olarak kullanıcının access_token çerezini iletir. Backend yeni sembol eklemeye ve
+// geçmiş veri indirmeye yalnızca giriş yapmış kullanıcılar için izin verir.
+export function backendAuthHeaders(request: Request): Record<string, string> {
+    const headers = clientIpHeader(request);
+    const token = request.headers.get('cookie')?.match(/(?:^|;\s*)access_token=([^;]+)/)?.[1];
+    if (token) headers['Cookie'] = `access_token=${token}`;
+    return headers;
+}
+
 const USER_AGENT = { 'User-Agent': 'Mozilla/5.0' };
 
 // Yahoo v7/v10 uçları cookie + crumb ister; ikisini 1 saat saklıyoruz.

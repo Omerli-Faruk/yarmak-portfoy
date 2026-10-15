@@ -3,13 +3,14 @@ package services
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 	"yarmak/internal/database"
 )
 
-// AssetService — Varlık verileri, fiyat geçmişi ve harici piyasa sorgulamalarını yöneten servis.
+// AssetService, varlık verileri, fiyat geçmişi ve harici piyasa sorgulamalarını yöneten servis.
 // Thread-safe in-memory cache içerir; tekrarlanan varlık aramalarında veritabanı yükünü sıfıra indirir.
 type AssetService struct {
 	DB         database.Querier
@@ -19,7 +20,7 @@ type AssetService struct {
 	idCache    map[int64]database.Asset  // key: id
 }
 
-// NewAssetService — Yeni AssetService örneği oluşturur ve bellek içi önbelleği ilklendirir.
+// NewAssetService, yeni AssetService örneği oluşturur ve bellek içi önbelleği ilklendirir.
 func NewAssetService(db database.Querier, prices PriceSource) *AssetService {
 	return &AssetService{
 		DB:         db,
@@ -29,7 +30,7 @@ func NewAssetService(db database.Querier, prices PriceSource) *AssetService {
 	}
 }
 
-// GetAssetByIDWithCache — Varlığı ID ile sorgularken bellek içi önbelleği kontrol eder, yoksa DB'den çeker ve önbelleğe yazar.
+// GetAssetByIDWithCache, varlığı ID ile sorgularken bellek içi önbelleği kontrol eder, yoksa DB'den çeker ve önbelleğe yazar.
 func (s *AssetService) GetAssetByIDWithCache(ctx context.Context, assetID int64) (database.Asset, error) {
 	s.cacheMu.RLock()
 	cached, ok := s.idCache[assetID]
@@ -51,7 +52,7 @@ func (s *AssetService) GetAssetByIDWithCache(ctx context.Context, assetID int64)
 	return asset, nil
 }
 
-// FetchPriceHistoryByRange — Varlığın istenen periyottaki geçmiş fiyatlarını veritabanından çeker.
+// FetchPriceHistoryByRange, varlığın istenen periyottaki geçmiş fiyatlarını veritabanından çeker.
 func (s *AssetService) FetchPriceHistoryByRange(ctx context.Context, assetID int64, rangeParam string) ([]database.PriceHistory, error) {
 	switch strings.ToUpper(strings.TrimSpace(rangeParam)) {
 	case "1Y":
@@ -71,9 +72,12 @@ func (s *AssetService) FetchPriceHistoryByRange(ctx context.Context, assetID int
 	}
 }
 
-// GetOrCreateAssetBySymbol — Verilen sembole ait varlığı önce bellek içi önbellekte, ardından veritabanında arar;
-// sistemde yoksa dış piyasalardan (TEFAS, Yahoo Finance) anında çeker, veritabanına ekler ve önbelleğe kaydeder.
-func (s *AssetService) GetOrCreateAssetBySymbol(ctx context.Context, symbol, assetType string) (database.Asset, error) {
+// symbolPattern, dış kaynaklara sorulabilecek sembollerin biçimi (THYAO, USDTRY, GC=F, AAPL.IS gibi).
+// Sembol URL'e eklendiği için başka karakterlere izin verilmez.
+var symbolPattern = regexp.MustCompile(`^[A-Z0-9][A-Z0-9.=]{0,19}$`)
+
+// normalizeSymbol, kullanıcı kısaltmalarını (USD, ALTIN...) sistemdeki sembol ve türe çevirir.
+func normalizeSymbol(symbol, assetType string) (string, string) {
 	symbol = strings.ToUpper(strings.TrimSpace(symbol))
 	assetType = strings.ToUpper(strings.TrimSpace(assetType))
 
@@ -91,8 +95,13 @@ func (s *AssetService) GetOrCreateAssetBySymbol(ctx context.Context, symbol, ass
 		symbol = "ALTIN"
 		assetType = "ALTIN"
 	}
+	return symbol, assetType
+}
 
-	// 1. In-Memory Lookup Cache Kontrolü (Hafızadan 0ms'de dönüş)
+// FindAssetBySymbol, varlığı yalnızca önbellekte ve veritabanında arar; dış kaynaklara gitmez.
+func (s *AssetService) FindAssetBySymbol(ctx context.Context, symbol string) (database.Asset, error) {
+	symbol, _ = normalizeSymbol(symbol, "")
+
 	s.cacheMu.RLock()
 	cached, ok := s.assetCache[symbol]
 	s.cacheMu.RUnlock()
@@ -109,8 +118,22 @@ func (s *AssetService) GetOrCreateAssetBySymbol(ctx context.Context, symbol, ass
 		s.cacheMu.Unlock()
 		return asset, nil
 	}
+	return database.Asset{}, err
+}
 
-	// 3. Piyasadan Canlı Fiyat Çekimi
+// GetOrCreateAssetBySymbol, varlığı önce sistemde arar; yoksa fiyatını dış kaynaklardan (Yahoo, TEFAS)
+// çekip veritabanına ekler.
+func (s *AssetService) GetOrCreateAssetBySymbol(ctx context.Context, symbol, assetType string) (database.Asset, error) {
+	symbol, assetType = normalizeSymbol(symbol, assetType)
+
+	if asset, err := s.FindAssetBySymbol(ctx, symbol); err == nil {
+		return asset, nil
+	}
+
+	if !symbolPattern.MatchString(symbol) {
+		return database.Asset{}, fmt.Errorf("geçersiz sembol: %q", symbol)
+	}
+
 	var livePrice float64
 	var fetchErr error
 	if assetType == "HISSE" || assetType == "ALTIN" || assetType == "DOVIZ" {

@@ -8,7 +8,7 @@ import (
 	"yarmak/internal/auth"
 )
 
-// MiddleWareAuth — Gelen HTTP isteğindeki access_token cookie'sini doğrular ve JWT geçerliyse UserID'yi context'e ekleyerek request'i devam ettirir.
+// MiddleWareAuth, gelen HTTP isteğindeki access_token cookie'sini doğrular ve JWT geçerliyse UserID'yi context'e ekleyerek request'i devam ettirir.
 func (cfg *ApiConfig) MiddleWareAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -29,7 +29,17 @@ func (cfg *ApiConfig) MiddleWareAuth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// MiddleWareAdmin — Sadece is_admin bayrağı true olan kullanıcıların (yöneticilerin) erişebileceği endpoint'leri korur.
+// userIDFromRequest, access_token çerezi geçerliyse kullanıcı ID'sini döner. Girişin zorunlu olmadığı uçlarda kullanılır.
+func (cfg *ApiConfig) userIDFromRequest(r *http.Request) (int64, bool) {
+	cookie, err := r.Cookie("access_token")
+	if err != nil {
+		return 0, false
+	}
+	userID, err := auth.ValidateJWT(cookie.Value, cfg.JWTSecret)
+	return userID, err == nil
+}
+
+// MiddleWareAdmin, sadece is_admin bayrağı true olan kullanıcıların (yöneticilerin) erişebileceği endpoint'leri korur.
 func (cfg *ApiConfig) MiddleWareAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := r.Context().Value(UserIDKey).(int64)

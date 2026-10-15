@@ -10,7 +10,7 @@ import (
 	"yarmak/internal/database"
 )
 
-// HandlerRegister — Yeni bir kullanıcı hesabı oluşturur. Şifreyi bcrypt ile hash'leyip veritabanına kaydeder.
+// HandlerRegister, yeni bir kullanıcı hesabı oluşturur. Şifreyi bcrypt ile hash'leyip veritabanına kaydeder.
 // @Summary Yeni Kullanıcı Kaydı
 // @Description Yeni bir kullanıcı hesabı oluşturur
 // @Tags Auth

@@ -83,7 +83,7 @@ func clientIPMiddleware(trusted []netip.Prefix) func(http.Handler) http.Handler 
 	}
 }
 
-// keyByClientIP — Rate limiter anahtarı. clientIPMiddleware'in belirlediği IP'yi kullanır;
+// keyByClientIP, rate limiter anahtarı. clientIPMiddleware'in belirlediği IP'yi kullanır;
 // o çalışmamışsa bağlantının adresine düşer.
 func keyByClientIP(r *http.Request) (string, error) {
 	ip := middleware.GetClientIP(r.Context())
@@ -182,7 +182,7 @@ func SetupRouter(apiCFG *handlers.ApiConfig) chi.Router {
 	v1Router.Put("/transactions/{id}", apiCFG.MiddleWareAuth(apiCFG.HandlerUpdateTransaction))
 	v1Router.Get("/assets/{id}/price-history", apiCFG.HandlerGetAssetPriceHistory)
 	v1Router.Get("/assets/{id}/summary", apiCFG.HandlerGetAssetSummary)
-	v1Router.With(lookupRateLimiter).Post("/assets/{id}/backfill", apiCFG.HandlerTriggerBackfill)
+	v1Router.With(lookupRateLimiter).Post("/assets/{id}/backfill", apiCFG.MiddleWareAuth(apiCFG.HandlerTriggerBackfill))
 	v1Router.Post("/dividends", apiCFG.MiddleWareAuth(apiCFG.HandlerCreateDividend))
 	v1Router.Get("/dividends", apiCFG.MiddleWareAuth(apiCFG.HandlerGetUserDividends))
 	v1Router.Put("/dividends/{id}", apiCFG.MiddleWareAuth(apiCFG.HandlerUpdateDividend))

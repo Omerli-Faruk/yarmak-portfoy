@@ -7,7 +7,7 @@ import (
 	"yarmak/internal/database"
 )
 
-// HandlerRefreshToken — refresh_token çerezinden yeni bir access/refresh token çifti üretir ve çerezlere yazar.
+// HandlerRefreshToken, refresh_token çerezinden yeni bir access/refresh token çifti üretir ve çerezlere yazar.
 // Eski token iptal edilir; aynı anda gelen isteklerde oturum düşmesin diye 30 saniyelik tolerans vardır.
 // @Summary Access Token Yenile (Refresh)
 // @Description refresh_token çerezini kullanarak yeni tokenları çerez olarak döner
@@ -98,7 +98,7 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Oturum yenilendi"})
 }
 
-// HandlerRevokeToken — Logout sırasında refresh token'ı DB'de iptal eder ve cookie'leri temizler.
+// HandlerRevokeToken, logout sırasında refresh token'ı DB'de iptal eder ve cookie'leri temizler.
 // @Summary Oturumu Kapat / Token İptal Et (Revoke)
 // @Description Kullanıcının refresh token'ını iptal ederek oturumunu kapatır (Logout)
 // @Tags Auth

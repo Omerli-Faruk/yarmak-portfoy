@@ -13,11 +13,7 @@ import (
 	"yarmak/internal/scraper"
 )
 
-// ============================================================================
-// API HANDLERS
-// ============================================================================
-
-// HandlerCreateAsset — Sisteme yeni bir varlık tanımlar (Admin).
+// HandlerCreateAsset, sisteme yeni bir varlık tanımlar (Admin).
 // @Summary Yeni Varlık Tanımla (Admin)
 // @Description Sisteme yeni bir hisse, fon, altın veya döviz varlığı ekler
 // @Tags Assets
@@ -66,7 +62,7 @@ func (cfg *ApiConfig) HandlerCreateAsset(w http.ResponseWriter, r *http.Request)
 	respondWithJSON(w, http.StatusCreated, asset)
 }
 
-// HandlerListAssets — Sistemde kayıtlı olan tüm finansal varlıkları listeler.
+// HandlerListAssets, sistemde kayıtlı olan tüm finansal varlıkları listeler.
 // @Summary Tüm Varlıkları Listele
 // @Description Sistemde kayıtlı tüm BIST hisseleri, TEFAS fonları ve altınları anlık fiyatlarıyla döner
 // @Tags Assets
@@ -81,7 +77,7 @@ func (cfg *ApiConfig) HandlerListAssets(w http.ResponseWriter, r *http.Request) 
 	respondWithJSON(w, http.StatusOK, assets)
 }
 
-// HandlerGetAssetPriceHistory — Varlığın tarihsel fiyat grafiğini çizmek için geçmiş fiyat verilerini döndürür.
+// HandlerGetAssetPriceHistory, varlığın tarihsel fiyat grafiğini çizmek için geçmiş fiyat verilerini döndürür.
 // @Summary Varlık Fiyat Geçmişi
 // @Description Belirli bir varlığın tarihsel fiyat değişim geçmişini listeler
 // @Tags Assets
@@ -139,7 +135,7 @@ func (cfg *ApiConfig) HandlerGetAssetPriceHistory(w http.ResponseWriter, r *http
 	respondWithJSON(w, http.StatusOK, price)
 }
 
-// HandlerTriggerBackfill — Eksik geçmiş fiyat verilerini tamamlamak için varlığı kuyruğa ekler ve arka planda senkronizasyon başlatır.
+// HandlerTriggerBackfill, eksik geçmiş fiyat verilerini tamamlamak için varlığı kuyruğa ekler ve arka planda senkronizasyon başlatır.
 func (cfg *ApiConfig) HandlerTriggerBackfill(w http.ResponseWriter, r *http.Request) {
 	assetID, err := parseAssetIDParam(r)
 	if err != nil {
@@ -164,9 +160,9 @@ func (cfg *ApiConfig) HandlerTriggerBackfill(w http.ResponseWriter, r *http.Requ
 	respondWithJSON(w, http.StatusOK, map[string]string{"status": "queued"})
 }
 
-// HandlerLookupAsset — Parametre olarak verilen sembol ve türe göre varlığı arar, yoksa dış kaynaktan bulup DB'ye kaydeder.
-// @Summary Akıllı Varlık Arama & Keşif
-// @Description Sembol ve türe göre varlık arar, sistemde yoksa piyasadan anında çeker
+// HandlerLookupAsset, sembolle varlık arar. Sistemde olmayan sembol yalnızca giriş yapmış kullanıcı için dış kaynaktan bulunup eklenir.
+// @Summary Sembolle varlık arama
+// @Description Sembol ve türe göre varlık arar; sistemde yoksa ve kullanıcı giriş yapmışsa piyasadan çekip ekler
 // @Tags Assets
 // @Produce json
 // @Router /assets/lookup [get]
@@ -180,6 +176,22 @@ func (cfg *ApiConfig) HandlerLookupAsset(w http.ResponseWriter, r *http.Request)
 	}
 	if assetType == "" {
 		assetType = "HISSE"
+	}
+
+	if asset, err := cfg.Services.Asset.FindAssetBySymbol(r.Context(), symbol); err == nil {
+		respondWithJSON(w, http.StatusOK, asset)
+		return
+	}
+
+	// Yeni sembol dış kaynaklara sorulup veritabanına eklenir. Giriş zorunlu ve kullanıcı başına sınırlı;
+	// yoksa herkes veritabanına kayıt ekletip fiyat kaynaklarına toplu istek attırabilirdi.
+	userID, ok := cfg.userIDFromRequest(r)
+	if !ok {
+		respondWithError(w, http.StatusNotFound, "Varlık bulunamadı", nil)
+		return
+	}
+	if cfg.DiscoveryLimiter != nil && cfg.DiscoveryLimiter.RespondOnLimit(w, r, fmt.Sprintf("user:%d", userID)) {
+		return
 	}
 
 	asset, err := cfg.Services.Asset.GetOrCreateAssetBySymbol(r.Context(), symbol, assetType)
@@ -196,7 +208,7 @@ func (cfg *ApiConfig) HandlerLookupAsset(w http.ResponseWriter, r *http.Request)
 	respondWithJSON(w, http.StatusOK, asset)
 }
 
-// HandlerGetAssetSummary — Bir varlığın 1G, 1H, 1A, YTD, 1Y, 3Y, ALL periyotlarındaki getiri yüzdelerini döner.
+// HandlerGetAssetSummary, bir varlığın 1G, 1H, 1A, YTD, 1Y, 3Y, ALL periyotlarındaki getiri yüzdelerini döner.
 func (cfg *ApiConfig) HandlerGetAssetSummary(w http.ResponseWriter, r *http.Request) {
 	assetID, err := parseAssetIDParam(r)
 	if err != nil {
@@ -245,7 +257,7 @@ func (cfg *ApiConfig) HandlerGetAssetSummary(w http.ResponseWriter, r *http.Requ
 	respondWithJSON(w, http.StatusOK, returns)
 }
 
-// HandlerGetAssetDailyChanges — Verilen varlık ID'leri veya tüm varlıklar için günlük yüzdesel değişimleri sqlc sorgusuyla hesaplar.
+// HandlerGetAssetDailyChanges, verilen varlık ID'leri veya tüm varlıklar için günlük yüzdesel değişimleri sqlc sorgusuyla hesaplar.
 func (cfg *ApiConfig) HandlerGetAssetDailyChanges(w http.ResponseWriter, r *http.Request) {
 	idsParam := strings.TrimSpace(r.URL.Query().Get("ids"))
 	ids := parseCommaSeparatedIDs(idsParam)

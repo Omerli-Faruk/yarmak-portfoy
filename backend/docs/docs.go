@@ -223,14 +223,14 @@ const docTemplate = `{
         },
         "/assets/lookup": {
             "get": {
-                "description": "Sembol ve türe göre varlık arar, sistemde yoksa piyasadan anında çeker",
+                "description": "Sembol ve türe göre varlık arar; sistemde yoksa ve kullanıcı giriş yapmışsa piyasadan çekip ekler",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Assets"
                 ],
-                "summary": "Akıllı Varlık Arama \u0026 Keşif",
+                "summary": "Sembolle varlık arama",
                 "responses": {}
             }
         },

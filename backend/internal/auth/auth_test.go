@@ -89,3 +89,16 @@ func TestMakeRefreshToken(t *testing.T) {
 		t.Errorf("Rastgele üretilen tokenlar birbirine eşit olmamalı!")
 	}
 }
+
+func TestIsPublicExampleSecret(t *testing.T) {
+	if !IsPublicExampleSecret("yalnizca_yerel_gelistirme_icin_degistirin_0123456789") {
+		t.Error("repodaki örnek anahtar reddedilmeli")
+	}
+	secret, err := GenerateSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(secret) != 64 || IsPublicExampleSecret(secret) {
+		t.Errorf("üretilen anahtar 64 karakterlik ve örneklerden farklı olmalı: %q", secret)
+	}
+}

@@ -12,7 +12,7 @@ import (
 	"yarmak/internal/wac"
 )
 
-// StartScraperWorker — Tüm arka plan görevlerini (TEFAS, BIST, Backfill, Portfolio Snapshot) asenkron olarak başlatan ana yöneticidir.
+// StartScraperWorker, tüm arka plan görevlerini (TEFAS, BIST, Backfill, Portfolio Snapshot) asenkron olarak başlatan ana yöneticidir.
 func StartScraperWorker(ctx context.Context, db *database.Queries, interval time.Duration, wg *sync.WaitGroup) {
 	slog.Info("Yeni Mimari (v2) Scraper Yöneticisi Başlatılıyor...")
 
@@ -42,7 +42,7 @@ func StartScraperWorker(ctx context.Context, db *database.Queries, interval time
 	}()
 }
 
-// checkAndTriggerAlerts — Varlığın yeni fiyatı, kullanıcıların belirlediği fiyat alarmlarını geçiyorsa bu alarmları tetikler ve loglar.
+// checkAndTriggerAlerts, varlığın yeni fiyatı, kullanıcıların belirlediği fiyat alarmlarını geçiyorsa bu alarmları tetikler ve loglar.
 func checkAndTriggerAlerts(ctx context.Context, db *database.Queries, asset database.Asset, newPrice float64, priceStr string) {
 	alerts, err := db.GetPendingAlertsForAsset(ctx, asset.ID)
 	if err != nil {
@@ -69,7 +69,7 @@ func checkAndTriggerAlerts(ctx context.Context, db *database.Queries, asset data
 
 var lastSnapshotDay atomic.Int32
 
-// recordPortfolioSnapshots — Her akşam mesai bitiminden sonra kullanıcıların anlık portföy durumlarını hesaplayıp gün sonu snapshot olarak kaydeder.
+// recordPortfolioSnapshots, her akşam mesai bitiminden sonra kullanıcıların anlık portföy durumlarını hesaplayıp gün sonu snapshot olarak kaydeder.
 func recordPortfolioSnapshots(ctx context.Context, db *database.Queries) {
 	loc, _ := time.LoadLocation("Europe/Istanbul")
 	now := time.Now().In(loc)

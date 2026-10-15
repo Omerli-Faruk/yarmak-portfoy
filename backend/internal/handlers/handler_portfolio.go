@@ -6,15 +6,7 @@ import (
 	"yarmak/internal/services"
 )
 
-// ============================================================================
-// API HANDLERS
-// ============================================================================
-
-// ============================================================================
-// API HANDLERS
-// ============================================================================
-
-// HandlerGetPortfolioSummary — Kullanıcının portföyünün tüm anlık resmini çıkarır.
+// HandlerGetPortfolioSummary, kullanıcının portföyünün tüm anlık resmini çıkarır.
 // Toplam değer, maliyet, kâr/zarar, dolar karşılığı, dönemsel getiriler (1D/1W/1M/3M/6M/YTD/1Y)
 // ve HISSE/FON/ALTIN/DOVIZ bazında kategori dağılımını tek seferde hesaplayıp döner.
 // @Summary Portföy Özeti (TL ve Dolar)
@@ -48,7 +40,7 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 // @Produce json
 // @Success 200 {array} database.PortfolioSnapshot
 // @Failure 401 {object} map[string]string
-// HandlerGetUserPortfolioHistory — Kullanıcının portföy değer geçmişini döner.
+// HandlerGetUserPortfolioHistory, kullanıcının portföy değer geçmişini döner.
 // Dashboard'daki çizgi grafiğinin veri kaynağı budur. Son 365 snapshot döner.
 // @Failure 500 {object} map[string]string
 // @Router /portfolio/history [get]
@@ -69,7 +61,7 @@ func (cfg *ApiConfig) HandlerGetUserPortfolioHistory(w http.ResponseWriter, r *h
 	respondWithJSON(w, http.StatusOK, history)
 }
 
-// HandlerGetPortfolioValueHistory — Kullanıcının gerçek portföy geçmişini döner.
+// HandlerGetPortfolioValueHistory, kullanıcının gerçek portföy geçmişini döner.
 // Her noktada o anki lotlar, o anki fiyatlar ve o ana kadarki gerçekleşen kâr/temettü kullanılır;
 // bugünkü varlıkları geçmişe taşımaz. Zaman çizelgesi portföyün ilk işleminden önce başlamaz.
 // @Summary Portföy Değer Geçmişi

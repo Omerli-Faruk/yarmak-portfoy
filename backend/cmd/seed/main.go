@@ -51,9 +51,9 @@ func main() {
 		return
 	}
 
-	// 📊 BIST 100 (TAM 100 HİSSE) + TEFAS TOP 30 (TAM 30 FON)
+	// BIST 100 hisseleri ve sık kullanılan 30 TEFAS fonu
 	assets := []seedAsset{
-		// --- 📈 FONLAR ---
+		// Fonlar
 		{"TTA", "İş Portföy Altın Fonu", "FON"},
 		{"MAC", "Marmara Capital Portföy Hisse Senedi Fonu", "FON"},
 		{"TCD", "Tacirler Portföy Değişken Fon", "FON"},
@@ -85,7 +85,7 @@ func main() {
 		{"DVT", "Deniz Portföy Metaverse ve Dijital Yaşam Tek. Değişken Fon", "FON"},
 		{"YHK", "Yapı Kredi Portföy Çoklu Varlık Birinci Değişken Fon", "FON"},
 
-		// --- 🏛️ HİSSELER ---
+		// Hisseler
 		{"AEFES", "Anadolu Efes Biracılık ve Malt Sanayii A.Ş.", "HISSE"},
 		{"AGHOL", "AG Anadolu Grubu Holding A.Ş.", "HISSE"},
 		{"AHGAZ", "Ahlatcı Doğal Gaz Dağıtım Enerji ve Yatırım A.Ş.", "HISSE"},
@@ -188,22 +188,21 @@ func main() {
 		{"YEOTK", "YEO Teknoloji Enerji ve Endüstri A.Ş.", "HISSE"},
 	}
 
-	fmt.Println("=== 🚀 BIST 100 & TOP 30 TEFAS TOHUMLAMA BAŞLATILDI ===")
-	fmt.Printf("Toplam %d adet varlık işlenecek...\n\n", len(assets))
+	fmt.Printf("%d varlık yükleniyor\n\n", len(assets))
 
 	successCount := 0
 	for i, item := range assets {
 		// Varlık veritabanında yoksa oluşturur, varsa fiyatını günceller
 		asset, err := cfg.Services.Asset.GetOrCreateAssetBySymbol(ctx, item.Symbol, item.AssetType)
 		if err != nil {
-			fmt.Printf("[%d/%d] ❌ %-8s Hata: %v\n", i+1, len(assets), item.Symbol, err)
+			fmt.Printf("[%d/%d] HATA %-8s %v\n", i+1, len(assets), item.Symbol, err)
 			continue
 		}
 
 		// Şirket/Fon ismini günceller
 		_, _ = conn.ExecContext(ctx, "UPDATE assets SET name = $1 WHERE id = $2", item.Name, asset.ID)
 
-		fmt.Printf("[%d/%d] ✅ %-8s | %-52s | %s TL\n",
+		fmt.Printf("[%d/%d] %-8s | %-52s | %s TL\n",
 			i+1, len(assets), asset.Symbol, item.Name, asset.CurrentPrice)
 		successCount++
 
@@ -211,5 +210,5 @@ func main() {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	fmt.Printf("\n🎉 Tohumlama tamamlandı! (%d/%d varlık başarıyla yüklendi)\n", successCount, len(assets))
+	fmt.Printf("\nBitti: %d/%d varlık yüklendi\n", successCount, len(assets))
 }

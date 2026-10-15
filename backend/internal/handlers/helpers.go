@@ -10,18 +10,14 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// mappedHistory — Dış kaynaktan (Yahoo Finance) çekilen canlı geçmiş verilerini frontend uyumlu formata dönüştürmek için kullanılan DTO.
+// mappedHistory, dış kaynaktan (Yahoo Finance) çekilen canlı geçmiş verilerini frontend uyumlu formata dönüştürmek için kullanılan DTO.
 type mappedHistory struct {
 	AssetID    int64     `json:"asset_id"`
 	Price      string    `json:"price"`
 	RecordedAt time.Time `json:"recorded_at"`
 }
 
-// ============================================================================
-// HELPER FONKSİYONLAR (DRY, Tip Güvenliği ve Hata Yönetimi)
-// ============================================================================
-
-// parseAssetIDParam — URL path parametresinden (örn: /assets/{id}) varlık ID'sini okur ve int64'e dönüştürür.
+// parseAssetIDParam, URL path parametresinden (örn: /assets/{id}) varlık ID'sini okur ve int64'e dönüştürür.
 func parseAssetIDParam(r *http.Request) (int64, error) {
 	param := chi.URLParam(r, "id")
 	if param == "" {
@@ -34,7 +30,7 @@ func parseAssetIDParam(r *http.Request) (int64, error) {
 	return id, nil
 }
 
-// parseFloatSafe — String tipindeki sayısal veriyi güvenli biçimde float64'e dönüştürür.
+// parseFloatSafe, string tipindeki sayısal veriyi güvenli biçimde float64'e dönüştürür.
 // Hata veya boş veri durumunda sessizce programı kırmak yerine 0.0 döner.
 func parseFloatSafe(s string) float64 {
 	val, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
@@ -44,7 +40,7 @@ func parseFloatSafe(s string) float64 {
 	return val
 }
 
-// calculatePercentageReturn — İki fiyat arasındaki yüzdesel değişimi ((güncel - önceki) / önceki) * 100 olarak hesaplar.
+// calculatePercentageReturn, iki fiyat arasındaki yüzdesel değişimi ((güncel - önceki) / önceki) * 100 olarak hesaplar.
 func calculatePercentageReturn(current, previous float64) float64 {
 	if previous <= 0 {
 		return 0.0
@@ -52,7 +48,7 @@ func calculatePercentageReturn(current, previous float64) float64 {
 	return ((current - previous) / previous) * 100.0
 }
 
-// mapRangeToYahooFinance — Frontend'den gelen aralık kodunu (örn: 1W, 1M, 1Y) Yahoo Finance API'sinin beklediği parametreye eşler.
+// mapRangeToYahooFinance, frontend'den gelen aralık kodunu (örn: 1W, 1M, 1Y) Yahoo Finance API'sinin beklediği parametreye eşler.
 func mapRangeToYahooFinance(rangeParam string) string {
 	switch strings.ToUpper(strings.TrimSpace(rangeParam)) {
 	case "1D":
@@ -78,7 +74,7 @@ func mapRangeToYahooFinance(rangeParam string) string {
 	}
 }
 
-// isValidAssetType — Desteklenen finansal varlık tiplerini doğrular.
+// isValidAssetType, desteklenen finansal varlık tiplerini doğrular.
 func isValidAssetType(assetType string) bool {
 	switch strings.ToUpper(strings.TrimSpace(assetType)) {
 	case "HISSE", "FON", "ALTIN", "DOVIZ":
@@ -88,7 +84,7 @@ func isValidAssetType(assetType string) bool {
 	}
 }
 
-// parseCommaSeparatedIDs — Virgülle ayrılmış ID parametresini (örn: "55,179,3157") ayrıştırıp pozitif int64 dilimine dönüştürür.
+// parseCommaSeparatedIDs, virgülle ayrılmış ID parametresini (örn: "55,179,3157") ayrıştırıp pozitif int64 dilimine dönüştürür.
 func parseCommaSeparatedIDs(param string) []int64 {
 	trimmed := strings.TrimSpace(param)
 	if trimmed == "" || strings.EqualFold(trimmed, "all") {

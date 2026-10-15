@@ -38,7 +38,7 @@ func main() {
 	db := database.New(dbConn)
 	ctx := context.Background()
 
-	log.Println("TEFAS Ultra-Hızlı Derin Tarayıcı Başlatılıyor...")
+	log.Println("TEFAS fon fiyat geçmişi indiriliyor")
 
 	today := time.Now()
 	// Varsayılan: 5 yıl öncesi (İlk kurulum için)
@@ -57,25 +57,23 @@ func main() {
 	forceFull := os.Getenv("FORCE_FULL_BACKFILL") == "true"
 
 	if err == nil && countRecords > 1000 && maxRecordedAt.Valid && !forceFull {
-		log.Printf("📊 Veritabanında %d adet fon fiyat geçmişi kaydı bulundu (En son kayıt: %s).",
+		log.Printf("Veritabanında %d fon fiyat kaydı var (son kayıt: %s)",
 			countRecords, maxRecordedAt.Time.Format("2006-01-02"))
 
 		oneMonthAgo := today.AddDate(0, -1, 0)
 		// Eğer son kayıt 1 aydan daha eskiyse, aradaki boşluğu kapatmak için son kayıt tarihinden başla
 		if maxRecordedAt.Time.Before(oneMonthAgo) && maxRecordedAt.Time.After(today.AddDate(-5, 0, 0)) {
 			currentStart = maxRecordedAt.Time.AddDate(0, 0, -3) // 3 gün güvenlik payı
-			log.Printf("🔄 Konteyner kapalı kaldığı için aradaki boşluğu kapatmak üzere %s tarihinden itibaren senkronize ediliyor...",
+			log.Printf("Son kayıt eski, %s tarihinden itibaren eksikler indiriliyor",
 				currentStart.Format("2006-01-02"))
 		} else {
 			// Son kayıt güncel (son 1 ay içinde): Sadece son 1 ayı güncelle ("son ay çeksin yeter")
 			currentStart = oneMonthAgo
-			log.Printf("🔄 Hızlı Güncelleme Modu: Eski veriler mevcut olduğundan sadece son 1 aylık veri (%s -> %s) senkronize ediliyor.",
+			log.Printf("Geçmiş zaten var, yalnızca son bir ay güncelleniyor (%s -> %s)",
 				currentStart.Format("2006-01-02"), today.Format("2006-01-02"))
 		}
 	} else {
-		log.Println("🚀 İlk Kurulum / Tam Tarama Modu: 5 yıllık tüm geçmiş veri ay-ay indirilecek...")
-		log.Println("Tüm pazar (3200+ fon) ay-ay tek seferde çekilecek.")
-		log.Println("Bu işlem yaklaşık 20-30 dakika sürebilir.")
+		log.Println("İlk kurulum: tüm fonların (3200+) son 5 yıllık geçmişi ay ay indirilecek, 20-30 dakika sürebilir")
 	}
 
 	// Create a map of Symbol -> AssetID for quick lookups
@@ -171,5 +169,5 @@ func main() {
 		time.Sleep(15 * time.Second)
 	}
 
-	log.Println("✅ FON FİYAT GEÇMİŞİ SENKRONİZASYONU BAŞARIYLA TAMAMLANDI!")
+	log.Println("Fon fiyat geçmişi güncellendi")
 }

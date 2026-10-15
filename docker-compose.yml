@@ -1,7 +1,5 @@
 services:
-  # ---------------------------------------------------------------------------
-  # 1. PostgreSQL 16 Veritabanı Servisi
-  # ---------------------------------------------------------------------------
+  # PostgreSQL
   db:
     image: postgres:16-alpine
     container_name: yarmak_db
@@ -10,7 +8,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-yarmak}
     ports:
-      - "${DB_PORT:-5432}:5432"
+      # Yalnızca bu bilgisayardan erişilir; ağdaki diğer cihazlara açılmaz.
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,9 +21,7 @@ services:
       - yarmak-network
     restart: unless-stopped
 
-  # ---------------------------------------------------------------------------
-  # 2. Otomatik Migration Servisi (Goose)
-  # ---------------------------------------------------------------------------
+  # Migration'lar (goose); uygulanınca kapanır
   migrate:
     build:
       context: ./backend
@@ -39,9 +36,7 @@ services:
       - yarmak-network
     restart: "no"
 
-  # ---------------------------------------------------------------------------
-  # 3. Golang Backend API Servisi
-  # ---------------------------------------------------------------------------
+  # Go API ve arka plan fiyat güncelleyicileri
   api:
     build:
       context: ./backend
@@ -53,8 +48,8 @@ services:
     environment:
       PORT: "8080"
       DB_URL: "postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-yarmak}?sslmode=disable"
-      # Varsayılan anahtar YALNIZCA yerel geliştirme içindir; sunucuda mutlaka .env ile değiştirin.
-      JWT_SECRET: ${JWT_SECRET:-yalnizca_yerel_gelistirme_icin_degistirin_0123456789}
+      # Boşsa API her açılışta geçici bir anahtar üretir. Sunucuda .env ile kalıcı bir anahtar verin.
+      JWT_SECRET: ${JWT_SECRET:-}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000}
       # HTTPS arkasında true yapın; yerelde (http://localhost) false kalmalı, yoksa giriş çerezi yazılmaz.
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
@@ -67,9 +62,7 @@ services:
       - yarmak-network
     restart: unless-stopped
 
-  # ---------------------------------------------------------------------------
-  # 4. Next.js Arayüzü (http://localhost:3000)
-  # ---------------------------------------------------------------------------
+  # Next.js arayüzü (http://localhost:3000)
   frontend:
     build:
       context: ./frontend
@@ -89,9 +82,7 @@ services:
       - yarmak-network
     restart: unless-stopped
 
-  # ---------------------------------------------------------------------------
-  # 5. Başlangıç Varlıkları Yükleyici (Seed Profile - İsteğe Bağlı)
-  # ---------------------------------------------------------------------------
+  # İsteğe bağlı: BIST 100 ve popüler fon listesi. docker compose run --rm seed
   seed:
     build:
       context: ./backend
@@ -108,10 +99,7 @@ services:
     profiles:
       - seed
 
-  # ---------------------------------------------------------------------------
-  # 6. Demo Hesabı (İsteğe Bağlı): docker compose run --rm demo_seed
-  #    demo / demo12345 ile giriş yapılan örnek portföy; yalnızca yerel deneme için.
-  # ---------------------------------------------------------------------------
+  # İsteğe bağlı: demo / demo12345 ile giriş yapılan örnek portföy. docker compose run --rm demo_seed
   demo_seed:
     build:
       context: ./backend
@@ -127,9 +115,7 @@ services:
     profiles:
       - demo
 
-  # ---------------------------------------------------------------------------
-  # 7. Derin Veri Tarayıcı (Deep Seeder - Arka planda 5 yıllık data çeker)
-  # ---------------------------------------------------------------------------
+  # İsteğe bağlı: tüm TEFAS fonlarının 5 yıllık fiyat geçmişi. docker compose run --rm deep_seeder
   deep_seeder:
     build:
       context: ./backend

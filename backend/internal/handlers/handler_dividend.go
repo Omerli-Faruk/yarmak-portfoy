@@ -101,7 +101,7 @@ func (cfg *ApiConfig) amountFromPerShare(w http.ResponseWriter, r *http.Request,
 	return true
 }
 
-// HandlerCreateDividend — Kullanıcının portföyüne temettü geliri kaydeder.
+// HandlerCreateDividend, kullanıcının portföyüne temettü geliri kaydeder.
 // Hisse başına tutar (amount_per_share) verilirse ödeme tarihindeki lot sayısıyla çarpılır.
 // Brüt, stopaj ve net tutarı hesaplar; tax_rate gelmezse %15 kullanılır.
 // @Summary Temettü Geliri Kaydet
@@ -169,7 +169,7 @@ func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Reque
 	respondWithJSON(w, http.StatusCreated, userDividend)
 }
 
-// HandlerGetUserDividends — Kullanıcının tüm temettü gelir kayıtlarını tarih sırasıyla döner.
+// HandlerGetUserDividends, kullanıcının tüm temettü gelir kayıtlarını tarih sırasıyla döner.
 // @Summary Kullanıcının Temettü Geçmişi
 // @Description Kullanıcının aldığı tüm temettü ödemelerini listeler
 // @Tags Dividends
@@ -195,7 +195,7 @@ func (cfg *ApiConfig) HandlerGetUserDividends(w http.ResponseWriter, r *http.Req
 	respondWithJSON(w, http.StatusOK, dividends)
 }
 
-// HandlerUpdateDividend — Mevcut bir temettü kaydını günceller.
+// HandlerUpdateDividend, mevcut bir temettü kaydını günceller.
 // tax_rate gönderilmezse kaydın mevcut stopaj oranı korunur.
 // @Summary Temettü Kaydını Güncelle
 // @Description Kullanıcının kaydettiği bir temettü gelirini günceller
@@ -289,7 +289,7 @@ func (cfg *ApiConfig) HandlerUpdateDividend(w http.ResponseWriter, r *http.Reque
 	respondWithJSON(w, http.StatusOK, updated)
 }
 
-// HandlerDeleteDividend — Bir temettü kaydını soft-delete ile siler.
+// HandlerDeleteDividend, bir temettü kaydını soft-delete ile siler.
 // Silmeden önce kaydın gerçekten bu kullanıcıya ait olup olmadığını kontrol eder (IDOR koruması).
 // @Summary Temettü Kaydını Sil
 // @Description Kullanıcının kaydettiği bir temettü gelirini siler

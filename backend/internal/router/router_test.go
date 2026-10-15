@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"yarmak/internal/handlers"
 )
 
 // limiterKey, isteği clientIPMiddleware'den geçirip rate limiter'ın göreceği anahtarı döner.
@@ -68,5 +69,16 @@ func TestSwaggerEnabled(t *testing.T) {
 		if got := swaggerEnabled(raw); got != want {
 			t.Errorf("swaggerEnabled(%q) = %v, beklenen %v", raw, got, want)
 		}
+	}
+}
+
+// Geçmiş veri indirmeyi tetikleyen uç giriş ister; çerezsiz istek handler'a ulaşmamalı.
+func TestBackfillRequiresAuth(t *testing.T) {
+	r := SetupRouter(&handlers.ApiConfig{JWTSecret: "test-secret"})
+	req := httptest.NewRequest(http.MethodPost, "/v1/assets/1/backfill", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("beklenen 401, gelen %d", rec.Code)
 	}
 }

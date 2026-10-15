@@ -547,12 +547,12 @@ paths:
       - Splits
   /assets/lookup:
     get:
-      description: Sembol ve türe göre varlık arar, sistemde yoksa piyasadan anında
-        çeker
+      description: Sembol ve türe göre varlık arar; sistemde yoksa ve kullanıcı giriş
+        yapmışsa piyasadan çekip ekler
       produces:
       - application/json
       responses: {}
-      summary: Akıllı Varlık Arama & Keşif
+      summary: Sembolle varlık arama
       tags:
       - Assets
   /dividends:

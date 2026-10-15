@@ -120,7 +120,7 @@ func FetchTEFASPrice(symbol string) (float64, error) {
 	bitTarih := now.Format("20060102")
 	basTarih := now.AddDate(0, 0, -7).Format("20060102")
 
-	// 1. Resmi TEFAS JSON API sorgusu (Akıllı Fon Tipi Tespiti ile)
+	// 1. TEFAS JSON API; önce sembolden tahmin edilen fon tipiyle denenir
 	detectedType := detectFundType(symbol)
 	typesToTry := []string{detectedType}
 	if detectedType != "YAT" {

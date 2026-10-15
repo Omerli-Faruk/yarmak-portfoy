@@ -1,10 +1,5 @@
-/**
- * Yarmak - Sunucu Taraflı Varlık Özet & Getiri Hesaplama Motoru
- * (Server-Side Asset Summary & Returns Calculation Engine)
- * 
- * Bu modül; /api/assets/batch-summary ve /api/assets/detail endpoint'lerinin
- * ortak kullandığı yüksek performanslı, bellek önbellekli getiri hesaplayıcısıdır.
- */
+// /api/assets/batch-summary ve /api/assets/detail rotalarının ortak kullandığı getiri özeti hesabı.
+// Sonuçlar birkaç dakika bellekte tutulur.
 
 const BACKEND_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080/v1';
 
@@ -101,7 +96,7 @@ export async function getAccurateYahooSummary(ticker: string): Promise<AccurateS
     }
 
     try {
-        const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=5y`, {
+        const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=5y`, {
             headers: { 'User-Agent': 'Mozilla/5.0' },
             signal: AbortSignal.timeout(5000),
         });
@@ -365,28 +360,31 @@ export async function fetchSingleAssetSummary(rawSymbol: string): Promise<Record
     return null;
 }
 
+// Sembol dış kaynak URL'lerine eklendiği için yalnızca bu biçime izin verilir (THYAO, USDTRY, GC=F, AAPL.IS).
+const SYMBOL_PATTERN = /^[A-Z0-9][A-Z0-9.=]{0,19}$/;
+const BATCH_CONCURRENCY = 8;
+
 /**
- * Birden fazla sembolün özetini tek seferde paralel olarak çeker (Batch Engine).
+ * Birden fazla sembolün özetini çeker. Aynı anda en fazla BATCH_CONCURRENCY sembol işlenir.
  */
 export async function fetchBatchAssetSummaries(symbols: string[]): Promise<Record<string, Record<string, number>>> {
-    const uniqueSymbols = Array.from(new Set(symbols.map(s => s.toUpperCase().trim()))).filter(Boolean);
+    const uniqueSymbols = Array.from(new Set(symbols.map(s => s.toUpperCase().trim())))
+        .filter(s => SYMBOL_PATTERN.test(s));
     const results: Record<string, Record<string, number>> = {};
 
-    if (uniqueSymbols.length === 0) return results;
-
-    // Eşzamanlı çekim (en fazla 15 sembol aynı anda)
-    const settled = await Promise.allSettled(
-        uniqueSymbols.map(async sym => {
-            const summary = await fetchSingleAssetSummary(sym);
-            return { symbol: sym, summary };
-        })
-    );
-
-    for (const item of settled) {
-        if (item.status === 'fulfilled' && item.value.summary) {
-            results[item.value.symbol] = item.value.summary;
+    let next = 0;
+    const worker = async () => {
+        while (next < uniqueSymbols.length) {
+            const sym = uniqueSymbols[next++];
+            try {
+                const summary = await fetchSingleAssetSummary(sym);
+                if (summary) results[sym] = summary;
+            } catch {
+                // tek sembolün hatası diğerlerini durdurmasın
+            }
         }
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(BATCH_CONCURRENCY, uniqueSymbols.length) }, worker));
 
     return results;
 }

@@ -1,6 +1,4 @@
-# ==========================================
-# Stage 1: Build Stage (Derleme Ortamı)
-# ==========================================
+# Derleme
 FROM golang:alpine AS builder
 
 WORKDIR /app
@@ -27,9 +25,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/bin/seed ./cmd/se
 # Deep Seeder aracını derle
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/bin/deep_seeder cmd/tefas_deep_seeder/main.go
 
-# ==========================================
-# Stage 2: Runtime Stage (Minimal Çalışma Ortamı)
-# ==========================================
+# Çalışma ortamı
 FROM alpine:3.20
 
 WORKDIR /app

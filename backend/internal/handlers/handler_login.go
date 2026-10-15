@@ -9,7 +9,7 @@ import (
 	"yarmak/internal/database"
 )
 
-// HandlerLogin — E-posta ya da kullanıcı adı ve şifreyle giriş yapar. Başarılı girişte access_token ve refresh_token
+// HandlerLogin, e-posta ya da kullanıcı adı ve şifreyle giriş yapar. Başarılı girişte access_token ve refresh_token
 // yalnızca HttpOnly çerez olarak gönderilir; yanıt gövdesinde sadece kullanıcı bilgisi döner.
 // @Summary Kullanıcı Girişi
 // @Description E-posta veya kullanıcı adı ve şifreyle giriş yapar, tokenları çerez olarak döner

@@ -11,7 +11,7 @@ import (
 	"yarmak/internal/wac"
 )
 
-// CalculateAssetHoldingAndCost — Varlığın tüm işlem listesini alarak WAC metoduna göre ortalama maliyetini ve eldeki mevcut lot sayısını hesaplar.
+// CalculateAssetHoldingAndCost, varlığın tüm işlem listesini alarak WAC metoduna göre ortalama maliyetini ve eldeki mevcut lot sayısını hesaplar.
 // Hesap wac paketinde; bu fonksiyon mevcut çağıranlar için duruyor.
 func CalculateAssetHoldingAndCost(transactions []database.Transaction) (currentLot float64, avgCost float64) {
 	return wac.HoldingAndCost(transactions)

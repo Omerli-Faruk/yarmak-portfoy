@@ -12,6 +12,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"yarmak/internal/auth"
 	"yarmak/internal/database"
 	"yarmak/internal/handlers"
 	"yarmak/internal/router"
@@ -20,11 +21,12 @@ import (
 
 	_ "yarmak/docs"
 
+	"github.com/go-chi/httprate"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
-// main — Uygulamanın giriş noktası. DB bağlantısı, router kurulumu,
+// main, uygulamanın giriş noktası. DB bağlantısı, router kurulumu,
 // scraper worker'ları ve HTTP sunucusunu başlatır. Graceful shutdown destekler.
 // @title Yarmak Borsa & Portföy Takip API
 // @version 1.0
@@ -42,12 +44,25 @@ func main() {
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		slog.Error("JWT_SECRET bulunamadı")
-		os.Exit(1)
+		// Anahtar verilmediyse her açılışta rastgele üretilir. Oturumlar refresh token ile
+		// yenilendiği için yeniden başlatmada kullanıcılar çıkış yapmış olmaz.
+		generated, err := auth.GenerateSecret()
+		if err != nil {
+			slog.Error("JWT_SECRET üretilemedi", "error", err)
+			os.Exit(1)
+		}
+		jwtSecret = generated
+		slog.Warn("JWT_SECRET verilmedi, geçici bir anahtar üretildi; sunucuda `openssl rand -hex 32` ile kalıcı bir anahtar verin")
 	}
 
 	if len(jwtSecret) < 32 {
 		slog.Error("JWT_SECRET en az 32 karakter olmalıdır")
+		os.Exit(1)
+	}
+
+	// Repoda geçmiş örnek anahtarlar herkese açık; onlarla imzalanan token'ı herkes üretebilir.
+	if auth.IsPublicExampleSecret(jwtSecret) {
+		slog.Error("JWT_SECRET repodaki örnek değerlerden biri; `openssl rand -hex 32` ile yeni bir anahtar üretin")
 		os.Exit(1)
 	}
 
@@ -90,6 +105,8 @@ func main() {
 		JWTSecret:    jwtSecret,
 		CookieSecure: cookieSecure,
 		Services:     servicesPkg,
+		// Yeni sembol araması dış kaynaklara istek attığı için kullanıcı başına dakikada 20 ile sınırlı.
+		DiscoveryLimiter: httprate.NewRateLimiter(20, time.Minute),
 	}
 
 	r := router.SetupRouter(apiCFG)

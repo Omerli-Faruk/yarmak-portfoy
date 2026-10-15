@@ -1,6 +1,0 @@
-# Yarmak
-# https://yarmak.app
-
-Yarmak is a portfolio tracker for Borsa Istanbul (BIST) stocks, TEFAS funds, gold and FX.
-Key features: BIST prices delayed by at least 15 minutes, daily TEFAS fund prices, weighted average cost, dividend records, USD view at the current USD/TRY rate, and in-app price alerts.
-It does not give investment advice and does not connect to bank or brokerage accounts; all transactions are entered by the user.
