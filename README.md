@@ -26,8 +26,8 @@ Alım-satımlarınızı elle girersiniz; uygulama ortalama maliyeti, gerçekleş
 Gereken tek şey [Docker](https://docs.docker.com/get-docker/) (Docker Desktop ya da Docker Engine + Compose v2).
 
 ```bash
-git clone https://github.com/Omerli-Faruk/borsa-portfoy-backend.git yarmak
-cd yarmak
+git clone https://github.com/Omerli-Faruk/yarmak-portfoy.git
+cd yarmak-portfoy
 docker compose up -d --build
 ```
 
