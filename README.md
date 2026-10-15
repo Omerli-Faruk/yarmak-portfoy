@@ -83,33 +83,55 @@ cp .env.example .env
 
 Bu ayarlarla kurulum yerel kullanım içindir. İnternete açık bir sunucuda çalıştıracaksanız en azından `JWT_SECRET`, `POSTGRES_PASSWORD`, `COOKIE_SECURE=true` ve `ENABLE_SWAGGER=false` ayarlayın ve önüne HTTPS sağlayan bir ters proxy koyun.
 
-## Docker olmadan geliştirme
+## Geliştirme
 
-Gereksinimler: Go 1.25+, Node.js 22, PostgreSQL 16 ve [goose](https://github.com/pressly/goose). Veritabanını Docker'da çalıştırmak en kolayı:
+Kod üzerinde çalışırken backend ve frontend doğrudan bilgisayarınızda çalışır; böylece değişiklikler her seferinde imaj derlemeden görünür. Gereksinimler: Go 1.25+, Node.js 22 ve [goose](https://github.com/pressly/goose).
+
+Docker ile tüm uygulama açıksa önce API ve arayüzü durdurun, yoksa 8080 ve 3000 portları çakışır:
+
+```bash
+docker compose stop api frontend
+```
+
+### 1. Veritabanı
+
+PostgreSQL için Docker'daki veritabanını kullanmak en kolayı:
 
 ```bash
 docker compose up -d db
 ```
 
-Backend:
+Kendi PostgreSQL 16 kurulumunuzu kullanacaksanız `yarmak` adında bir veritabanı oluşturun ve aşağıdaki `backend/.env` dosyasında `DB_URL` değerini ona göre değiştirin.
+
+### 2. Backend
 
 ```bash
 cd backend
 cp .env.example .env
 goose -dir sql/schema postgres "postgres://postgres:postgres@localhost:5432/yarmak?sslmode=disable" up
-go run ./cmd/seed     # varlık listesi (isteğe bağlı)
-go run .              # http://localhost:8080
+go run ./cmd/seed          # varlık listesi (isteğe bağlı)
+go run ./cmd/seed -demo    # demo / demo12345 hesabı (isteğe bağlı)
+go run .                   # http://localhost:8080
 ```
 
-Frontend:
+### 3. Frontend
 
 ```bash
 cd frontend
 npm ci
-npm run dev           # http://localhost:3000
+npm run dev                # http://localhost:3000
 ```
 
-SQL sorgularını değiştirdikten sonra `backend` klasöründe `sqlc generate`, handler açıklamalarını değiştirdikten sonra `swag init` çalıştırın.
+Arayüz varsayılan olarak `http://localhost:8080/v1` adresindeki API'ye bağlanır. Farklı bir adres için `frontend/.env.local` dosyasına `NEXT_PUBLIC_API_URL` yazın.
+
+### Üretilen kod
+
+`backend/internal/database` ve `backend/docs` elle düzenlenmez; `backend` klasöründe yeniden üretilir:
+
+```bash
+sqlc generate                                                                        # SQL sorguları değişince (sqlc v1.31.1)
+go run github.com/swaggo/swag/cmd/swag@v1.16.6 init --parseDependency --parseInternal  # handler açıklamaları değişince
+```
 
 ## Nasıl çalışıyor?
 
@@ -118,11 +140,11 @@ SQL sorgularını değiştirdikten sonra `backend` klasöründe `sqlc generate`,
 API tek bir Go süreci olarak çalışır ve fiyatları arka planda günceller:
 
 - BIST, altın ve döviz: iş günlerinde 10:00-18:15 arasında 5 dakikada bir
-- TEFAS fonları: sabah 09:00'da ve akşam 18:00-21:00 arasında
+- TEFAS fonları: sabah 09:00'da, akşam 18:15'te ve 18:00-21:00 arasında yarım saatte bir
 - Eksik fon geçmişi: kuyruktaki fonlar sırayla indirilir
 - Portföy değeri: her gün 18:00'den sonra bir kez kaydedilir
 
-Next.js tarafındaki `/api/*` rotaları piyasa ekranı ve varlık detayı için Yahoo Finance verisini sunucu tarafında çeker ve kısa süreli önbellekte tutar.
+Next.js tarafındaki `/api/*` rotaları piyasa ekranı ve varlık detayı için Yahoo Finance ve Truncgil verisini sunucu tarafında çeker ve kısa süreli önbellekte tutar. Gram altın Truncgil'den alınamazsa ons fiyatı ve USD/TRY kurundan hesaplanır.
 
 Ortalama maliyet hesabı `backend/internal/wac` paketinde tek yerde durur; hem API hem de günlük portföy kaydı bunu kullanır.
 
@@ -141,11 +163,18 @@ Tüm uç noktalar `/v1` altındadır; ayrıntılar Swagger arayüzündedir. Kiml
 | İşlemler | `GET/POST /transactions`, `PUT/DELETE /transactions/{id}` |
 | Portföy | `GET /portfolio/holdings`, `GET /portfolio/summary`, `GET /portfolio/history`, `GET /portfolio/value-history`, `DELETE /portfolio/holdings/{symbol}` |
 | Temettü | `GET/POST /dividends`, `PUT/DELETE /dividends/{id}` |
+| Bölünmeler | `GET /assets/{id}/splits` |
 | Alarmlar | `GET/POST /alerts`, `DELETE /alerts/{id}` |
-| Yönetici | `POST /assets`, `POST /splits`, `GET /assets/{id}/splits` |
+| Yönetici | `POST /assets`, `POST /splits` |
 | Sağlık | `GET /healthz` |
 
 Sistemde olmayan bir sembol `GET /assets/lookup` ile yalnızca giriş yapmış kullanıcılar için dış kaynaklardan aranıp eklenir.
+
+Yeni hesaplar `USER` rolüyle açılır. Yönetici uç noktalarını kullanmak için hesabın rolünü veritabanında değiştirin:
+
+```bash
+docker compose exec db psql -U postgres -d yarmak -c "UPDATE users SET role = 'ADMIN' WHERE email = 'siz@ornek.com';"
+```
 
 ## Proje yapısı
 
