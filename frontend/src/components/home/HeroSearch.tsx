@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, X } from 'lucide-react';
+import { ArrowRight, Search, X } from 'lucide-react';
 import { popularTags, type CatalogAsset } from '@/data/homeData';
 import { formatPriceTR, ASSET_TYPE_LABELS } from '@/lib/formatters';
 import { scoreAssetMatch } from '@/lib/searchUtils';
@@ -118,49 +118,47 @@ export default function HeroSearch({ assets }: { assets: CatalogAsset[] }) {
                         router.push(`/assets/${searchQuery.trim().toUpperCase()}`);
                     }
                 }}
-                className={cn(
-                    'flex h-12 items-center gap-2.5 rounded border bg-surface pl-3.5 pr-2',
-                    'transition-colors duration-[120ms]',
-                    isSearchFocused ? 'border-primary' : 'border-border-strong hover:border-fg-subtle',
-                )}
+                className="flex items-stretch gap-2"
             >
-                <Search
-                    aria-hidden
-                    className={cn('size-4 shrink-0', isSearchFocused ? 'text-primary' : 'text-fg-subtle')}
-                />
-                <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => {
-                        setSearchQuery(e.target.value);
-                        if (!isSearchFocused) setIsSearchFocused(true);
-                    }}
-                    onFocus={() => setIsSearchFocused(true)}
-                    placeholder="Hisse veya fon ara (örn: THYAO, ASELS, TI2)..."
-                    aria-label="Hisse veya fon ara"
-                    className="h-full min-w-0 flex-1 bg-transparent text-base text-fg outline-none placeholder:text-fg-subtle"
-                    autoComplete="off"
-                    spellCheck={false}
-                />
-                {searchQuery && (
-                    <IconButton
-                        icon={<X />}
-                        label="Temizle"
-                        size="sm"
-                        onClick={() => setSearchQuery('')}
+                {/* Arama kutusu; Keşfet düğmesi kutunun dışında, yanında durur */}
+                <div
+                    className={cn(
+                        'flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded border bg-surface pl-3.5 pr-1',
+                        'transition-colors duration-[120ms]',
+                        isSearchFocused ? 'border-primary' : 'border-border-strong hover:border-fg-subtle',
+                    )}
+                >
+                    <Search
+                        aria-hidden
+                        className={cn('size-4 shrink-0', isSearchFocused ? 'text-primary' : 'text-fg-subtle')}
                     />
-                )}
-                {/* Button kendi display sınıfını taşıdığı için mobilde gizleme sarmalayıcıyla yapılır */}
-                <span className="hidden shrink-0 sm:flex">
-                    <Button
-                        type="submit"
-                        size="sm"
-                        variant="secondary"
-                        rightIcon={<kbd aria-hidden className="font-mono text-xs text-fg-subtle">↵</kbd>}
-                    >
-                        Keşfet
-                    </Button>
-                </span>
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            if (!isSearchFocused) setIsSearchFocused(true);
+                        }}
+                        onFocus={() => setIsSearchFocused(true)}
+                        placeholder="Hisse veya fon ara (örn: THYAO, ASELS, TI2)..."
+                        aria-label="Hisse veya fon ara"
+                        className="h-full min-w-0 flex-1 bg-transparent text-base text-fg outline-none placeholder:text-fg-subtle"
+                        autoComplete="off"
+                        spellCheck={false}
+                    />
+                    {searchQuery && (
+                        <IconButton
+                            icon={<X />}
+                            label="Temizle"
+                            size="sm"
+                            onClick={() => setSearchQuery('')}
+                        />
+                    )}
+                </div>
+                <Button type="submit" size="md" className="h-12 px-4 sm:px-5" aria-label="Keşfet">
+                    <span className="hidden sm:inline">Keşfet</span>
+                    <ArrowRight aria-hidden />
+                </Button>
             </form>
 
             {/* Öneri listesi */}

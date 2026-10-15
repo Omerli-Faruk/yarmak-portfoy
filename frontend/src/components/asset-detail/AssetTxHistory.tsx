@@ -9,6 +9,7 @@ import ChangePill from '@/components/ui/ChangePill';
 import EmptyState from '@/components/ui/EmptyState';
 import IconButton from '@/components/ui/IconButton';
 import type { NormalizedTransaction } from '@/types';
+import { tableHeadRowClasses } from '@/components/ui/tableStyles';
 
 // Geniş alan tablosunun sütunları; başlık ve satırlar aynı sınıfları kullanır
 const TX_COL = {
@@ -63,7 +64,7 @@ export default function AssetTxHistory({ isLoggedIn, transactions, onDelete, cla
                     {/* Sütun başlıkları (dar alanda gizli); sağdaki boşluk silme düğmesinin yeri.
                         Sayı sütunları sabit genişlikte ve küçülmez, böylece başlık ve satırlar aynı hizada kalır;
                         toplamları (aralarla) @3xl (768px) içine sığar, artan yer tür sütununa kalır. */}
-                    <div className="hidden @3xl:flex items-center gap-3 h-9 border-b border-border text-xs text-fg-muted">
+                    <div className={tableHeadRowClasses('hidden @3xl:flex gap-3')}>
                         <span className={TX_COL.date}>Tarih</span>
                         <span className={TX_COL.type}>Tür</span>
                         <span className={TX_COL.amount}>Adet</span>
@@ -91,7 +92,7 @@ export default function AssetTxHistory({ isLoggedIn, transactions, onDelete, cla
                             return (
                                 <li
                                     key={tx.id}
-                                    className="-mx-2 px-2 rounded transition-colors duration-[120ms] hover:bg-surface-2"
+                                    className="px-3 rounded transition-colors duration-[120ms] hover:bg-surface-2"
                                 >
                                     {/* Dar alan: üstte tür, adet × fiyat ve toplam; altta tarih ve kâr/zarar */}
                                     <div className="flex @3xl:hidden items-center gap-3 py-3">

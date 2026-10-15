@@ -8,6 +8,7 @@ import ChangePill from '@/components/ui/ChangePill';
 import Sparkline, { seriesFromPeriodReturns } from '@/components/ui/Sparkline';
 import { getHoldingRowMetrics } from '@/components/holdings/holdingRowMetrics';
 import { formatPercent } from '@/lib/formatters';
+import { tableHeadRowClasses } from '@/components/ui/tableStyles';
 
 interface HoldingsGlanceProps {
     holdings: UserHolding[];
@@ -63,7 +64,7 @@ export default function HoldingsGlance({ holdings, assetSummaries, fmt, equityVa
             }
         >
             {/* Başlık satırı: sütun genişlikleri satırlarla aynı; mobilde satırlar iki katlı olduğu için gizli */}
-            <div aria-hidden className="hidden sm:flex items-center gap-4 h-9 border-b border-border text-xs text-fg-muted">
+            <div aria-hidden className={tableHeadRowClasses('hidden sm:flex gap-4')}>
                 <span className="grow min-w-0">Varlık</span>
                 <span className="hidden md:block w-16 shrink-0 text-right">1Y</span>
                 <span className="hidden xl:block w-28 shrink-0 text-right">Fiyat</span>
@@ -78,7 +79,7 @@ export default function HoldingsGlance({ holdings, assetSummaries, fmt, equityVa
                     <li key={h.asset_id ?? h.symbol}>
                         <Link
                             href={`/assets/${h.symbol}`}
-                            className="flex items-center gap-4 h-16 sm:h-12 -mx-2 px-2 rounded text-sm hover:bg-surface-2 transition-colors duration-[120ms] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+                            className="flex items-center gap-4 h-16 sm:h-12 px-3 rounded text-sm hover:bg-surface-2 transition-colors duration-[120ms] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
                         >
                             <span className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2 grow min-w-0">
                                 <span className="font-mono font-medium text-fg">{h.symbol}</span>

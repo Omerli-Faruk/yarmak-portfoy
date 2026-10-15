@@ -212,12 +212,14 @@ body {
   background: var(--primary-soft);
 }
 
-/* Sayfanın üstündeki çok hafif mavi ışık; iki temada da arka plan rengine göre ayarlanır */
+/* Sayfanın üstündeki çok hafif mavi ışık; iki temada da arka plan rengine göre ayarlanır.
+   Boyutlar piksel: yüzde verilince ışık sayfa yüksekliğiyle büyüyüp küçülüyor, uzun ve kısa sayfalarda
+   zemin farklı koyulukta görünüyordu. Artık her sayfada aynı. */
 .bg-ambient-spotlight {
   background-color: var(--bg);
   background-image:
-          radial-gradient(ellipse 70% 40% at 50% -8%, var(--spotlight) 0%, transparent 70%),
-          radial-gradient(circle at 50% 0%, var(--spotlight-soft) 0%, transparent 80%);
+          radial-gradient(ellipse 1100px 460px at 50% -120px, var(--spotlight) 0%, transparent 70%),
+          radial-gradient(ellipse 1600px 900px at 50% 0, var(--spotlight-soft) 0%, transparent 80%);
   background-repeat: no-repeat;
 }
 
@@ -233,6 +235,12 @@ body {
 /* Mobilde dokunma gecikmesini önleme */
 button, a, input, select {
   touch-action: manipulation;
+}
+
+/* Grafik kaydırıcısı: dış çerçeve ince gri; seçili aralık ve tutamaçlar mavi (InteractiveAreaChart) */
+.chart-brush > rect:first-child {
+  stroke: var(--border-strong);
+  rx: 4px;
 }
 
 /* Recharts Brush tutamaç metinleri taştığı için gizlenir */

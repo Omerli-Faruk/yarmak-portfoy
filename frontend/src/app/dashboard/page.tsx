@@ -92,6 +92,7 @@ export default function DashboardPage() {
         totalDividends,
         totalCost,
         realizedPnL,
+        capitalPnl,
         totalCombinedProfit,
         totalReturnPct,
         totalCommission: summary?.total_commission || 0,
@@ -251,9 +252,11 @@ export default function DashboardPage() {
             </div>
 
             <DashboardDetails
+                holdings={holdings}
                 dividends={dividends}
                 totals={totals}
                 fmt={fmt}
+                currency={displayCurrency}
                 usdRate={usdRate}
             />
 

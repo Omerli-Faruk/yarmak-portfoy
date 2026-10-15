@@ -15,6 +15,15 @@ export interface AssetDetailInfo {
     positive?: boolean;
 }
 
+// Temettü özeti (/api/assets/detail): tutarlar hisse başı brüt, tarihler hak kullanım tarihi, hepsi biçimli metin
+export interface AssetDividendInfo {
+    last: { exDate: string; amount: string } | null;
+    next: { exDate: string; payDate: string | null } | null;
+    trailing12m: { amount: string; count: number } | null;
+    trailingYield: string | null;
+    history: { exDate: string; amount: string }[];
+}
+
 export interface AssetFundamentals {
     marketCap?: string;
     peRatio?: string;
@@ -27,6 +36,7 @@ export interface AssetFundamentals {
     fiftyTwoWeekHigh?: string;
     fiftyTwoWeekLow?: string;
     volume?: string;
+    dividends?: AssetDividendInfo | null;
     isStale?: boolean;
     staleMessage?: string;
     lastUpdateDate?: string;

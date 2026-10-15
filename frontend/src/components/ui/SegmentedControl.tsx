@@ -21,6 +21,7 @@ export interface SegmentedControlProps<T extends string> {
 }
 
 // Dönem, sekme ve görünüm seçicisi. Sığmazsa yatay kayar.
+// segment: çerçevesiz düğme dizisi, seçili seçenek yumuşak mavi zeminli "çip".
 // Her seçenek dokunma hedefi: mobilde en az 44px, masaüstünde en az 40px yüksek.
 export default function SegmentedControl<T extends string>({
     options,
@@ -43,7 +44,7 @@ export default function SegmentedControl<T extends string>({
                 'flex max-w-full overflow-x-auto no-scrollbar',
                 isUnderline
                     ? 'gap-6 border-b border-border'
-                    : 'gap-px p-0.5 rounded bg-surface-2 border border-border',
+                    : 'gap-1',
                 fullWidth ? 'w-full' : 'w-fit',
                 className,
             )}
@@ -72,13 +73,14 @@ export default function SegmentedControl<T extends string>({
                                     isActive ? 'border-primary text-fg' : 'border-transparent text-fg-muted hover:text-fg',
                                 )
                                 : cn(
-                                    'rounded-[3px]',
+                                    'rounded',
                                     size === 'sm'
-                                        ? 'h-11 sm:h-10 min-w-11 sm:min-w-10 px-2 text-13'
+                                        ? 'h-11 sm:h-10 min-w-11 sm:min-w-10 px-2.5 text-13'
                                         : 'h-11 sm:h-10 min-w-11 sm:min-w-10 px-3.5 text-sm',
+                                    // Seçili: yumuşak mavi zemin + mavi yazı (çerçeve/halka yok); diğerleri yalnızca üzerine gelince zemin alır
                                     isActive
-                                        ? 'bg-surface-3 text-fg ring-1 ring-inset ring-border-strong'
-                                        : 'text-fg-muted hover:text-fg',
+                                        ? 'bg-primary-soft text-primary'
+                                        : 'text-fg-muted hover:bg-surface-2 hover:text-fg',
                                 ),
                         )}
                     >

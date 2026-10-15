@@ -124,7 +124,7 @@ export default function AddTransactionModal({
     const priceNum = parseFloat(txPrice) || 0;
     const commissionNum = parseFloat(txCommission) || 0;
 
-    // Alış / Satış seçici: düz segment; seçili olanın yazısı kâr ya da zarar renginde
+    // Alış / Satış seçici: seçili olan kâr ya da zarar renginde yumuşak zeminli
     const typeButton = (value: 'BUY' | 'SELL', label: string) => {
         const isActive = txType === value;
         return (
@@ -133,11 +133,11 @@ export default function AddTransactionModal({
                 aria-pressed={isActive}
                 onClick={() => setTxType(value)}
                 className={cn(
-                    'flex-1 h-10 sm:h-9 rounded-[3px] text-sm font-medium cursor-pointer transition-colors duration-[120ms]',
+                    'flex-1 h-11 sm:h-10 rounded text-sm font-medium cursor-pointer transition-colors duration-[120ms]',
                     'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary',
                     isActive
-                        ? cn('bg-surface-3 ring-1 ring-inset ring-border-strong', value === 'BUY' ? 'text-profit' : 'text-loss')
-                        : 'text-fg-muted hover:text-fg',
+                        ? cn('font-semibold', value === 'BUY' ? 'bg-profit-soft text-profit' : 'bg-loss-soft text-loss')
+                        : 'bg-surface-2 text-fg-muted hover:bg-surface-3 hover:text-fg',
                 )}
             >
                 {label}
@@ -202,7 +202,7 @@ export default function AddTransactionModal({
                     )}
                 </Field>
 
-                <div role="group" aria-label="İşlem türü" className="flex gap-0.5 p-0.5 rounded border border-border bg-surface-2">
+                <div role="group" aria-label="İşlem türü" className="flex gap-2">
                     {typeButton('BUY', 'Alış')}
                     {typeButton('SELL', 'Satış')}
                 </div>

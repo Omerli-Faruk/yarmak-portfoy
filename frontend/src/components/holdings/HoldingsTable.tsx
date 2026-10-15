@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { AssetGroup, AssetSummaryMap, Period, UserHolding } from '@/types';
 import { cn } from '@/lib/cn';
+import { TABLE_TH } from '@/components/ui/tableStyles';
 import { getPeriodHeaderLabel } from '@/lib/periodUtils';
 import { ASSET_TYPE_LABELS } from '@/lib/formatters';
 import ChangePill from '@/components/ui/ChangePill';
@@ -48,7 +49,7 @@ const ACTION_TEXT = cn(ACTION_BASE, 'h-11 sm:h-10 px-3');
 // Masaüstü tablo hücreleri: başlık 36px ve yapışkan, satırlar 48px, sayılar sağa yaslı mono, sütun arası 24px.
 // Tablo sabit düzende (table-fixed): sayı sütunları sabit genişlikte, kalan yer varlık sütununa kalır.
 // Türe göre görünümde her tür ayrı tablo olduğu için sütunlar ancak böyle alt alta hizalı kalır.
-const TH = 'sticky top-0 z-10 h-9 px-3 bg-bg border-b border-border text-xs font-normal text-fg-muted whitespace-nowrap';
+const TH = TABLE_TH;
 const TD = 'h-12 px-3 border-b border-border whitespace-nowrap';
 const NUM_TH = cn(TH, 'text-right');
 const NUM_TD = cn(TD, 'text-right font-mono text-sm text-fg');

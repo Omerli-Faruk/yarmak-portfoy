@@ -10,6 +10,7 @@ import Hero, { HeroMeta } from '@/components/ui/Hero';
 import ChangePill from '@/components/ui/ChangePill';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import { buttonClasses } from '@/components/ui/Button';
+import { tableHeadRowClasses } from '@/components/ui/tableStyles';
 
 const PERIOD_OPTIONS = SHOWCASE_PERIODS.map((period) => ({ value: period, label: period }));
 
@@ -127,7 +128,7 @@ export default function PortfolioShowcase() {
                     <div className="flex flex-col">
                         <h3 className="pb-2 text-base font-semibold text-fg">Varlıklar</h3>
 
-                        <div className="flex h-9 items-center gap-3 border-y border-border text-xs text-fg-muted">
+                        <div className={tableHeadRowClasses('gap-3')}>
                             <span className="min-w-0 flex-1">Varlık</span>
                             <span className={COL_PRICE}>Fiyat</span>
                             <span className={COL_WEIGHT}>Ağırlık</span>
@@ -136,7 +137,7 @@ export default function PortfolioShowcase() {
 
                         <ul className="flex flex-col divide-y divide-border border-b border-border">
                             {activePreset.holdings.map((h) => (
-                                <li key={h.symbol} className="flex min-h-12 items-center gap-3 py-1.5">
+                                <li key={h.symbol} className="flex min-h-12 items-center gap-3 px-3 py-1.5">
                                     <div className="flex min-w-0 flex-1 flex-col">
                                         <span className="flex items-baseline gap-1.5">
                                             <span className="font-mono text-sm font-medium text-fg">{h.symbol}</span>

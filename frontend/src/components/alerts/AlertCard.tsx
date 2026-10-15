@@ -5,6 +5,7 @@ import { motion } from 'motion/react';
 import { Trash2 } from 'lucide-react';
 import { formatDate, formatPriceTR, formatSignedPercent } from '@/lib/formatters';
 import { cn } from '@/lib/cn';
+import { tableHeadRowClasses } from '@/components/ui/tableStyles';
 import type { NormalizedAlert } from '@/types';
 import Button from '@/components/ui/Button';
 import IconButton from '@/components/ui/IconButton';
@@ -90,10 +91,10 @@ function Price({ value, className }: { value: number; className?: string }) {
     );
 }
 
-// Masaüstü tablonun başlık satırı (lg ve üstü). Kutusuz tabloda zemin sayfa zemini.
+// Masaüstü tablonun başlık satırı (lg ve üstü): hafif zeminli bant (tableStyles)
 export function AlertTableHeader() {
     return (
-        <div className="sticky top-0 z-10 hidden lg:flex items-center gap-4 xl:gap-6 h-9 border-b border-border bg-bg text-xs text-fg-muted">
+        <div className={tableHeadRowClasses('sticky top-0 z-10 hidden lg:flex gap-4 xl:gap-6')}>
             <span className="flex-1 min-w-0">Varlık</span>
             <span className={COL.direction}>Koşul</span>
             <span className={COL.target}>Hedef fiyat</span>
@@ -106,7 +107,7 @@ export function AlertTableHeader() {
 }
 
 // Alarm satırı: lg ve üstünde 48px tablo satırı, altında iki satırlı yığın (solda sembol/ad, sağda hedef/durum).
-// Satır zemini hover'da kenara taşsın diye -mx-2 px-2; hiza bozulmaz.
+// Satır, başlık bandıyla aynı px-3 iç boşluğu kullanır; sütunlar hizalı kalır.
 export default function AlertCard({ alert, onDelete }: AlertCardProps) {
     const isAbove = alert.direction === 'ABOVE';
     const triggeredAt = alert.isTriggered && alert.triggeredAt ? formatDate(alert.triggeredAt) : null;
@@ -115,7 +116,7 @@ export default function AlertCard({ alert, onDelete }: AlertCardProps) {
     return (
         <motion.li initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col">
             {/* Masaüstü: tablo satırı */}
-            <div className="hidden lg:flex items-center gap-4 xl:gap-6 h-12 -mx-2 px-2 rounded text-sm hover:bg-surface-2 transition-colors duration-[120ms]">
+            <div className="hidden lg:flex items-center gap-4 xl:gap-6 h-12 px-3 rounded text-sm hover:bg-surface-2 transition-colors duration-[120ms]">
                 <div className="flex flex-1 min-w-0 items-baseline gap-2">
                     <SymbolLink symbol={alert.symbol} />
                     <span className="truncate text-xs text-fg-muted">{alert.assetName}</span>

@@ -13,6 +13,7 @@ import Section from '@/components/ui/Section';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import Select from '@/components/ui/Select';
 import Skeleton from '@/components/ui/Skeleton';
+import { tableHeadRowClasses } from '@/components/ui/tableStyles';
 import { cn } from '@/lib/cn';
 import { ASSET_TYPE_LABELS, formatPriceTR } from '@/lib/formatters';
 import type { MarketAssetItem } from '@/types';
@@ -141,7 +142,7 @@ export default function MarketScreener({
                 <div className="flex flex-col divide-y divide-border">
                     <span className="sr-only">Piyasa varlıkları yükleniyor...</span>
                     {Array.from({ length: 8 }, (_, i) => (
-                        <div key={i} className="flex h-12 items-center gap-4">
+                        <div key={i} className="flex h-12 items-center gap-4 px-3">
                             <Skeleton className="h-3.5 w-14" />
                             <Skeleton className="h-3 w-40 max-w-full" />
                             <span className="flex-1" />
@@ -166,7 +167,7 @@ export default function MarketScreener({
                     {/* Masaüstü sütun başlıkları; mobilde iki satırlı yığın satırlar kendi içinde anlaşılır */}
                     <div
                         aria-hidden
-                        className="sticky top-0 z-10 hidden h-9 items-center gap-6 border-b border-border bg-bg text-xs text-fg-muted md:flex"
+                        className={tableHeadRowClasses('sticky top-0 z-10 hidden gap-6 md:flex')}
                     >
                         <span className="min-w-0 flex-1">Varlık</span>
                         <span className={cn(COL_TYPE, 'hidden lg:block')}>Tür</span>
@@ -181,7 +182,7 @@ export default function MarketScreener({
                             return (
                                 <li
                                     key={`scr-${item.id}-${item.symbol}-${idx}`}
-                                    className="flex min-h-14 items-center gap-2 py-1.5 transition-colors duration-[120ms] hover:bg-surface-2 md:h-12 md:min-h-0 md:gap-6 md:py-0"
+                                    className="flex min-h-14 items-center gap-2 px-3 py-1.5 rounded transition-colors duration-[120ms] hover:bg-surface-2 md:h-12 md:min-h-0 md:gap-6 md:py-0"
                                 >
                                     {/* Mobilde: üstte sembol + tür, altta ad. Masaüstünde tek satır. */}
                                     <Link

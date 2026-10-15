@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
 import IconButton from '@/components/ui/IconButton';
 import { cn } from '@/lib/cn';
+import { TABLE_TH } from '@/components/ui/tableStyles';
 import ListPagination from './ListPagination';
 
 // Tabloda bir sayfada gösterilen işlem sayısı
@@ -37,7 +38,7 @@ function formatAmount(amount: number): string {
 }
 
 // Kutusuz tablo: başlık zemini sayfa zemini, satırlar 48px ve ince çizgiyle ayrılır
-const TH = 'sticky top-0 z-10 h-9 px-3 bg-bg text-xs font-normal text-fg-muted text-left whitespace-nowrap border-b border-border';
+const TH = cn(TABLE_TH, 'text-left');
 const TD = 'h-12 px-3 whitespace-nowrap border-b border-border';
 
 export default function TxTable({
@@ -134,7 +135,7 @@ export default function TxTable({
 
             {/* Geniş ekran: sütunlu veri olduğu için table. Başlık, kayarken üstte sabit kalır.
                 Satır hover zemini kenara taşsın diye kap 8px dışarı açılır, ilk/son hücre aynı kadar içeri alınır. */}
-            <div className="hidden lg:block -mx-2 max-h-[70vh] overflow-auto custom-scrollbar">
+            <div className="hidden lg:block max-h-[70vh] overflow-auto custom-scrollbar">
                 <table className="w-full border-separate border-spacing-0 text-sm">
                     <thead>
                         <tr>

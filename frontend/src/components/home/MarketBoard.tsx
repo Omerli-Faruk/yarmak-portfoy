@@ -8,6 +8,7 @@ import Section from '@/components/ui/Section';
 import ChangePill from '@/components/ui/ChangePill';
 import Skeleton from '@/components/ui/Skeleton';
 import { buildMarketItems } from './marketItems';
+import { tableHeadRowClasses } from '@/components/ui/tableStyles';
 
 // Tablo sütun genişlikleri; başlık ve satırlar aynı değerleri kullanır
 // Fiyat en çok "12.345,67 ₺"; değişim sütunu "▼ −%10,00" sığacak genişlikte
@@ -27,7 +28,7 @@ export default function MarketBoard({ assets, className }: { assets: CatalogAsse
             className={className}
             contentClassName="gap-0"
         >
-            <div className="flex h-9 items-center gap-3 border-b border-border text-xs text-fg-muted">
+            <div className={tableHeadRowClasses('gap-3')}>
                 <span className="min-w-0 flex-1">Varlık</span>
                 <span className={COL_PRICE}>Son</span>
                 <span className={COL_CHANGE}>Gün</span>
@@ -36,7 +37,7 @@ export default function MarketBoard({ assets, className }: { assets: CatalogAsse
             {rows.length === 0 ? (
                 <div className="flex flex-col divide-y divide-border" aria-hidden>
                     {Array.from({ length: 5 }, (_, i) => (
-                        <div key={i} className="flex h-12 items-center gap-3">
+                        <div key={i} className="flex h-12 items-center gap-3 px-3">
                             <Skeleton className="h-3.5 w-24" />
                             <span className="flex-1" />
                             <Skeleton className="h-3.5 w-20" />
@@ -50,7 +51,7 @@ export default function MarketBoard({ assets, className }: { assets: CatalogAsse
                         <li key={row.symbol}>
                             <Link
                                 href={`/assets/${row.symbol}`}
-                                className="-mx-2 flex h-12 items-center gap-3 rounded px-2 transition-colors duration-[120ms] hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+                                className="flex h-12 items-center gap-3 rounded px-3 transition-colors duration-[120ms] hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
                             >
                                 <span className="flex min-w-0 flex-1 items-baseline gap-2">
                                     <span className="truncate text-sm text-fg">{row.label}</span>

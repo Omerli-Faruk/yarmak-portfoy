@@ -26,12 +26,24 @@ interface AssetSummary {
     [key: string]: number;
 }
 
+// Temettü özeti; tutarlar hisse başı brüt, tarihler hak kullanım (ex) tarihi, hepsi tr-TR metin
+interface DividendInfo {
+    last: { exDate: string; amount: string } | null;
+    next: { exDate: string; payDate: string | null } | null; // şirketin açıkladığı, henüz gelmemiş temettü
+    trailing12m: { amount: string; count: number } | null;   // son 12 ayda dağıtılan toplam
+    trailingYield: string | null;                            // son 12 ay toplamı / güncel fiyat
+    history: { exDate: string; amount: string }[];           // yeniden eskiye, en çok 6 kayıt
+}
+
 interface Fundamentals {
     marketCap: string;
     peRatio: string;
     dividendYield: string;
     dividendRate: string;
     exDividendDate: string;
+    isExDateFuture?: string;
+    exDividendLabel?: string;
+    dividends?: DividendInfo | null;
     beta: string;
     fiftyTwoWeekHigh: string;
     fiftyTwoWeekLow: string;
@@ -62,6 +74,7 @@ interface YahooQuoteSummaryData {
         result?: Array<{
             summaryDetail?: YahooQuoteSummaryDetail;
             defaultKeyStatistics?: YahooQuoteSummaryDetail;
+            calendarEvents?: { exDividendDate?: YahooMetric; dividendDate?: YahooMetric };
         }>;
     };
 }
@@ -114,7 +127,7 @@ async function fetchFundamentals(ticker: string, isTefas: boolean): Promise<Reco
         let qsData: YahooQuoteSummaryData | null = null;
         if (auth) {
             const qsRes = await fetch(
-                `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}?crumb=${encodeURIComponent(auth.crumb)}&modules=summaryDetail,defaultKeyStatistics`,
+                `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}?crumb=${encodeURIComponent(auth.crumb)}&modules=summaryDetail,defaultKeyStatistics,calendarEvents`,
                 {
                     headers: { 'User-Agent': 'Mozilla/5.0', 'Cookie': auth.cookie },
                     signal: AbortSignal.timeout(4000)
@@ -127,6 +140,7 @@ async function fetchFundamentals(ticker: string, isTefas: boolean): Promise<Reco
 
         const sd = qsData?.quoteSummary?.result?.[0]?.summaryDetail;
         const ks = qsData?.quoteSummary?.result?.[0]?.defaultKeyStatistics;
+        const ce = qsData?.quoteSummary?.result?.[0]?.calendarEvents;
 
         const formatCap = (val: { raw?: number; fmt?: string } | number | string | null | undefined) => {
             if (!val) return '-';
@@ -173,11 +187,91 @@ async function fetchFundamentals(ticker: string, isTefas: boolean): Promise<Reco
             volume: volumeRaw ? formatLargeNumberTR(volumeRaw) : (sd?.volume?.fmt || sd?.regularMarketVolume?.fmt || '-'),
         };
 
+        // Açıklanan (gelecekteki) temettü: hak kullanım ve ödeme tarihi, saniye cinsinden
+        const nowSec = Date.now() / 1000;
+        const nextExTs = rawOf(ce?.exDividendDate, sd?.exDividendDate);
+        if (nextExTs !== null && nextExTs > nowSec) {
+            result.nextExDividendTs = String(nextExTs);
+            const payTs = rawOf(ce?.dividendDate);
+            if (payTs !== null && payTs >= nextExTs) result.nextDividendPayTs = String(payTs);
+        }
+
         fundamentalsCache.set(ticker, { data: result, timestamp: Date.now() });
         return result;
     } catch {
         return {};
     }
+}
+
+// Geçmiş temettüler (hak kullanım tarihi sn, hisse başı brüt tutar), eskiden yeniye. 6 saat bellekte tutulur.
+// Çeyreklik mumlarla 10 yıl istenir: fiyat verisi küçük kalır, temettü olayları yine tam tarihleriyle gelir.
+const dividendHistoryCache = new Map<string, { data: { date: number; amount: number }[]; timestamp: number }>();
+
+async function fetchDividendHistory(ticker: string, isTefas: boolean): Promise<{ date: number; amount: number }[]> {
+    // Yalnızca BIST hisseleri; endeks, döviz ve altında temettü yok
+    if (isTefas || !ticker.endsWith('.IS') || ticker.startsWith('XU')) return [];
+
+    const cached = dividendHistoryCache.get(ticker);
+    if (cached && Date.now() - cached.timestamp < 6 * 60 * 60 * 1000) {
+        return cached.data;
+    }
+
+    try {
+        const res = await fetch(
+            `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=3mo&range=10y&events=div`,
+            { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(4000) }
+        );
+        if (!res.ok) return [];
+        const data = await res.json();
+        const events: Record<string, { amount?: number; date?: number }> =
+            data?.chart?.result?.[0]?.events?.dividends || {};
+        const list = Object.values(events)
+            .filter((d): d is { amount: number; date: number } =>
+                typeof d?.amount === 'number' && d.amount > 0 && typeof d?.date === 'number')
+            .map(d => ({ date: d.date, amount: d.amount }))
+            .sort((a, b) => a.date - b.date);
+        dividendHistoryCache.set(ticker, { data: list, timestamp: Date.now() });
+        return list;
+    } catch {
+        return [];
+    }
+}
+
+function formatDateTR(sec: number): string {
+    return new Date(sec * 1000).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Istanbul' });
+}
+
+// Temettü geçmişi ve açıklanan temettüden ekranda gösterilen özet; hiç bilgi yoksa null
+function buildDividendInfo(
+    history: { date: number; amount: number }[],
+    fields: Record<string, string>,
+    currentPrice: number,
+): DividendInfo | null {
+    const nowSec = Date.now() / 1000;
+    const past = history.filter(d => d.date <= nowSec);
+    const lastPaid = past.length > 0 ? past[past.length - 1] : null;
+
+    const nextExTs = Number(fields.nextExDividendTs);
+    const nextPayTs = Number(fields.nextDividendPayTs);
+    const next = Number.isFinite(nextExTs) && nextExTs > nowSec
+        ? { exDate: formatDateTR(nextExTs), payDate: Number.isFinite(nextPayTs) && nextPayTs > 0 ? formatDateTR(nextPayTs) : null }
+        : null;
+
+    if (!lastPaid && !next) return null;
+
+    const yearAgo = nowSec - 365 * 86400;
+    const last12 = past.filter(d => d.date > yearAgo);
+    const ttmSum = last12.reduce((sum, d) => sum + d.amount, 0);
+
+    return {
+        last: lastPaid ? { exDate: formatDateTR(lastPaid.date), amount: formatTRY(lastPaid.amount) } : null,
+        next,
+        trailing12m: ttmSum > 0 ? { amount: formatTRY(ttmSum), count: last12.length } : null,
+        trailingYield: ttmSum > 0 && currentPrice > 0
+            ? `%${((ttmSum / currentPrice) * 100).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : null,
+        history: past.slice(-6).reverse().map(d => ({ exDate: formatDateTR(d.date), amount: formatTRY(d.amount) })),
+    };
 }
 
 interface AccurateSummaryResult {
@@ -417,7 +511,7 @@ export async function GET(request: Request) {
         const yahooTicker = getYahooTicker(rawSymbol);
 
         // 2) Fiyat geçmişi, backend özeti, temel veriler ve getiriler paralel çekilir
-        const [historyRes, summaryRes, extraFundamentals, accurateResult, spotGoldResult] = await Promise.all([
+        const [historyRes, summaryRes, extraFundamentals, accurateResult, spotGoldResult, dividendHistory] = await Promise.all([
             fetch(`${BACKEND_URL}/assets/${assetId}/price-history?range=${encodeURIComponent(range)}`, {
                 cache: 'no-store',
                 headers: backendHeaders,
@@ -428,6 +522,7 @@ export async function GET(request: Request) {
                 ? getAccurateGoldSummary(assetId, backendHeaders)
                 : (!isTefas ? getAccurateSummary(yahooTicker, isTefas, null) : Promise.resolve(null)),
             rawSymbol === 'ALTIN' ? fetchSpotGold(5000) : Promise.resolve(null),
+            fetchDividendHistory(yahooTicker, isTefas),
         ]);
 
         let chartData: { date: string; price: number, rawDate?: Date }[] = [];
@@ -704,6 +799,8 @@ export async function GET(request: Request) {
             dividendYield: extraFundamentals.dividendYield || '-',
             dividendRate: extraFundamentals.dividendRate || '-',
             exDividendDate: extraFundamentals.exDividendDate || '-',
+            isExDateFuture: extraFundamentals.isExDateFuture,
+            exDividendLabel: extraFundamentals.exDividendLabel,
             beta: extraFundamentals.beta || '-',
             fiftyTwoWeekHigh: extraFundamentals.fiftyTwoWeekHigh || '-',
             fiftyTwoWeekLow: extraFundamentals.fiftyTwoWeekLow || '-',
@@ -733,6 +830,9 @@ export async function GET(request: Request) {
         if (latestPrice === 0 && assetObj) {
             latestPrice = parseFloat(assetObj.CurrentPrice || assetObj.current_price || '0');
         }
+
+        // Temettü özeti; verim son 12 ayda dağıtılan toplamın güncel fiyata oranı
+        fundamentals.dividends = buildDividendInfo(dividendHistory, extraFundamentals, latestPrice);
 
         let latestChange = '0.00';
         let latestPositive = true;

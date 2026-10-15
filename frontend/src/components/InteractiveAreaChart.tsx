@@ -123,6 +123,8 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
 
     // Kaydırıcıyla seçilen aralığın başlangıç ve bitiş indeksleri
     const [brushRange, setBrushRange] = useState<{ start?: number; end?: number }>({});
+    // "Tüm dönem" ile kaydırıcıyı başa almak için Brush yeniden kurulur (iç durumu dışarıdan sıfırlanamıyor)
+    const [brushKey, setBrushKey] = useState(0);
 
     // Periyot değişince seçili aralık sıfırlanır
     // (efekt yerine render sırasında: önceki dönem state'te tutulur)
@@ -268,6 +270,12 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
         });
     }, []);
 
+    const resetBrush = useCallback(() => {
+        lastRangeRef.current = {};
+        setBrushRange({});
+        setBrushKey(k => k + 1);
+    }, []);
+
     const currentStartIndex = brushRange.start !== undefined ? brushRange.start : 0;
     const currentEndIndex = brushRange.end !== undefined ? brushRange.end : (data && data.length > 0 ? data.length - 1 : 0);
     const startDateLabel = data && data.length > 0 && data[currentStartIndex] ? String(data[currentStartIndex][dateKey] || '') : '';
@@ -398,7 +406,7 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
                     <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                         <AreaChart
                             data={data}
-                            margin={{ top: 8, right: frameless ? 0 : 8, left: -12, bottom: showBrush ? 6 : 0 }}
+                            margin={{ top: 8, right: frameless ? 0 : 8, left: -12, bottom: showBrush ? 8 : 0 }}
                         >
                             <defs>
                                 <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -482,15 +490,32 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
 
                             {/* Zaman kaydırıcı: periyot içinde aralığı daraltmak için */}
                             {showBrush && data.length > 1 && (
+                                // Çubukta tüm dönemin küçük eğrisi; seçili aralık mavi dolgulu, kenar tutamaçları mavi.
+                                // stroke seçili aralığın ve tutamaçların rengi; dış çerçeve globals.css'te (.chart-brush) inceltilir.
                                 <Brush
+                                    key={brushKey}
+                                    className="chart-brush"
                                     dataKey={dateKey}
-                                    height={28}
-                                    stroke="var(--border-strong)"
+                                    height={40}
+                                    stroke="var(--primary)"
                                     fill="var(--surface-2)"
-                                    travellerWidth={10}
+                                    travellerWidth={12}
+                                    traveller={BrushHandle}
                                     onChange={handleInternalBrushChange}
                                     tickFormatter={() => ''}
-                                />
+                                >
+                                    <AreaChart>
+                                        <Area
+                                            type="monotone"
+                                            dataKey={dataKey}
+                                            stroke="var(--fg-subtle)"
+                                            strokeWidth={1}
+                                            fill="var(--fg-subtle)"
+                                            fillOpacity={0.12}
+                                            isAnimationActive={false}
+                                        />
+                                    </AreaChart>
+                                </Brush>
                             )}
                         </AreaChart>
                     </ResponsiveContainer>
@@ -510,9 +535,19 @@ export const InteractiveAreaChart: React.FC<InteractiveAreaChartProps> = React.m
                         <span className="font-mono text-fg-muted">{startDateLabel || '-'}</span>
                     </div>
 
-                    <span className="text-fg-subtle hidden md:inline select-none truncate px-2 text-center">
-                        Aralığı değiştirmek için çubuğun kenarlarını kaydırın
-                    </span>
+                    {isCustomRangeSelected ? (
+                        <button
+                            type="button"
+                            onClick={resetBrush}
+                            className="inline-flex items-center min-h-11 sm:min-h-10 px-2 rounded text-sm text-primary hover:underline underline-offset-4 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                        >
+                            Tüm dönemi göster
+                        </button>
+                    ) : (
+                        <span className="text-fg-muted hidden md:inline select-none truncate px-2 text-center">
+                            Aralığı daraltmak için çubuğun mavi kenarlarını sürükleyin
+                        </span>
+                    )}
 
                     <div className="flex items-baseline gap-1.5 shrink-0">
                         <span className="text-fg-subtle">Bitiş</span>
@@ -530,4 +565,18 @@ InteractiveAreaChart.displayName = 'InteractiveAreaChart';
 function ChartShell({ frameless, className, children }: { frameless: boolean; className?: string; children: React.ReactNode }) {
     if (frameless) return <div className={cn('flex flex-col w-full min-w-0', className)}>{children}</div>;
     return <Card padded={false} className={cn('w-full', className)}>{children}</Card>;
+}
+
+// Kaydırıcı tutamacı: mavi, köşeleri hafif yuvarlak, ortasında iki tutma çizgisi
+function BrushHandle({ x, y, width, height }: { x: number; y: number; width: number; height: number }) {
+    const midX = x + width / 2;
+    const gripTop = y + height / 2 - 6;
+    const gripBottom = y + height / 2 + 6;
+    return (
+        <g style={{ cursor: 'ew-resize' }}>
+            <rect x={x} y={y} width={width} height={height} rx={3} fill="var(--primary)" />
+            <line x1={midX - 2} y1={gripTop} x2={midX - 2} y2={gripBottom} stroke="var(--on-primary)" strokeWidth={1.5} />
+            <line x1={midX + 2} y1={gripTop} x2={midX + 2} y2={gripBottom} stroke="var(--on-primary)" strokeWidth={1.5} />
+        </g>
+    );
 }

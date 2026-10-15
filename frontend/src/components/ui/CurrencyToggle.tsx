@@ -28,10 +28,9 @@ export default function CurrencyToggle({ currency, onToggle, disabled = false, c
             disabled={disabled}
             title={disabled ? 'Kur bilgisi alınamadı' : 'Tüm değerleri dolar veya TL cinsinden görüntüle'}
             className={cn(
-                'inline-flex items-center gap-px p-0.5 rounded border border-border bg-surface-2 text-13 font-medium shrink-0',
-                'transition-colors duration-[120ms]',
+                'group inline-flex items-center gap-1 rounded text-13 font-medium shrink-0',
                 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-                disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-border-strong',
+                disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
                 className,
             )}
         >
@@ -41,8 +40,10 @@ export default function CurrencyToggle({ currency, onToggle, disabled = false, c
                     key={option.value}
                     aria-hidden
                     className={cn(
-                        'flex items-center h-10 sm:h-9 px-3 rounded-[3px] whitespace-nowrap font-mono transition-colors duration-[120ms]',
-                        option.value === shown ? 'bg-surface-3 text-fg ring-1 ring-inset ring-border-strong' : 'text-fg-muted',
+                        'flex items-center h-11 sm:h-10 px-3 rounded whitespace-nowrap font-mono transition-colors duration-[120ms]',
+                        option.value === shown
+                            ? 'bg-primary-soft text-primary'
+                            : cn('text-fg-muted', !disabled && 'group-hover:bg-surface-2 group-hover:text-fg'),
                     )}
                 >
                     {option.label}

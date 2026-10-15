@@ -7,6 +7,7 @@ import { Pencil, Trash2 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import IconButton from '@/components/ui/IconButton';
 import { cn } from '@/lib/cn';
+import { TABLE_TH } from '@/components/ui/tableStyles';
 
 // Normalize edilmiş satır; düzenleme modalı ham kaydı beklediği için o da saklanır
 export interface DividendRow extends NormalizedDividend {
@@ -25,8 +26,8 @@ function taxRateLabel(gross: number, tax: number): string {
     return gross > 0 ? `%${Math.round((tax / gross) * 100)}` : '—';
 }
 
-// Kutusuz tablo: başlık zemini sayfa zemini, satırlar 48px ve ince çizgiyle ayrılır
-const TH = 'sticky top-0 z-10 h-9 px-3 bg-bg text-xs font-normal text-fg-muted text-left whitespace-nowrap border-b border-border';
+// Kutusuz tablo: başlık hafif zeminli bant (tableStyles), satırlar 48px ve ince çizgiyle ayrılır
+const TH = cn(TABLE_TH, 'text-left');
 const TD = 'h-12 px-3 whitespace-nowrap border-b border-border';
 
 export default function DividendList({ rows, fmt, onEdit, onDelete }: DividendListProps) {
@@ -73,7 +74,7 @@ export default function DividendList({ rows, fmt, onEdit, onDelete }: DividendLi
 
             {/* Tablet ve masaüstü: sütunlu veri olduğu için table. Başlık, kayarken üstte sabit kalır.
                 Satır hover zemini kenara taşsın diye kap 8px dışarı açılır, ilk/son hücre aynı kadar içeri alınır. */}
-            <div className="hidden md:block -mx-2 max-h-[70vh] overflow-auto custom-scrollbar">
+            <div className="hidden md:block max-h-[70vh] overflow-auto custom-scrollbar">
                 <table className="w-full border-separate border-spacing-0 text-sm">
                     <thead>
                         <tr>
