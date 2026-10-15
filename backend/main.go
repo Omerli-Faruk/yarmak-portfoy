@@ -31,7 +31,6 @@ import (
 // @title Yarmak Borsa & Portföy Takip API
 // @version 1.0
 // @description BIST 100 hisseleri, TEFAS yatırım fonları, altın ve döviz portföy takip sistemi REST API dokümantasyonu.
-// @host localhost:8080
 // @BasePath /v1
 // @securityDefinitions.apikey BearerAuth
 // @in header

@@ -16,7 +16,7 @@ import (
 // @Tags Auth
 // @Accept json
 // @Produce json
-// @Param request body registerRequest true "Kayıt Bilgileri"
+// @Param request body authRequest true "Kayıt Bilgileri"
 // @Success 201 {object} database.User
 // @Failure 400 {object} map[string]string
 // @Failure 409 {object} map[string]string

@@ -86,6 +86,9 @@ func (cfg *ApiConfig) HandlerGetUserPriceAlerts(w http.ResponseWriter, r *http.R
 		respondWithError(w, http.StatusInternalServerError, "Fiyat alarmları listelenirken hata oluştu", err)
 		return
 	}
+	if priceAlert == nil {
+		priceAlert = []database.GetUserPriceAlertRow{}
+	}
 	respondWithJSON(w, http.StatusOK, priceAlert)
 }
 

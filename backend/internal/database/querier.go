@@ -33,6 +33,7 @@ type Querier interface {
 	GetAssetByID(ctx context.Context, id int64) (Asset, error)
 	GetAssetBySymbol(ctx context.Context, symbol string) (Asset, error)
 	GetAssetDailyChangesAll(ctx context.Context) ([]GetAssetDailyChangesAllRow, error)
+	// İki fiyat kaydı olmayan varlıklar atlanır; LEFT JOIN'de NULL dönen prev_p tüm isteği 500'e düşürüyordu
 	GetAssetDailyChangesByIDs(ctx context.Context, dollar_1 []int64) ([]GetAssetDailyChangesByIDsRow, error)
 	GetAssetPrice3Y(ctx context.Context, assetID int64) (string, error)
 	GetAssetPriceHistory(ctx context.Context, assetID int64) ([]PriceHistory, error)

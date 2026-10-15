@@ -8,6 +8,7 @@ import {
     fetchSpotGold,
     fetchYahooChart as fetchChart,
     formatApiPrice,
+    gramGoldFromOunce,
     signedChange,
 } from '@/lib/marketData';
 
@@ -176,21 +177,8 @@ async function getLiveMarketQuotes(): Promise<Record<string, ChartQuote>> {
         }),
     ]);
 
-    if (spotGold && spotGold.price > 0) {
-        quotes['ALTIN'] = spotGold;
-    } else if (quotes['GOLD_OZ'] && quotes['USDTRY']) {
-        // Gram altın alınamazsa ons fiyatından hesapla: ons * USDTRY / 31,1034768 (bir onsun gram karşılığı)
-        const goldPrice = (quotes['GOLD_OZ'].price * quotes['USDTRY'].price) / 31.1034768;
-        const goldPrev = (quotes['GOLD_OZ'].prev * quotes['USDTRY'].prev) / 31.1034768;
-        const pct = goldPrev > 0 ? ((goldPrice - goldPrev) / goldPrev) * 100 : 0;
-        quotes['ALTIN'] = {
-            price: goldPrice,
-            prev: goldPrev,
-            change: signedChange(pct),
-            positive: pct >= 0,
-            name: 'Gram Altın',
-        };
-    }
+    const gold = spotGold || gramGoldFromOunce(quotes['GOLD_OZ'] ?? null, quotes['USDTRY'] ?? null);
+    if (gold) quotes['ALTIN'] = gold;
 
     liveQuotesCache = quotes;
     lastQuotesFetchTime = now;

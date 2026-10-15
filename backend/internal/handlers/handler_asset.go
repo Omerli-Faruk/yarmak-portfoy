@@ -165,6 +165,11 @@ func (cfg *ApiConfig) HandlerTriggerBackfill(w http.ResponseWriter, r *http.Requ
 // @Description Sembol ve türe göre varlık arar; sistemde yoksa ve kullanıcı giriş yapmışsa piyasadan çekip ekler
 // @Tags Assets
 // @Produce json
+// @Param symbol query string true "Varlık sembolü" example(THYAO)
+// @Param type query string false "Varlık türü (varsayılan HISSE)" Enums(HISSE, FON, ALTIN, DOVIZ)
+// @Success 200 {object} database.Asset
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
 // @Router /assets/lookup [get]
 func (cfg *ApiConfig) HandlerLookupAsset(w http.ResponseWriter, r *http.Request) {
 	symbol := strings.TrimSpace(r.URL.Query().Get("symbol"))

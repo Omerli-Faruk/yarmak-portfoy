@@ -231,7 +231,54 @@ const docTemplate = `{
                     "Assets"
                 ],
                 "summary": "Sembolle varlık arama",
-                "responses": {}
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "THYAO",
+                        "description": "Varlık sembolü",
+                        "name": "symbol",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "HISSE",
+                            "FON",
+                            "ALTIN",
+                            "DOVIZ"
+                        ],
+                        "type": "string",
+                        "description": "Varlık türü (varsayılan HISSE)",
+                        "name": "type",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/database.Asset"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/assets/{id}/price-history": {
@@ -395,6 +442,86 @@ const docTemplate = `{
             }
         },
         "/dividends/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Kullanıcının kaydettiği bir temettü gelirini günceller",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dividends"
+                ],
+                "summary": "Temettü Kaydını Güncelle",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Temettü ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Güncellenecek Temettü Bilgileri",
+                        "name": "dividend",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.createDividendRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/database.Dividend"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
             "delete": {
                 "security": [
                     {
@@ -480,8 +607,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.loginResponse"
                         }
                     },
-                    "400": {
-                        "description": "Bad Request",
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -599,6 +726,70 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/portfolio/holdings/{symbol}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Kullanıcının belirtilen sembole ait tüm işlemlerini soft-delete yaparak portföyünden kaldırır.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Portfolio"
+                ],
+                "summary": "Varlığı Portföyden Tamamen Sil",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Varlık Sembolü (örn. THYAO, ASELS)",
+                        "name": "symbol",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -748,7 +939,7 @@ const docTemplate = `{
         },
         "/register": {
             "post": {
-                "description": "Sisteme yeni bir kullanıcı kaydeder",
+                "description": "Yeni bir kullanıcı hesabı oluşturur",
                 "consumes": [
                     "application/json"
                 ],
@@ -761,7 +952,7 @@ const docTemplate = `{
                 "summary": "Yeni Kullanıcı Kaydı",
                 "parameters": [
                     {
-                        "description": "Kullanıcı Kayıt Bilgileri",
+                        "description": "Kayıt Bilgileri",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -774,11 +965,20 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/handlers.userResponse"
+                            "$ref": "#/definitions/database.User"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -987,6 +1187,86 @@ const docTemplate = `{
             }
         },
         "/transactions/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Kullanıcının gerçekleştirdiği bir alım veya satım işleminin adet, fiyat, komisyon veya tarihini günceller",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Transactions"
+                ],
+                "summary": "Alım/Satım İşlemini Güncelle",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "İşlem ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Güncellenecek işlem bilgileri",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.updateTransactionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/database.Transaction"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
             "delete": {
                 "security": [
                     {
@@ -1062,7 +1342,8 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "format": "int64"
                 },
                 "name": {
                     "type": "string"
@@ -1082,7 +1363,8 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "assetID": {
-                    "type": "integer"
+                    "type": "integer",
+                    "format": "int64"
                 },
                 "createdAt": {
                     "type": "string"
@@ -1094,7 +1376,8 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "format": "int64"
                 },
                 "netAmount": {
                     "type": "string"
@@ -1106,7 +1389,8 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "userID": {
-                    "type": "integer"
+                    "type": "integer",
+                    "format": "int64"
                 }
             }
         },
@@ -1114,7 +1398,8 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "format": "int64"
                 },
                 "profitLoss": {
                     "type": "string"
@@ -1129,7 +1414,8 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "userID": {
-                    "type": "integer"
+                    "type": "integer",
+                    "format": "int64"
                 }
             }
         },
@@ -1137,7 +1423,8 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "assetID": {
-                    "type": "integer"
+                    "type": "integer",
+                    "format": "int64"
                 },
                 "createdAt": {
                     "type": "string"
@@ -1149,7 +1436,8 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "format": "int64"
                 },
                 "isTriggered": {
                     "type": "boolean"
@@ -1161,7 +1449,8 @@ const docTemplate = `{
                     "$ref": "#/definitions/sql.NullTime"
                 },
                 "userID": {
-                    "type": "integer"
+                    "type": "integer",
+                    "format": "int64"
                 }
             }
         },
@@ -1169,7 +1458,8 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "assetID": {
-                    "type": "integer"
+                    "type": "integer",
+                    "format": "int64"
                 },
                 "createdAt": {
                     "type": "string"
@@ -1178,7 +1468,8 @@ const docTemplate = `{
                     "$ref": "#/definitions/sql.NullTime"
                 },
                 "id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "format": "int64"
                 },
                 "splitDate": {
                     "type": "string"
@@ -1195,7 +1486,8 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "assetID": {
-                    "type": "integer"
+                    "type": "integer",
+                    "format": "int64"
                 },
                 "commission": {
                     "type": "string"
@@ -1207,7 +1499,8 @@ const docTemplate = `{
                     "$ref": "#/definitions/sql.NullTime"
                 },
                 "id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "format": "int64"
                 },
                 "price": {
                     "type": "string"
@@ -1222,7 +1515,32 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "userID": {
-                    "type": "integer"
+                    "type": "integer",
+                    "format": "int64"
+                }
+            }
+        },
+        "database.User": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "passwordHash": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
                 }
             }
         },
@@ -1325,6 +1643,10 @@ const docTemplate = `{
                     ],
                     "example": "ABOVE"
                 },
+                "symbol": {
+                    "type": "string",
+                    "example": "THYAO"
+                },
                 "target_price": {
                     "type": "string",
                     "example": "350.00"
@@ -1421,6 +1743,20 @@ const docTemplate = `{
                 "holdings_count": {
                     "type": "integer"
                 },
+                "period_returns": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
+                "period_values": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
                 "realized_profit_loss": {
                     "type": "number"
                 },
@@ -1513,6 +1849,34 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.updateTransactionRequest": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number",
+                    "example": 100
+                },
+                "commission": {
+                    "type": "number",
+                    "example": 10
+                },
+                "price": {
+                    "type": "number",
+                    "example": 25.5
+                },
+                "transaction_date": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "BUY",
+                        "SELL"
+                    ],
+                    "example": "BUY"
+                }
+            }
+        },
         "handlers.userHoldingResponse": {
             "type": "object",
             "properties": {
@@ -1530,6 +1894,9 @@ const docTemplate = `{
                 },
                 "current_price": {
                     "type": "number"
+                },
+                "first_buy_date": {
+                    "type": "string"
                 },
                 "profit_loss": {
                     "type": "number"
@@ -1591,7 +1958,7 @@ const docTemplate = `{
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
-	Host:             "localhost:8080",
+	Host:             "",
 	BasePath:         "/v1",
 	Schemes:          []string{},
 	Title:            "Yarmak Borsa & Portföy Takip API",

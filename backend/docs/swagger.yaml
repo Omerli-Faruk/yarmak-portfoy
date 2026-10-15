@@ -7,6 +7,7 @@ definitions:
       currentPrice:
         type: string
       id:
+        format: int64
         type: integer
       name:
         type: string
@@ -20,6 +21,7 @@ definitions:
       amount:
         type: string
       assetID:
+        format: int64
         type: integer
       createdAt:
         type: string
@@ -28,6 +30,7 @@ definitions:
       grossAmount:
         type: string
       id:
+        format: int64
         type: integer
       netAmount:
         type: string
@@ -36,11 +39,13 @@ definitions:
       taxAmount:
         type: string
       userID:
+        format: int64
         type: integer
     type: object
   database.PortfolioSnapshot:
     properties:
       id:
+        format: int64
         type: integer
       profitLoss:
         type: string
@@ -51,11 +56,13 @@ definitions:
       totalValue:
         type: string
       userID:
+        format: int64
         type: integer
     type: object
   database.PriceAlert:
     properties:
       assetID:
+        format: int64
         type: integer
       createdAt:
         type: string
@@ -64,6 +71,7 @@ definitions:
       direction:
         type: string
       id:
+        format: int64
         type: integer
       isTriggered:
         type: boolean
@@ -72,17 +80,20 @@ definitions:
       triggeredAt:
         $ref: '#/definitions/sql.NullTime'
       userID:
+        format: int64
         type: integer
     type: object
   database.Split:
     properties:
       assetID:
+        format: int64
         type: integer
       createdAt:
         type: string
       deletedAt:
         $ref: '#/definitions/sql.NullTime'
       id:
+        format: int64
         type: integer
       splitDate:
         type: string
@@ -94,6 +105,7 @@ definitions:
       amount:
         type: string
       assetID:
+        format: int64
         type: integer
       commission:
         type: string
@@ -102,6 +114,7 @@ definitions:
       deletedAt:
         $ref: '#/definitions/sql.NullTime'
       id:
+        format: int64
         type: integer
       price:
         type: string
@@ -112,7 +125,24 @@ definitions:
       type:
         type: string
       userID:
+        format: int64
         type: integer
+    type: object
+  database.User:
+    properties:
+      createdAt:
+        type: string
+      email:
+        type: string
+      id:
+        format: int64
+        type: integer
+      passwordHash:
+        type: string
+      role:
+        type: string
+      username:
+        type: string
     type: object
   handlers.AssetCategorySummary:
     properties:
@@ -186,6 +216,9 @@ definitions:
         - BELOW
         example: ABOVE
         type: string
+      symbol:
+        example: THYAO
+        type: string
       target_price:
         example: "350.00"
         type: string
@@ -254,6 +287,16 @@ definitions:
         type: number
       holdings_count:
         type: integer
+      period_returns:
+        additionalProperties:
+          format: float64
+          type: number
+        type: object
+      period_values:
+        additionalProperties:
+          format: float64
+          type: number
+        type: object
       realized_profit_loss:
         type: number
       total_combined_profit:
@@ -317,6 +360,26 @@ definitions:
         example: "2025-10-10T07:00:00Z"
         type: string
     type: object
+  handlers.updateTransactionRequest:
+    properties:
+      amount:
+        example: 100
+        type: number
+      commission:
+        example: 10
+        type: number
+      price:
+        example: 25.5
+        type: number
+      transaction_date:
+        type: string
+      type:
+        enum:
+        - BUY
+        - SELL
+        example: BUY
+        type: string
+    type: object
   handlers.userHoldingResponse:
     properties:
       asset_id:
@@ -329,6 +392,8 @@ definitions:
         type: number
       current_price:
         type: number
+      first_buy_date:
+        type: string
       profit_loss:
         type: number
       symbol:
@@ -359,7 +424,6 @@ definitions:
         description: Valid is true if Time is not NULL
         type: boolean
     type: object
-host: localhost:8080
 info:
   contact: {}
   description: BIST 100 hisseleri, TEFAS yatırım fonları, altın ve döviz portföy takip
@@ -549,9 +613,41 @@ paths:
     get:
       description: Sembol ve türe göre varlık arar; sistemde yoksa ve kullanıcı giriş
         yapmışsa piyasadan çekip ekler
+      parameters:
+      - description: Varlık sembolü
+        example: THYAO
+        in: query
+        name: symbol
+        required: true
+        type: string
+      - description: Varlık türü (varsayılan HISSE)
+        enum:
+        - HISSE
+        - FON
+        - ALTIN
+        - DOVIZ
+        in: query
+        name: type
+        type: string
       produces:
       - application/json
-      responses: {}
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/database.Asset'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       summary: Sembolle varlık arama
       tags:
       - Assets
@@ -648,12 +744,64 @@ paths:
       summary: Temettü Kaydını Sil
       tags:
       - Dividends
+    put:
+      consumes:
+      - application/json
+      description: Kullanıcının kaydettiği bir temettü gelirini günceller
+      parameters:
+      - description: Temettü ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Güncellenecek Temettü Bilgileri
+        in: body
+        name: dividend
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.createDividendRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/database.Dividend'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Temettü Kaydını Güncelle
+      tags:
+      - Dividends
   /login:
     post:
       consumes:
       - application/json
-      description: E-posta veya kullanıcı adı ve şifreyle giriş yapar, tokenları
-        çerez olarak döner
+      description: E-posta veya kullanıcı adı ve şifreyle giriş yapar, tokenları çerez
+        olarak döner
       parameters:
       - description: Giriş Bilgileri
         in: body
@@ -668,8 +816,8 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/handlers.loginResponse'
-        "400":
-          description: Bad Request
+        "401":
+          description: Unauthorized
           schema:
             additionalProperties:
               type: string
@@ -752,6 +900,48 @@ paths:
       summary: Kullanıcının Varlıklarını (Holdings) Listele
       tags:
       - Portfolio
+  /portfolio/holdings/{symbol}:
+    delete:
+      description: Kullanıcının belirtilen sembole ait tüm işlemlerini soft-delete
+        yaparak portföyünden kaldırır.
+      parameters:
+      - description: Varlık Sembolü (örn. THYAO, ASELS)
+        in: path
+        name: symbol
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Varlığı Portföyden Tamamen Sil
+      tags:
+      - Portfolio
   /portfolio/summary:
     get:
       description: Toplam portföy değeri, toplam maliyet, kâr/zarar, dolar karşılığı
@@ -826,8 +1016,7 @@ paths:
       - Portfolio
   /refresh:
     post:
-      description: refresh_token çerezini kullanarak yeni tokenları çerez olarak
-        döner
+      description: refresh_token çerezini kullanarak yeni tokenları çerez olarak döner
       produces:
       - application/json
       responses:
@@ -850,9 +1039,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Sisteme yeni bir kullanıcı kaydeder
+      description: Yeni bir kullanıcı hesabı oluşturur
       parameters:
-      - description: Kullanıcı Kayıt Bilgileri
+      - description: Kayıt Bilgileri
         in: body
         name: request
         required: true
@@ -864,9 +1053,15 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/handlers.userResponse'
+            $ref: '#/definitions/database.User'
         "400":
           description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
           schema:
             additionalProperties:
               type: string
@@ -1041,6 +1236,59 @@ paths:
       security:
       - BearerAuth: []
       summary: Alım/Satım İşlemini Sil
+      tags:
+      - Transactions
+    put:
+      consumes:
+      - application/json
+      description: Kullanıcının gerçekleştirdiği bir alım veya satım işleminin adet,
+        fiyat, komisyon veya tarihini günceller
+      parameters:
+      - description: İşlem ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Güncellenecek işlem bilgileri
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.updateTransactionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/database.Transaction'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Alım/Satım İşlemini Güncelle
       tags:
       - Transactions
 securityDefinitions:

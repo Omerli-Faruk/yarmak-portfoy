@@ -86,13 +86,13 @@ SELECT
     p1.price as latest_p,
     p2.price as prev_p
 FROM assets a
-LEFT JOIN LATERAL (
+JOIN LATERAL (
     SELECT price FROM price_history WHERE asset_id = a.id ORDER BY recorded_at DESC LIMIT 1
 ) p1 ON true
-LEFT JOIN LATERAL (
+JOIN LATERAL (
     SELECT price FROM price_history WHERE asset_id = a.id ORDER BY recorded_at DESC OFFSET 1 LIMIT 1
 ) p2 ON true
-WHERE a.id = ANY($1::bigint[])
+WHERE a.id = ANY($1::bigint[]) AND p2.price > 0
 `
 
 type GetAssetDailyChangesByIDsRow struct {
@@ -101,6 +101,7 @@ type GetAssetDailyChangesByIDsRow struct {
 	PrevP   string
 }
 
+// İki fiyat kaydı olmayan varlıklar atlanır; LEFT JOIN'de NULL dönen prev_p tüm isteği 500'e düşürüyordu
 func (q *Queries) GetAssetDailyChangesByIDs(ctx context.Context, dollar_1 []int64) ([]GetAssetDailyChangesByIDsRow, error) {
 	rows, err := q.db.QueryContext(ctx, getAssetDailyChangesByIDs, pq.Array(dollar_1))
 	if err != nil {

@@ -123,6 +123,24 @@ export async function fetchYahooChart(
     }
 }
 
+// Bir onsun gram karşılığı
+const GRAMS_PER_OUNCE = 31.1034768;
+
+// Gram altın alınamazsa ons fiyatından hesaplanır: ons * USDTRY / 31,1034768
+export function gramGoldFromOunce(goldOz: ChartQuote | null, usdTry: ChartQuote | null): ChartQuote | null {
+    if (!goldOz || !usdTry || goldOz.price <= 0 || usdTry.price <= 0) return null;
+    const price = (goldOz.price * usdTry.price) / GRAMS_PER_OUNCE;
+    const prev = (goldOz.prev * usdTry.prev) / GRAMS_PER_OUNCE;
+    const pct = prev > 0 ? ((price - prev) / prev) * 100 : 0;
+    return {
+        price,
+        prev,
+        change: signedChange(pct),
+        positive: pct >= 0,
+        name: 'Gram Altın',
+    };
+}
+
 // Gram altın (serbest piyasa) fiyatı truncgil'den
 export async function fetchSpotGold(timeoutMs = 3500): Promise<ChartQuote | null> {
     try {

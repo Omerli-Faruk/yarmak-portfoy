@@ -7,6 +7,7 @@ import {
     fetchSpotGold,
     fetchYahooChart,
     getYahooAuth,
+    gramGoldFromOunce,
     signedChange,
 } from '@/lib/marketData';
 import type { MarketAssetItem, MarketIndexItem } from '@/types';
@@ -115,11 +116,20 @@ function getMarketCacheTTL(): number {
     return isTradingHours ? 60 * 1000 : 15 * 60 * 1000;
 }
 
+// Bir endeks ya da kur alınamadıysa (fiyatı 0) önbellek tam süre beklenmeden 30 sn sonra yenilenir
+const INCOMPLETE_CACHE_TTL = 30 * 1000;
+
+function getCacheTTL(data: MarketData): number {
+    const complete = data.indices.every(i => i.price > 0);
+    return complete ? getMarketCacheTTL() : Math.min(INCOMPLETE_CACHE_TTL, getMarketCacheTTL());
+}
+
 let isRefreshingMarkets = false;
 
 async function fetchFreshMarketData(backendHeaders: Record<string, string>): Promise<MarketData> {
     const [
-        spotGold,
+        truncgilGold,
+        goldOz,
         xu100,
         xu030,
         usdTry,
@@ -128,6 +138,7 @@ async function fetchFreshMarketData(backendHeaders: Record<string, string>): Pro
         dailyChangesRes
     ] = await Promise.all([
         fetchSpotGold(3500),
+        fetchDailyQuote('GC=F', 'Altın (ons)'),
         fetchDailyQuote('XU100.IS', 'BIST 100'),
         fetchDailyQuote('XU030.IS', 'BIST 30'),
         fetchDailyQuote('USDTRY=X', 'Dolar / TL'),
@@ -135,6 +146,9 @@ async function fetchFreshMarketData(backendHeaders: Record<string, string>): Pro
         fetch(`${BACKEND_URL}/assets`, { cache: 'no-store', headers: backendHeaders }).catch(() => null),
         fetch(`${BACKEND_URL}/assets/daily-changes`, { cache: 'no-store', headers: backendHeaders }).catch(() => null),
     ]);
+
+    // truncgil'e ulaşılamazsa gram altın ons fiyatı ve kurdan hesaplanır
+    const spotGold = truncgilGold || gramGoldFromOunce(goldOz, usdTry);
 
     const rawAssets: BackendAsset[] = (backendAssetsRes?.ok && await backendAssetsRes.json().catch(() => [])) || [];
     const dailyChangesMap: Record<string, number> = (dailyChangesRes?.ok && await dailyChangesRes.json().catch(() => ({}))) || {};
@@ -369,7 +383,7 @@ export async function GET(request: Request) {
 
         // Önbellek varsa hemen döner; süresi dolmuşsa yenisi arka planda çekilir
         if (marketCache) {
-            if (Date.now() - marketCache.timestamp >= getMarketCacheTTL()) {
+            if (Date.now() - marketCache.timestamp >= getCacheTTL(marketCache.data)) {
                 void refreshMarketsInBackground(backendHeaders);
             }
             return formatResponse(marketCache.data, category, sort, period, search);
