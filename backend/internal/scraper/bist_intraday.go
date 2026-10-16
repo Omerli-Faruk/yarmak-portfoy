@@ -11,6 +11,23 @@ import (
 	"yarmak/internal/database"
 )
 
+// Seans dışında tarama en fazla bu aralıkla yapılır (döviz/altın ve kaçırılmış kapanışlar için)
+const offHoursInterval = 4 * time.Hour
+
+func isBistMarketHours(now time.Time) bool {
+	isWeekend := now.Weekday() == time.Saturday || now.Weekday() == time.Sunday
+	return !isWeekend && now.Hour() >= 10 && (now.Hour() < 18 || (now.Hour() == 18 && now.Minute() <= 15))
+}
+
+// shouldRunCycle, seans içinde her tikte, seans dışında son turdan offHoursInterval geçtiyse true döner.
+// assets.updated_at'e bakılmaz: fiyat değişmeyince güncellenmediği için hafta sonu her tik bayat sayılıyordu.
+func shouldRunCycle(now, lastRun time.Time) bool {
+	if isBistMarketHours(now) {
+		return true
+	}
+	return now.Sub(lastRun) >= offHoursInterval
+}
+
 func StartBistIntradayWorker(ctx context.Context, db *database.Queries, wg *sync.WaitGroup) {
 	wg.Add(1)
 	go func() {
@@ -18,6 +35,7 @@ func StartBistIntradayWorker(ctx context.Context, db *database.Queries, wg *sync
 		slog.Info("BIST Intraday worker başlatıldı")
 
 		// Sunucu ilk açıldığında hemen bir kez çalıştır
+		lastRun := time.Now()
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -38,25 +56,10 @@ func StartBistIntradayWorker(ctx context.Context, db *database.Queries, wg *sync
 			case <-ticker.C:
 				loc, _ := time.LoadLocation("Europe/Istanbul")
 				now := time.Now().In(loc)
-				isWeekend := now.Weekday() == time.Saturday || now.Weekday() == time.Sunday
-				isMarketHours := !isWeekend && now.Hour() >= 10 && (now.Hour() < 18 || (now.Hour() == 18 && now.Minute() <= 15))
-
-				// Mesai saatleri dışında sadece bayat kalmış (> 4 saat) aktif hisseleri tarar
-				if !isMarketHours {
-					hasStale := false
-					activeAssets, err := db.GetActiveAssets(ctx)
-					if err == nil {
-						for _, a := range activeAssets {
-							if a.AssetType != "FON" && time.Since(a.UpdatedAt) > 4*time.Hour {
-								hasStale = true
-								break
-							}
-						}
-					}
-					if !hasStale {
-						continue
-					}
+				if !shouldRunCycle(now, lastRun) {
+					continue
 				}
+				lastRun = now
 
 				func() {
 					defer func() {
