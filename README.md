@@ -10,6 +10,14 @@ Borsa İstanbul hisseleri, TEFAS fonları, altın ve döviz için portföy takip
 
 Alım-satımlarınızı elle girersiniz; uygulama ortalama maliyeti, gerçekleşen ve gerçekleşmeyen kâr/zararı, temettüleri ve portföyün zaman içindeki değerini hesaplar. Banka veya aracı kurum hesabına bağlanmaz, yatırım tavsiyesi vermez.
 
+![Portföy genel bakış](docs/screenshots/portfoy.png)
+
+| Varlıklar | Piyasalar | Varlık detayı (koyu tema) |
+| --- | --- | --- |
+| ![Varlıklar](docs/screenshots/varliklar.png) | ![Piyasalar](docs/screenshots/piyasalar.png) | ![Varlık detayı](docs/screenshots/varlik-detay.png) |
+
+<sub>Görüntüler demo hesabından alınmıştır.</sub>
+
 ## Özellikler
 
 - Hisse, fon, gram altın ve döviz aynı portföyde
