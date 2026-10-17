@@ -129,6 +129,7 @@ func main() {
 		err = srv.ListenAndServe()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("Server hata verdi", "error", err)
+			stop()
 		}
 	}()
 	// Sunucunun kapanmasını bekle
