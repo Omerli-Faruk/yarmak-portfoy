@@ -26,9 +26,7 @@ func StartScraperWorker(ctx context.Context, db *database.Queries, interval time
 	StartBackfillWorker(ctx, db, wg)
 
 	// 4. Günlük portföy özeti: saatte bir bakılır, 18:00'den sonra günde bir kez yazılır
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
 		for {
@@ -39,7 +37,7 @@ func StartScraperWorker(ctx context.Context, db *database.Queries, interval time
 				recordPortfolioSnapshots(ctx, db)
 			}
 		}
-	}()
+	})
 }
 
 // checkAndTriggerAlerts, varlığın yeni fiyatı, kullanıcıların belirlediği fiyat alarmlarını geçiyorsa bu alarmları tetikler ve loglar.

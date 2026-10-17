@@ -10,9 +10,7 @@ import (
 )
 
 func StartBackfillWorker(ctx context.Context, db *database.Queries, wg *sync.WaitGroup) {
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		slog.Info("Backfill kuyruk işleyicisi başlatıldı")
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
@@ -26,7 +24,7 @@ func StartBackfillWorker(ctx context.Context, db *database.Queries, wg *sync.Wai
 				processNextBackfill(ctx, db)
 			}
 		}
-	}()
+	})
 }
 
 func processNextBackfill(ctx context.Context, db *database.Queries) {

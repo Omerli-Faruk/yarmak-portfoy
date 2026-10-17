@@ -42,9 +42,7 @@ func shouldRunCycle(marketOpen bool, now, lastRun time.Time) bool {
 }
 
 func StartBistIntradayWorker(ctx context.Context, db *database.Queries, wg *sync.WaitGroup) {
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		slog.Info("BIST Intraday worker başlatıldı")
 
 		// Sunucu ilk açıldığında hemen bir kez çalıştır
@@ -92,7 +90,7 @@ func StartBistIntradayWorker(ctx context.Context, db *database.Queries, wg *sync
 				}()
 			}
 		}
-	}()
+	})
 }
 
 // runBistCycle, aktif varlıkların fiyatını günceller. stocks hisseleri, fx döviz ve altını kapsar.

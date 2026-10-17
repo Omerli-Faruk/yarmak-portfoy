@@ -10,9 +10,7 @@ import (
 )
 
 func StartTefasDailyWorker(ctx context.Context, db *database.Queries, wg *sync.WaitGroup) {
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		slog.Info("TEFAS Daily worker başlatıldı")
 
 		// Sunucu ilk açıldığında hemen bir kez güncel verileri çek
@@ -62,7 +60,7 @@ func StartTefasDailyWorker(ctx context.Context, db *database.Queries, wg *sync.W
 				runTefasDailyCycle(ctx, db)
 			}()
 		}
-	}()
+	})
 }
 
 func runTefasDailyCycle(ctx context.Context, db *database.Queries) {
