@@ -45,12 +45,14 @@ func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(identifier, "@") {
 		user, err = cfg.DB.GetUserByEmail(r.Context(), identifier)
 		if err != nil {
+			auth.SimulatePasswordCheck(password)
 			respondWithError(w, http.StatusUnauthorized, "Geçersiz e-posta veya şifre", err)
 			return
 		}
 	} else {
 		user, err = cfg.DB.GetUserByUsername(r.Context(), identifier)
 		if err != nil {
+			auth.SimulatePasswordCheck(password)
 			respondWithError(w, http.StatusUnauthorized, "Geçersiz kullanıcı adı veya şifre", err)
 			return
 		}

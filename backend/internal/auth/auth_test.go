@@ -3,6 +3,8 @@ package auth
 import (
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestPasswordHashing(t *testing.T) {
@@ -100,5 +102,16 @@ func TestIsPublicExampleSecret(t *testing.T) {
 	}
 	if len(secret) != 64 || IsPublicExampleSecret(secret) {
 		t.Errorf("üretilen anahtar 64 karakterlik ve örneklerden farklı olmalı: %q", secret)
+	}
+}
+
+// Sahte hash'in maliyeti gerçek şifrelerle aynı olmalı; yoksa "kullanıcı yok" cevabı yine daha hızlı döner.
+func TestDummyHashCostMatchesRealHash(t *testing.T) {
+	cost, err := bcrypt.Cost(dummyHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cost != bcrypt.DefaultCost {
+		t.Errorf("sahte hash maliyeti %d, gerçek hash maliyeti %d olmalı", cost, bcrypt.DefaultCost)
 	}
 }

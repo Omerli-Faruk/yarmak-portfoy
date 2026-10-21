@@ -27,6 +27,23 @@ func CheckPasswordHash(password, hash string) bool {
 	return err == nil
 }
 
+// dummyHash, program açılırken bir kez üretilen ve hiçbir kullanıcıya ait olmayan sahte hash.
+var dummyHash = mustHash("zamanlama-esitleme")
+
+func mustHash(password string) []byte {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		panic(fmt.Sprintf("sahte hash üretilemedi: %v", err))
+	}
+	return hash
+}
+
+// SimulatePasswordCheck, kullanıcı bulunamadığında da bcrypt'i çalıştırır. Böylece giriş cevabının süresi
+// e-postanın ya da kullanıcı adının kayıtlı olup olmadığını ele vermez.
+func SimulatePasswordCheck(password string) {
+	_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
+}
+
 // MakeJWT, kullanıcı oturumu için kısa ömürlü (ör. 1 saat) bir JSON Web Token (JWT) oluşturur ve imzalar.
 func MakeJWT(userID int64, tokenSecret string, expiresIn time.Duration) (string, error) {
 	signingKey := []byte(tokenSecret)
