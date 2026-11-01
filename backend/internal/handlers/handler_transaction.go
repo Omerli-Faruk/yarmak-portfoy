@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -196,7 +198,11 @@ func (cfg *ApiConfig) HandlerDeleteTransaction(w http.ResponseWriter, r *http.Re
 		ID:     transactionID,
 		UserID: userID,
 	}); err != nil {
-		respondWithError(w, http.StatusNotFound, "İşlem bulunamadı veya yetkiniz yok", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			respondWithError(w, http.StatusNotFound, "İşlem bulunamadı veya yetkiniz yok", nil)
+		} else {
+			respondWithError(w, http.StatusInternalServerError, "İşlem silinemedi, lütfen biraz sonra tekrar deneyin", err)
+		}
 		return
 	}
 
@@ -285,7 +291,11 @@ func (cfg *ApiConfig) HandlerUpdateTransaction(w http.ResponseWriter, r *http.Re
 		UserID: userID,
 	})
 	if err != nil {
-		respondWithError(w, http.StatusNotFound, "İşlem bulunamadı veya yetkiniz yok", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			respondWithError(w, http.StatusNotFound, "İşlem bulunamadı veya yetkiniz yok", nil)
+		} else {
+			respondWithError(w, http.StatusInternalServerError, "İşlem güncellenemedi, lütfen biraz sonra tekrar deneyin", err)
+		}
 		return
 	}
 	// Tarih gönderilmemişse işlemin mevcut tarihini koruyoruz.
