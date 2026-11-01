@@ -23,7 +23,7 @@ func parseTaxRate(raw string) (float64, bool) {
 	if err != nil {
 		return 0, false
 	}
-	if tr > 1 {
+	if tr >= 1 {
 		tr = tr / 100
 	}
 	if tr >= 0 && tr < 1 {
@@ -143,9 +143,12 @@ func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Reque
 
 	taxRate := defaultDividendTaxRate
 	if params.TaxRate != "" {
-		if tr, ok := parseTaxRate(params.TaxRate); ok {
-			taxRate = tr
+		tr, ok := parseTaxRate(params.TaxRate)
+		if !ok {
+			respondWithError(w, http.StatusBadRequest, "Geçersiz stopaj oranı (örn. 15 veya 0.15)", nil)
+			return
 		}
+		taxRate = tr
 	}
 
 	grossAmount, taxAmount, netAmount := splitDividend(amount, taxRate, params.IsNet)
@@ -261,9 +264,12 @@ func (cfg *ApiConfig) HandlerUpdateDividend(w http.ResponseWriter, r *http.Reque
 
 	taxRate := storedTaxRate(existing)
 	if params.TaxRate != "" {
-		if tr, ok := parseTaxRate(params.TaxRate); ok {
-			taxRate = tr
+		tr, ok := parseTaxRate(params.TaxRate)
+		if !ok {
+			respondWithError(w, http.StatusBadRequest, "Geçersiz stopaj oranı (örn. 15 veya 0.15)", nil)
+			return
 		}
+		taxRate = tr
 	}
 
 	grossAmount, taxAmount, netAmount := splitDividend(amount, taxRate, params.IsNet)
