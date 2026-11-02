@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -20,6 +22,7 @@ import (
 // @Success 201 {object} database.Split
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /splits [post]
 func (cfg *ApiConfig) HandlerCreateSplit(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
@@ -43,8 +46,13 @@ func (cfg *ApiConfig) HandlerCreateSplit(w http.ResponseWriter, r *http.Request)
 	}
 	asset, err := cfg.DB.GetAssetByID(r.Context(), params.AssetID)
 	if err != nil {
-		respondWithError(w, http.StatusNotFound, "Bölünme uygulanacak hisse senedi sistemde bulunamadı", err)
-		return
+		if errors.Is(err, sql.ErrNoRows) {
+			respondWithError(w, http.StatusNotFound, "Bölünme uygulanacak hisse senedi sistemde bulunamadı", err)
+			return
+		} else {
+			respondWithError(w, http.StatusInternalServerError, "Şuanda sisteme ulaşılamıyor, lütfen sonra tekrar deneyin", err)
+			return
+		}
 	}
 	if splitRatio == 1.0 {
 		respondWithError(w, http.StatusBadRequest, "Bölünme oranı 1'den farklı olmalıdır", nil)
@@ -52,14 +60,16 @@ func (cfg *ApiConfig) HandlerCreateSplit(w http.ResponseWriter, r *http.Request)
 	}
 
 	existingSplits, err := cfg.DB.ListSplitsByAsset(r.Context(), asset.ID)
-	if err == nil {
-		for _, s := range existingSplits {
-			if s.SplitDate.Year() == params.SplitDate.Year() &&
-				s.SplitDate.Month() == params.SplitDate.Month() &&
-				s.SplitDate.Day() == params.SplitDate.Day() {
-				respondWithError(w, http.StatusBadRequest, "Bu hisse senedi için bu tarihte zaten bir bölünme uygulanmış. Mükerrer bölünme yapılamaz.", nil)
-				return
-			}
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Mevcut bölünmeler kontrol edilemediği için bölünme uygulanmadı, lütfen biraz sonra tekrar deneyin", err)
+		return
+	}
+	for _, s := range existingSplits {
+		if s.SplitDate.Year() == params.SplitDate.Year() &&
+			s.SplitDate.Month() == params.SplitDate.Month() &&
+			s.SplitDate.Day() == params.SplitDate.Day() {
+			respondWithError(w, http.StatusBadRequest, "Bu hisse senedi için bu tarihte zaten bir bölünme uygulanmış. Mükerrer bölünme yapılamaz.", nil)
+			return
 		}
 	}
 
@@ -88,7 +98,7 @@ func (cfg *ApiConfig) HandlerCreateSplit(w http.ResponseWriter, r *http.Request)
 		TransactionDate: params.SplitDate,
 	})
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Hisseye ait geçmiş işlemler bölünme oranına göre güncellenemedi", err)
+		respondWithError(w, http.StatusInternalServerError, "Hisseye ait geçmiş işlemler bölünme oranına göre güncellenemedi", err)
 		return
 	}
 	if err := tx.Commit(); err != nil {
