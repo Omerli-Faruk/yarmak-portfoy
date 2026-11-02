@@ -105,6 +105,8 @@ func (cfg *ApiConfig) HandlerGetUserPriceAlerts(w http.ResponseWriter, r *http.R
 // @Success 200 {object} map[string]string
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /alerts/{id} [delete]
 func (cfg *ApiConfig) HandlerDeletePriceAlert(w http.ResponseWriter, r *http.Request) {
 	urlID := chi.URLParam(r, "id")
@@ -118,7 +120,11 @@ func (cfg *ApiConfig) HandlerDeletePriceAlert(w http.ResponseWriter, r *http.Req
 		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
 		return
 	}
-	alerts, _ := cfg.DB.GetUserPriceAlert(r.Context(), userID)
+	alerts, err := cfg.DB.GetUserPriceAlert(r.Context(), userID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Fiyat alarmı silinemedi, lütfen biraz sonra tekrar deneyin", err)
+		return
+	}
 	found := false
 	for _, a := range alerts {
 		if a.ID == priceAlertID {
