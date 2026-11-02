@@ -21,6 +21,7 @@ import (
 // @Success 201 {object} database.PriceAlert
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /alerts [post]
 func (cfg *ApiConfig) HandlerCreatePriceAlert(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
@@ -39,9 +40,11 @@ func (cfg *ApiConfig) HandlerCreatePriceAlert(w http.ResponseWriter, r *http.Req
 	if params.AssetID <= 0 && strings.TrimSpace(params.Symbol) != "" {
 		cleanSym := strings.ToUpper(strings.TrimSpace(params.Symbol))
 		asset, err := cfg.Services.Asset.GetOrCreateAssetBySymbol(r.Context(), cleanSym, "HISSE")
-		if err == nil {
-			params.AssetID = asset.ID
+		if err != nil {
+			respondWithError(w, http.StatusBadRequest, "Varlık bulunamadı veya fiyatı alınamadı: "+cleanSym, err)
+			return
 		}
+		params.AssetID = asset.ID
 	}
 
 	if targetPrice <= 0 || params.AssetID <= 0 || (params.Direction != "ABOVE" && params.Direction != "BELOW") {
@@ -60,7 +63,7 @@ func (cfg *ApiConfig) HandlerCreatePriceAlert(w http.ResponseWriter, r *http.Req
 		Direction:   params.Direction,
 	})
 	if err != nil {
-		respondWithError(w, http.StatusConflict, "Fiyat alarmı oluşturulamadı", err)
+		respondWithError(w, http.StatusInternalServerError, "Fiyat alarmı oluşturulamadı", err)
 		return
 	}
 	respondWithJSON(w, http.StatusCreated, priceAlert)
