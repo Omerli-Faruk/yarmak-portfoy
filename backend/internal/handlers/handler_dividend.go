@@ -306,6 +306,8 @@ func (cfg *ApiConfig) HandlerUpdateDividend(w http.ResponseWriter, r *http.Reque
 // @Success 200 {object} map[string]string
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /dividends/{id} [delete]
 func (cfg *ApiConfig) HandlerDeleteDividend(w http.ResponseWriter, r *http.Request) {
 	urlID := chi.URLParam(r, "id")
@@ -319,7 +321,11 @@ func (cfg *ApiConfig) HandlerDeleteDividend(w http.ResponseWriter, r *http.Reque
 		respondWithError(w, http.StatusBadRequest, "Geçersiz temettü ID", err)
 		return
 	}
-	dividends, _ := cfg.DB.GetUserDividends(r.Context(), userID)
+	dividends, err := cfg.DB.GetUserDividends(r.Context(), userID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Temettü kaydı silinemedi, lütfen biraz sonra tekrar deneyin", err)
+		return
+	}
 	found := false
 	for _, d := range dividends {
 		if d.ID == dividendID {
