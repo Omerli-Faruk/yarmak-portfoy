@@ -41,7 +41,7 @@ func StartScraperWorker(ctx context.Context, db *database.Queries, interval time
 }
 
 // checkAndTriggerAlerts, varlığın yeni fiyatı, kullanıcıların belirlediği fiyat alarmlarını geçiyorsa bu alarmları tetikler ve loglar.
-func checkAndTriggerAlerts(ctx context.Context, db *database.Queries, asset database.Asset, newPrice float64, priceStr string) {
+func checkAndTriggerAlerts(ctx context.Context, db database.Querier, asset database.Asset, newPrice float64, priceStr string) {
 	alerts, err := db.GetPendingAlertsForAsset(ctx, asset.ID)
 	if err != nil {
 		slog.Error("Fiyat alarmı sorgulanırken hata oluştu", "symbol", asset.Symbol, "error", err)
@@ -53,6 +53,7 @@ func checkAndTriggerAlerts(ctx context.Context, db *database.Queries, asset data
 			err = db.MarkAlertTriggered(ctx, alert.ID)
 			if err != nil {
 				slog.Error("Fiyat alarmı durumu güncellenirken hata oluştu", "symbol", asset.Symbol, "error", err)
+				continue
 			}
 			slog.Warn("Fiyat alarmı tetiklendi",
 				"symbol", asset.Symbol,
