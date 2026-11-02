@@ -166,7 +166,7 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, userID int64
 			UserID: userID,
 		})
 		if err != nil {
-			return fmt.Errorf("İşlem bulunamadı veya yetkiniz yok")
+			return fmt.Errorf("İşlem bulunamadı veya yetkiniz yok: %w", err)
 		}
 
 		// 2. İşlemin yeni hâliyle bakiyenin hiçbir tarihte eksiye düşmediğini kontrol et
@@ -227,7 +227,7 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, userID int64
 			UserID: userID,
 		})
 		if err != nil {
-			return fmt.Errorf("İşlem bulunamadı veya yetkiniz yok")
+			return fmt.Errorf("İşlem bulunamadı veya yetkiniz yok: %w", err)
 		}
 		if tx.Type == "BUY" {
 			userTxs, err := q.GetUserTransactionsForAsset(ctx, database.GetUserTransactionsForAssetParams{
@@ -267,11 +267,14 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, userID int64
 func (s *TransactionService) GetUserHoldings(ctx context.Context, userID int64) ([]UserHoldingResponse, error) {
 	holdings, err := s.DB.GetUserHoldingsSummary(ctx, userID)
 	if err != nil {
-		return []UserHoldingResponse{}, nil
+		return nil, fmt.Errorf("portföy özeti alınamadı: %w", err)
 	}
 	res := make([]UserHoldingResponse, 0, len(holdings))
 
-	allTxs, _ := s.DB.GetAllUserTransactions(ctx, userID)
+	allTxs, err := s.DB.GetAllUserTransactions(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("işlem geçmişi alınamadı: %w", err)
+	}
 	txsByAsset := make(map[int64][]database.Transaction)
 	for _, tx := range allTxs {
 		txsByAsset[tx.AssetID] = append(txsByAsset[tx.AssetID], tx)
