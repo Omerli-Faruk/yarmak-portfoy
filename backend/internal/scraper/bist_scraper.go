@@ -58,7 +58,12 @@ func fetchYahooPrice(ticker string) (float64, error) {
 		if decodeErr != nil || len(data.Chart.Result) == 0 {
 			return 0, fmt.Errorf("veri bulunamadı: %s", ticker)
 		}
-		return data.Chart.Result[0].Meta.RegularMarketPrice, nil
+		// Alan JSON'da yoksa Go hata vermez, 0 bırakır. 0'ı fiyat diye döndürürsek veritabanına 0 yazılır.
+		price := data.Chart.Result[0].Meta.RegularMarketPrice
+		if price <= 0 {
+			return 0, fmt.Errorf("Yahoo geçerli fiyat dönmedi (%s): %v", ticker, price)
+		}
+		return price, nil
 	}
 	return 0, fmt.Errorf("veri alınamadı: %s", ticker)
 }
@@ -69,23 +74,26 @@ func getSpotGramGoldPrice() (float64, error) {
 	if err == nil {
 		req.Header.Set("User-Agent", "Mozilla/5.0")
 		resp, err := client.Do(req)
-		if err == nil && resp.StatusCode == http.StatusOK {
+		if err == nil {
+			// Body, durum kodu ne olursa olsun kapatılmalı; yalnızca 200'de kapatınca 500 gibi cevaplarda bağlantı sızıyordu.
 			defer resp.Body.Close()
-			bodyBytes, _ := io.ReadAll(resp.Body)
-			bodyStr := string(bodyBytes)
+			if resp.StatusCode == http.StatusOK {
+				bodyBytes, _ := io.ReadAll(resp.Body)
+				bodyStr := string(bodyBytes)
 
-			if idx := strings.Index(bodyStr, `"GRA"`); idx != -1 {
-				sub := bodyStr[idx:]
-				if closeIdx := strings.Index(sub, "}"); closeIdx != -1 {
-					chunk := sub[:closeIdx+1]
-					var graData struct {
-						GRA struct {
-							Selling float64 `json:"Selling"`
-							Buying  float64 `json:"Buying"`
-						} `json:"GRA"`
-					}
-					if err := json.Unmarshal([]byte("{"+chunk+"}"), &graData); err == nil && graData.GRA.Selling > 0 {
-						return graData.GRA.Selling, nil
+				if idx := strings.Index(bodyStr, `"GRA"`); idx != -1 {
+					sub := bodyStr[idx:]
+					if closeIdx := strings.Index(sub, "}"); closeIdx != -1 {
+						chunk := sub[:closeIdx+1]
+						var graData struct {
+							GRA struct {
+								Selling float64 `json:"Selling"`
+								Buying  float64 `json:"Buying"`
+							} `json:"GRA"`
+						}
+						if err := json.Unmarshal([]byte("{"+chunk+"}"), &graData); err == nil && graData.GRA.Selling > 0 {
+							return graData.GRA.Selling, nil
+						}
 					}
 				}
 			}
@@ -226,7 +234,8 @@ func FetchBISTPrice(symbol string) (float64, error) {
 		return bpPrice, nil
 	}
 
-	return 0, fmt.Errorf("hisse fiyatı alınamadı (%s): %v", symbol, err)
+	// İki kaynak da denendi; hangisinin neden düştüğü loglarda görünsün diye ikisinin hatası da yazılır.
+	return 0, fmt.Errorf("hisse fiyatı alınamadı (%s): yahoo: %v; bigpara: %v", symbol, err, bpErr)
 }
 
 type StockHistoricalRecord struct {
