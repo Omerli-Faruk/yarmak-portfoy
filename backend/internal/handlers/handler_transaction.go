@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -88,7 +89,9 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 	go func(assetID int64) {
 		assetObj, err := cfg.Services.Asset.GetAssetByIDWithCache(context.Background(), assetID)
 		if err == nil && time.Since(assetObj.UpdatedAt) > 15*time.Minute {
-			_ = scraper.QuickSyncAsset(context.Background(), cfg.DB, assetObj)
+			if syncErr := scraper.QuickSyncGuarded(cfg.DB, assetObj, time.Minute); syncErr != nil {
+				slog.Warn("İşlem sonrası fiyat senkronizasyonu tamamlanamadı", "symbol", assetObj.Symbol, "error", syncErr)
+			}
 		}
 	}(params.AssetID)
 

@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -9,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 	"yarmak/internal/database"
 	"yarmak/internal/scraper"
 )
@@ -116,10 +116,11 @@ func (cfg *ApiConfig) HandlerGetAssetPriceHistory(w http.ResponseWriter, r *http
 	// Veritabanından tarih aralığına uygun geçmiş veriyi çek
 	price, err := cfg.Services.Asset.FetchPriceHistoryByRange(r.Context(), assetID, rangeParam)
 
-	// Otomatik TEFAS Kurtarma: TEFAS fonu DB'de 0 adet geçmişe sahipse, anında son 1 aylık geçmişi çek ve kaydet
+	// Otomatik TEFAS Kurtarma: TEFAS fonu DB'de 0 adet geçmişe sahipse son 1 aylık geçmişi çek ve kaydet.
+	// Korumalı çağrı: aynı fon için tek istek, aynı anda en fazla 2, en fazla 8 sn bekleme (WriteTimeout 15 sn).
 	if err == nil && len(price) == 0 && assetObj.AssetType == "FON" {
-		if syncErr := scraper.QuickSyncAsset(r.Context(), cfg.DB, assetObj); syncErr != nil {
-			slog.Warn("TEFAS hızlı senkronizasyon başarısız", "symbol", assetObj.Symbol, "error", syncErr)
+		if syncErr := scraper.QuickSyncGuarded(cfg.DB, assetObj, 8*time.Second); syncErr != nil {
+			slog.Warn("TEFAS hızlı senkronizasyon tamamlanamadı", "symbol", assetObj.Symbol, "error", syncErr)
 		}
 		if qErr := cfg.DB.AddToBackfillQueue(r.Context(), int32(assetID)); qErr != nil {
 			slog.Warn("TEFAS backfill kuyruğuna eklenemedi", "asset_id", assetID, "error", qErr)
@@ -152,7 +153,7 @@ func (cfg *ApiConfig) HandlerTriggerBackfill(w http.ResponseWriter, r *http.Requ
 	assetObj, err := cfg.Services.Asset.GetAssetByIDWithCache(r.Context(), assetID)
 	if err == nil {
 		go func() {
-			if syncErr := scraper.QuickSyncAsset(context.Background(), cfg.DB, assetObj); syncErr != nil {
+			if syncErr := scraper.QuickSyncGuarded(cfg.DB, assetObj, time.Minute); syncErr != nil {
 				slog.Error("Arka plan hızlı varlık senkronizasyonu hatası", "symbol", assetObj.Symbol, "error", syncErr)
 			}
 		}()
