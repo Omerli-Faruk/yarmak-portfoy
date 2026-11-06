@@ -77,24 +77,36 @@ func processNextBackfill(ctx context.Context, db *database.Queries) {
 }
 
 func backfillBIST(ctx context.Context, db *database.Queries, asset database.Asset) error {
-	// Yahoo 5 yıllık veriyi tek istekte veriyor
-	currentPrice, history, err := FetchBISTHistory(asset.Symbol, "5y")
+	// Yahoo 5 yıllık veriyi tek istekte veriyor. Sıklık elle günlük: FetchBISTHistory "5y" için aylık seçiyordu
+	// ve yeni eklenen hisseye 5 yılda yalnızca 60 nokta yazılıyordu. Veritabanı günde bir satır tutar.
+	currentPrice, history, err := FetchBISTHistoryInterval(asset.Symbol, "5y", "1d")
 	if err != nil {
 		return err
 	}
 
 	// Güncel fiyatı da yaz
-	_, _ = db.UpdateAssetPrice(ctx, database.UpdateAssetPriceParams{
-		ID:           asset.ID,
-		CurrentPrice: fmt.Sprintf("%.6f", currentPrice),
-	})
+	if currentPrice > 0 {
+		if _, err := db.UpdateAssetPrice(ctx, database.UpdateAssetPriceParams{
+			ID:           asset.ID,
+			CurrentPrice: fmt.Sprintf("%.6f", currentPrice),
+		}); err != nil {
+			slog.Warn("Backfill: güncel fiyat yazılamadı", "symbol", asset.Symbol, "error", err)
+		}
+	}
 
+	// Yazılamayan günler sayılır; hepsi yutulursa iş boş geçse de "tamamlandı" sayılıyordu.
+	failed := 0
 	for _, h := range history {
-		_ = db.UpsertPriceHistory(ctx, database.UpsertPriceHistoryParams{
+		if err := db.UpsertPriceHistory(ctx, database.UpsertPriceHistoryParams{
 			AssetID:    asset.ID,
 			Price:      fmt.Sprintf("%.6f", h.Price),
 			RecordedAt: h.Date.UTC(),
-		})
+		}); err != nil {
+			failed++
+		}
+	}
+	if failed > 0 {
+		return fmt.Errorf("%d günün fiyatı veritabanına yazılamadı (%d günden)", failed, len(history))
 	}
 	return nil
 }
