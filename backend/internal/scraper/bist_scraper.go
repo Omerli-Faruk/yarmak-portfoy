@@ -2,6 +2,7 @@ package scraper
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -15,9 +16,15 @@ import (
 
 var client = &http.Client{Timeout: 10 * time.Second}
 
+// ErrRateLimited, Yahoo'nun 429 döndüğünü bildirir. Çağıranlar errors.Is ile tanıyıp bir süre istek atmayı keser.
+var ErrRateLimited = errors.New("yahoo istek sınırı aşıldı (429)")
+
+// yahooBaseURL, Yahoo Finance adresi. Testler buraya sahte bir sunucunun adresini verir (gerçek Yahoo'ya 429 yaptıramayız).
+var yahooBaseURL = "https://query1.finance.yahoo.com"
+
 func fetchYahooPrice(ticker string) (float64, error) {
 	for attempt := 0; attempt < 2; attempt++ {
-		req, err := http.NewRequest("GET", "https://query1.finance.yahoo.com/v8/finance/chart/"+ticker, nil)
+		req, err := http.NewRequest("GET", yahooBaseURL+"/v8/finance/chart/"+ticker, nil)
 		if err != nil {
 			return 0, fmt.Errorf("istek oluşturulamadı: %w", err)
 		}
@@ -393,7 +400,7 @@ func FetchBISTHistoryInterval(symbol, rangeStr, interval string) (currentPrice f
 		ticker += ".IS"
 	}
 
-	url := fmt.Sprintf("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=%s&range=%s", ticker, interval, rangeStr)
+	url := fmt.Sprintf("%s/v8/finance/chart/%s?interval=%s&range=%s", yahooBaseURL, ticker, interval, rangeStr)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return 0, nil, err
@@ -406,17 +413,13 @@ func FetchBISTHistoryInterval(symbol, rangeStr, interval string) (currentPrice f
 	}
 	defer resp.Body.Close()
 
+	// Geçmiş alınamıyorsa hata dönüyoruz. Eskiden Bigpara'dan tek anlık fiyat "geçmiş" diye dönülüyordu;
+	// çağıran hata görmediği için veritabanı yedeğine düşmüyor, kullanıcı tek noktalık grafik görüyordu.
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return 0, nil, fmt.Errorf("%w: %s", ErrRateLimited, ticker)
+	}
 	if resp.StatusCode != http.StatusOK {
-		// Yahoo'da bulunamayan hisseler için Bigpara üzerinden anlık fiyatı çek
-		if bpPrice, bpErr := fetchBigparaStockPrice(symbol); bpErr == nil && bpPrice > 0 {
-			return bpPrice, []StockHistoricalRecord{
-				{
-					Date:  time.Now(),
-					Price: bpPrice,
-				},
-			}, nil
-		}
-		return 0, nil, fmt.Errorf("Yahoo API hata kodu: %d", resp.StatusCode)
+		return 0, nil, fmt.Errorf("Yahoo geçmiş verisi alınamadı (%s): HTTP %d", ticker, resp.StatusCode)
 	}
 
 	var data struct {
