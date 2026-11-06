@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:gate": "node --experimental-strip-types --test src/lib/externalGate.test.ts"
   },
   "dependencies": {
     "axios": "^1.20.0",

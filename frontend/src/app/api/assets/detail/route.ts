@@ -9,6 +9,7 @@ import {
     signedChange,
 } from '@/lib/marketData';
 import { formatTRY } from '@/lib/formatters';
+import { gatedFetch } from '@/lib/externalGate';
 
 export const dynamic = 'force-dynamic';
 
@@ -126,7 +127,7 @@ async function fetchFundamentals(ticker: string, isTefas: boolean): Promise<Reco
         const auth = await getYahooAuth(3000);
         let qsData: YahooQuoteSummaryData | null = null;
         if (auth) {
-            const qsRes = await fetch(
+            const qsRes = await gatedFetch(
                 `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}?crumb=${encodeURIComponent(auth.crumb)}&modules=summaryDetail,defaultKeyStatistics,calendarEvents`,
                 {
                     headers: { 'User-Agent': 'Mozilla/5.0', 'Cookie': auth.cookie },
@@ -217,7 +218,7 @@ async function fetchDividendHistory(ticker: string, isTefas: boolean): Promise<{
     }
 
     try {
-        const res = await fetch(
+        const res = await gatedFetch(
             `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=3mo&range=10y&events=div`,
             { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(4000) }
         );
@@ -295,7 +296,7 @@ async function getAccurateSummary(ticker: string, isTefas: boolean, backendSumma
     }
 
     try {
-        const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=5y`, {
+        const res = await gatedFetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=5y`, {
             headers: { 'User-Agent': 'Mozilla/5.0' },
             signal: AbortSignal.timeout(5000),
         });

@@ -11,6 +11,7 @@ import {
     signedChange,
 } from '@/lib/marketData';
 import type { MarketAssetItem, MarketIndexItem } from '@/types';
+import { gatedFetch } from '@/lib/externalGate';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,7 +46,7 @@ async function fetchBistLiveQuotes(symbols: string[]): Promise<Map<string, { pri
     await Promise.all(chunks.map(async chunk => {
         try {
             const querySymbols = chunk.map(s => (s.endsWith('.IS') ? s : `${s}.IS`)).join(',');
-            const res = await fetch(`https://query2.finance.yahoo.com/v7/finance/quote?symbols=${querySymbols}&crumb=${auth.crumb}`, {
+            const res = await gatedFetch(`https://query2.finance.yahoo.com/v7/finance/quote?symbols=${querySymbols}&crumb=${auth.crumb}`, {
                 headers: { 'User-Agent': 'Mozilla/5.0', 'Cookie': auth.cookie },
                 signal: AbortSignal.timeout(4500)
             });

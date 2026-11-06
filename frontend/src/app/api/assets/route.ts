@@ -11,6 +11,7 @@ import {
     gramGoldFromOunce,
     signedChange,
 } from '@/lib/marketData';
+import { gatedFetch } from '@/lib/externalGate';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,7 +56,7 @@ let lastTefasFetchTime = 0;
 
 async function fetchTefasType(fonTipi: 'YAT' | 'EMK', bas: string, bit: string): Promise<TefasFundItem[]> {
     try {
-        const res = await fetch('https://www.tefas.gov.tr/api/funds/fonGnlBlgSiraliGetir', {
+        const res = await gatedFetch('https://www.tefas.gov.tr/api/funds/fonGnlBlgSiraliGetir', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -476,7 +477,7 @@ export async function GET(request: Request) {
 
         // 4) Yahoo metin araması; yalnızca Borsa İstanbul sonuçları alınır
         try {
-            const yahooRes = await fetch(
+            const yahooRes = await gatedFetch(
                 'https://query2.finance.yahoo.com/v1/finance/search?q=' + encodeURIComponent(query) + '&quotesCount=10',
                 { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(2500) }
             );

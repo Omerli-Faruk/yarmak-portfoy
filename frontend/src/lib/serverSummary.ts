@@ -1,6 +1,8 @@
 // /api/assets/batch-summary ve /api/assets/detail rotalarının ortak kullandığı getiri özeti hesabı.
 // Sonuçlar birkaç dakika bellekte tutulur.
 
+import { gatedFetch } from './externalGate';
+
 const BACKEND_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080/v1';
 
 export interface AccurateSummaryResult {
@@ -96,7 +98,7 @@ export async function getAccurateYahooSummary(ticker: string): Promise<AccurateS
     }
 
     try {
-        const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=5y`, {
+        const res = await gatedFetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=5y`, {
             headers: { 'User-Agent': 'Mozilla/5.0' },
             signal: AbortSignal.timeout(5000),
         });

@@ -1,6 +1,8 @@
 // app/api altındaki route'ların ortak yardımcıları. Sadece sunucuda çalışır,
 // 'use client' olan dosyalardan import etmeyin.
 
+import { gatedFetch } from './externalGate';
+
 export const BACKEND_URL =
     process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080/v1';
 
@@ -65,14 +67,14 @@ export async function getYahooAuth(timeoutMs = 3500): Promise<{ cookie: string; 
         return { cookie: yahooAuthCache.cookie, crumb: yahooAuthCache.crumb };
     }
     try {
-        const r1 = await fetch('https://fc.yahoo.com', {
+        const r1 = await gatedFetch('https://fc.yahoo.com', {
             headers: USER_AGENT,
             signal: AbortSignal.timeout(timeoutMs),
         });
         const cookie = r1.headers.get('set-cookie');
         if (!cookie) return null;
 
-        const r2 = await fetch('https://query2.finance.yahoo.com/v1/test/getcrumb', {
+        const r2 = await gatedFetch('https://query2.finance.yahoo.com/v1/test/getcrumb', {
             headers: { ...USER_AGENT, 'Cookie': cookie },
             signal: AbortSignal.timeout(timeoutMs),
         });
@@ -95,7 +97,7 @@ export async function fetchYahooChart(
 ): Promise<ChartQuote | null> {
     const { range = '1d', timeoutMs = 3500, name } = opts;
     try {
-        const res = await fetch(
+        const res = await gatedFetch(
             `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=${range}`,
             {
                 headers: USER_AGENT,
@@ -144,7 +146,7 @@ export function gramGoldFromOunce(goldOz: ChartQuote | null, usdTry: ChartQuote 
 // Gram altın (serbest piyasa) fiyatı truncgil'den
 export async function fetchSpotGold(timeoutMs = 3500): Promise<ChartQuote | null> {
     try {
-        const res = await fetch('https://finans.truncgil.com/v4/today.json', {
+        const res = await gatedFetch('https://finans.truncgil.com/v4/today.json', {
             headers: USER_AGENT,
             signal: AbortSignal.timeout(timeoutMs),
         });
