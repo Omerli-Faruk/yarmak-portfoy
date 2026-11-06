@@ -253,7 +253,7 @@ type StockHistoricalRecord struct {
 // FetchGoldHistory, gram Altın (TL) geçmiş fiyat verisini Ons Altın (GC=F) ve Dolar/TL (USDTRY=X)
 // kurlarını zaman damgalarına göre eşleştirip çarparak (Ons * Dolar / 31.1034768) dinamik üretir.
 func FetchGoldHistory(rangeStr string) (float64, []StockHistoricalRecord, error) {
-	return FetchGoldHistoryInterval(rangeStr, yahooInterval(rangeStr))
+	return FetchGoldHistoryInterval(rangeStr, YahooInterval(rangeStr))
 }
 
 // FetchGoldHistoryInterval, FetchGoldHistory ile aynı; yalnızca veri sıklığı (interval) elle verilir.
@@ -356,11 +356,11 @@ func FetchGoldHistoryInterval(rangeStr, interval string) (float64, []StockHistor
 
 // FetchBISTHistory, BIST hissesinin güncel fiyatını ve verilen aralıktaki günlük fiyat geçmişini çeker.
 func FetchBISTHistory(symbol string, rangeStr string) (currentPrice float64, history []StockHistoricalRecord, err error) {
-	return FetchBISTHistoryInterval(symbol, rangeStr, yahooInterval(rangeStr))
+	return FetchBISTHistoryInterval(symbol, rangeStr, YahooInterval(rangeStr))
 }
 
-// yahooInterval, aralığa göre varsayılan veri sıklığını seçer.
-func yahooInterval(rangeStr string) string {
+// YahooInterval, aralığa göre varsayılan veri sıklığını seçer. Grafik ucu kapıya aynı sıklıkla sorsun diye dışa açık.
+func YahooInterval(rangeStr string) string {
 	switch rangeStr {
 	case "1d":
 		return "5m"

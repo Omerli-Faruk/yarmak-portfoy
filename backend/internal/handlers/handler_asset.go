@@ -92,11 +92,12 @@ func (cfg *ApiConfig) HandlerGetAssetPriceHistory(w http.ResponseWriter, r *http
 
 	rangeParam := r.URL.Query().Get("range")
 
-	// Eğer HISSE, DOVIZ veya ALTIN ise öncelikli olarak anlık Yahoo Finance verisi çekilir
+	// HISSE, DOVIZ ve ALTIN geçmişi Yahoo'dan gelir, ama doğrudan değil: fiyat kapısından (önbellek, singleflight,
+	// hız sınırı, devre kesici). Böylece aynı grafiği açan kullanıcı sayısı dışarıya giden istek sayısını artırmaz.
 	assetObj, err := cfg.Services.Asset.GetAssetByIDWithCache(r.Context(), assetID)
 	if err == nil && (assetObj.AssetType == "HISSE" || assetObj.AssetType == "DOVIZ" || assetObj.AssetType == "ALTIN" || assetObj.Symbol == "ALTIN") {
 		yhRange := mapRangeToYahooFinance(rangeParam)
-		_, history, fetchErr := scraper.FetchBISTHistory(assetObj.Symbol, yhRange)
+		history, fetchErr := cfg.Services.Prices.History(assetObj.Symbol, yhRange, scraper.YahooInterval(yhRange))
 		if fetchErr == nil {
 			mapped := make([]mappedHistory, 0, len(history))
 			for _, h := range history {
@@ -109,7 +110,7 @@ func (cfg *ApiConfig) HandlerGetAssetPriceHistory(w http.ResponseWriter, r *http
 			respondWithJSON(w, http.StatusOK, mapped)
 			return
 		}
-		slog.Debug("Yahoo Finance anlık geçmiş çekilemedi, veritabanına başvuruluyor", "symbol", assetObj.Symbol, "error", fetchErr)
+		slog.Debug("Yahoo geçmişi alınamadı, veritabanına başvuruluyor", "symbol", assetObj.Symbol, "error", fetchErr)
 	}
 
 	// Veritabanından tarih aralığına uygun geçmiş veriyi çek
@@ -132,7 +133,12 @@ func (cfg *ApiConfig) HandlerGetAssetPriceHistory(w http.ResponseWriter, r *http
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, price)
+	// Veritabanı kaynağı da Yahoo kaynağıyla aynı biçimde (asset_id, price, recorded_at) dönsün.
+	mapped := make([]mappedHistory, 0, len(price))
+	for _, p := range price {
+		mapped = append(mapped, mappedHistory{AssetID: p.AssetID, Price: p.Price, RecordedAt: p.RecordedAt})
+	}
+	respondWithJSON(w, http.StatusOK, mapped)
 }
 
 // HandlerTriggerBackfill, eksik geçmiş fiyat verilerini tamamlamak için varlığı kuyruğa ekler ve arka planda senkronizasyon başlatır.
