@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -20,7 +21,15 @@ var client = &http.Client{Timeout: 10 * time.Second}
 var ErrRateLimited = errors.New("yahoo istek sınırı aşıldı (429)")
 
 // yahooBaseURL, Yahoo Finance adresi. Testler buraya sahte bir sunucunun adresini verir (gerçek Yahoo'ya 429 yaptıramayız).
-var yahooBaseURL = "https://query1.finance.yahoo.com"
+// YAHOO_BASE_URL ortam değişkeni yük testinde sunucuyu sahte Yahoo'ya yönlendirir; verilmezse gerçek adres.
+var yahooBaseURL = envOrDefault("YAHOO_BASE_URL", "https://query1.finance.yahoo.com")
+
+func envOrDefault(key, def string) string {
+	if v := strings.TrimRight(strings.TrimSpace(os.Getenv(key)), "/"); v != "" {
+		return v
+	}
+	return def
+}
 
 func fetchYahooPrice(ticker string) (float64, error) {
 	for attempt := 0; attempt < 2; attempt++ {
