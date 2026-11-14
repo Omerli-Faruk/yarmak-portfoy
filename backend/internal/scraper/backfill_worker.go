@@ -2,6 +2,8 @@ package scraper
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -28,19 +30,13 @@ func StartBackfillWorker(ctx context.Context, db *database.Queries, wg *sync.Wai
 }
 
 func processNextBackfill(ctx context.Context, db *database.Queries) {
-	// Kuyruktaki sıradaki işi al
-	task, err := db.GetNextBackfillTask(ctx)
+	// Sıradaki işi tek cümlede al ve PROCESSING yap. Seçme ile işaretleme ayrı sorgular olunca
+	// kilit arada açılıyordu; iki sunucu aynı işi alabiliyordu.
+	task, err := db.ClaimNextBackfillTask(ctx)
 	if err != nil {
-		return // Bekleyen iş yok ya da sorgu hata verdi
-	}
-
-	// İşi "işleniyor" olarak işaretle
-	err = db.UpdateBackfillTaskStatus(ctx, database.UpdateBackfillTaskStatusParams{
-		ID:           task.ID,
-		Status:       "PROCESSING",
-		ErrorMessage: "",
-	})
-	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) { // iş yoksa sessizce bekleriz, veritabanı hatası loglanır
+			slog.Error("Backfill kuyruğundan iş alınamadı", "error", err)
+		}
 		return
 	}
 

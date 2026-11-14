@@ -36,16 +36,24 @@ func (q *Queries) AddToWatchlist(ctx context.Context, arg AddToWatchlistParams) 
 	return err
 }
 
-const getNextBackfillTask = `-- name: GetNextBackfillTask :one
-SELECT id, asset_id, status, error_message, created_at, updated_at FROM backfill_queue
-WHERE status = 'PENDING' OR (status = 'PROCESSING' AND updated_at < NOW() - INTERVAL '10 minutes')
-ORDER BY created_at ASC
-LIMIT 1
-FOR UPDATE SKIP LOCKED
+const claimNextBackfillTask = `-- name: ClaimNextBackfillTask :one
+UPDATE backfill_queue
+SET status = 'PROCESSING', error_message = '', updated_at = NOW()
+WHERE id = (
+    SELECT id FROM backfill_queue
+    WHERE status = 'PENDING' OR (status = 'PROCESSING' AND updated_at < NOW() - INTERVAL '10 minutes')
+    ORDER BY created_at ASC
+    LIMIT 1
+    FOR UPDATE SKIP LOCKED
+)
+RETURNING id, asset_id, status, error_message, created_at, updated_at
 `
 
-func (q *Queries) GetNextBackfillTask(ctx context.Context) (BackfillQueue, error) {
-	row := q.db.QueryRowContext(ctx, getNextBackfillTask)
+// Sıradaki işi tek cümlede kilitler, PROCESSING yapar ve döner. Eskiden SELECT ... FOR UPDATE ile UPDATE
+// ayrı sorgulardı; kilit SELECT bitince açıldığı için iki sunucu aynı işi alabiliyordu. Tek cümle tek
+// transaction olduğundan kilit işaretleme bitene kadar yaşar.
+func (q *Queries) ClaimNextBackfillTask(ctx context.Context) (BackfillQueue, error) {
+	row := q.db.QueryRowContext(ctx, claimNextBackfillTask)
 	var i BackfillQueue
 	err := row.Scan(
 		&i.ID,

@@ -12,6 +12,10 @@ type Querier interface {
 	AddToBackfillQueue(ctx context.Context, assetID int32) error
 	AddToWatchlist(ctx context.Context, arg AddToWatchlistParams) error
 	ApplyStockSplitToTransactions(ctx context.Context, arg ApplyStockSplitToTransactionsParams) error
+	// Sıradaki işi tek cümlede kilitler, PROCESSING yapar ve döner. Eskiden SELECT ... FOR UPDATE ile UPDATE
+	// ayrı sorgulardı; kilit SELECT bitince açıldığı için iki sunucu aynı işi alabiliyordu. Tek cümle tek
+	// transaction olduğundan kilit işaretleme bitene kadar yaşar.
+	ClaimNextBackfillTask(ctx context.Context) (BackfillQueue, error)
 	CreateAsset(ctx context.Context, arg CreateAssetParams) (Asset, error)
 	CreateDividend(ctx context.Context, arg CreateDividendParams) (Dividend, error)
 	CreatePortfolioSnapshot(ctx context.Context, arg CreatePortfolioSnapshotParams) (PortfolioSnapshot, error)
@@ -43,7 +47,6 @@ type Querier interface {
 	GetAssetReturnsSummary(ctx context.Context, assetID int64) (GetAssetReturnsSummaryRow, error)
 	GetDividendByIDAndUser(ctx context.Context, arg GetDividendByIDAndUserParams) (Dividend, error)
 	GetLatestPortfolioSnapshot(ctx context.Context, userID int64) (PortfolioSnapshot, error)
-	GetNextBackfillTask(ctx context.Context) (BackfillQueue, error)
 	GetPendingAlertsForAsset(ctx context.Context, assetID int64) ([]PriceAlert, error)
 	GetPortfolioPeriodValues(ctx context.Context, userID int64) (GetPortfolioPeriodValuesRow, error)
 	GetTotalCommission(ctx context.Context, userID int64) (string, error)

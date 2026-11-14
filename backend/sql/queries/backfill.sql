@@ -3,12 +3,20 @@ INSERT INTO backfill_queue (asset_id)
 VALUES ($1)
 ON CONFLICT (asset_id) DO UPDATE SET status = 'PENDING', error_message = '', updated_at = NOW();
 
--- name: GetNextBackfillTask :one
-SELECT * FROM backfill_queue
-WHERE status = 'PENDING' OR (status = 'PROCESSING' AND updated_at < NOW() - INTERVAL '10 minutes')
-ORDER BY created_at ASC
-LIMIT 1
-FOR UPDATE SKIP LOCKED;
+-- name: ClaimNextBackfillTask :one
+-- Sıradaki işi tek cümlede kilitler, PROCESSING yapar ve döner. Eskiden SELECT ... FOR UPDATE ile UPDATE
+-- ayrı sorgulardı; kilit SELECT bitince açıldığı için iki sunucu aynı işi alabiliyordu. Tek cümle tek
+-- transaction olduğundan kilit işaretleme bitene kadar yaşar.
+UPDATE backfill_queue
+SET status = 'PROCESSING', error_message = '', updated_at = NOW()
+WHERE id = (
+    SELECT id FROM backfill_queue
+    WHERE status = 'PENDING' OR (status = 'PROCESSING' AND updated_at < NOW() - INTERVAL '10 minutes')
+    ORDER BY created_at ASC
+    LIMIT 1
+    FOR UPDATE SKIP LOCKED
+)
+RETURNING *;
 
 -- name: UpdateBackfillTaskStatus :exec
 UPDATE backfill_queue
