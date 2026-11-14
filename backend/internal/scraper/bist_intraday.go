@@ -129,6 +129,7 @@ func runBistCycle(ctx context.Context, db *database.Queries, stocks, fx bool) {
 				CurrentPrice: priceStr,
 			})
 			if err != nil {
+				slog.Error("BIST fiyatı veritabanına yazılamadı", "symbol", asset.Symbol, "error", err)
 				continue
 			}
 			err = db.UpsertPriceHistory(ctx, database.UpsertPriceHistoryParams{

@@ -10,39 +10,6 @@ import (
 	"time"
 )
 
-const createPortfolioSnapshot = `-- name: CreatePortfolioSnapshot :one
-INSERT INTO portfolio_snapshots(user_id, total_value, total_cost, profit_loss, recorded_at)
-values ($1, $2, $3, $4, $5) RETURNING id, user_id, total_value, total_cost, profit_loss, recorded_at
-`
-
-type CreatePortfolioSnapshotParams struct {
-	UserID     int64
-	TotalValue string
-	TotalCost  string
-	ProfitLoss string
-	RecordedAt time.Time
-}
-
-func (q *Queries) CreatePortfolioSnapshot(ctx context.Context, arg CreatePortfolioSnapshotParams) (PortfolioSnapshot, error) {
-	row := q.db.QueryRowContext(ctx, createPortfolioSnapshot,
-		arg.UserID,
-		arg.TotalValue,
-		arg.TotalCost,
-		arg.ProfitLoss,
-		arg.RecordedAt,
-	)
-	var i PortfolioSnapshot
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.TotalValue,
-		&i.TotalCost,
-		&i.ProfitLoss,
-		&i.RecordedAt,
-	)
-	return i, err
-}
-
 const getLatestPortfolioSnapshot = `-- name: GetLatestPortfolioSnapshot :one
 SELECT id, user_id, total_value, total_cost, profit_loss, recorded_at
 FROM portfolio_snapshots
@@ -175,4 +142,35 @@ func (q *Queries) GetUserPortfolioHistory(ctx context.Context, userID int64) ([]
 		return nil, err
 	}
 	return items, nil
+}
+
+const upsertPortfolioSnapshot = `-- name: UpsertPortfolioSnapshot :exec
+INSERT INTO portfolio_snapshots (user_id, total_value, total_cost, profit_loss, recorded_at)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (user_id, (timezone('Europe/Istanbul', recorded_at)::date)) DO UPDATE
+SET total_value = EXCLUDED.total_value,
+    total_cost  = EXCLUDED.total_cost,
+    profit_loss = EXCLUDED.profit_loss,
+    recorded_at = EXCLUDED.recorded_at
+`
+
+type UpsertPortfolioSnapshotParams struct {
+	UserID     int64
+	TotalValue string
+	TotalCost  string
+	ProfitLoss string
+	RecordedAt time.Time
+}
+
+// Aynı kullanıcı için aynı İstanbul gününde ikinci yazım yeni satır açmaz, o günün satırını günceller.
+// Böylece yeniden başlatma ya da hata sonrası tekrar deneme güvenli olur.
+func (q *Queries) UpsertPortfolioSnapshot(ctx context.Context, arg UpsertPortfolioSnapshotParams) error {
+	_, err := q.db.ExecContext(ctx, upsertPortfolioSnapshot,
+		arg.UserID,
+		arg.TotalValue,
+		arg.TotalCost,
+		arg.ProfitLoss,
+		arg.RecordedAt,
+	)
+	return err
 }

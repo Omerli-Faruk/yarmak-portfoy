@@ -97,7 +97,7 @@ func runTefasDailyCycle(ctx context.Context, db *database.Queries) {
 		}
 	}
 
-	updateCount := 0
+	updateCount, failed := 0, 0
 	for _, fund := range allFunds {
 		// Sıfır veya negatif fiyat koruması: TEFAS henüz fiyat açıklamamışsa veya veri eksikse mevcut fiyatı bozma
 		if fund.Price <= 0 {
@@ -115,7 +115,9 @@ func runTefasDailyCycle(ctx context.Context, db *database.Queries) {
 		})
 
 		if err != nil {
-			continue // Veritabanı hatası
+			failed++
+			slog.Error("TEFAS fonu veritabanına yazılamadı", "symbol", fund.Symbol, "error", err)
+			continue
 		}
 
 		// 2. Aktif fonsa fiyat geçmişine yaz ve bekleyen alarmlarını kontrol et
@@ -125,7 +127,10 @@ func runTefasDailyCycle(ctx context.Context, db *database.Queries) {
 				Price:      priceStr,
 				RecordedAt: fund.Date.UTC(),
 			})
-			if err == nil {
+			if err != nil {
+				failed++
+				slog.Error("TEFAS fiyat geçmişi yazılamadı", "symbol", fund.Symbol, "error", err)
+			} else {
 				updateCount++
 			}
 			if fund.Price > 0 {
@@ -133,5 +138,5 @@ func runTefasDailyCycle(ctx context.Context, db *database.Queries) {
 			}
 		}
 	}
-	slog.Info("TEFAS Toplu Fiyat Çekimi Tamamlandı", "guncellenen_aktif_fon_sayisi", updateCount)
+	slog.Info("TEFAS Toplu Fiyat Çekimi Tamamlandı", "guncellenen_aktif_fon_sayisi", updateCount, "yazilamayan", failed)
 }

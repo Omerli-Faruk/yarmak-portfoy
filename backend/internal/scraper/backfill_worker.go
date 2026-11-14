@@ -23,7 +23,7 @@ func StartBackfillWorker(ctx context.Context, db *database.Queries, wg *sync.Wai
 				slog.Info("Backfill worker durduruldu")
 				return
 			case <-ticker.C:
-				processNextBackfill(ctx, db)
+				runSafely("backfill", func() { processNextBackfill(ctx, db) })
 			}
 		}
 	})

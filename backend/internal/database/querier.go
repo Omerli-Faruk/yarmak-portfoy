@@ -18,7 +18,6 @@ type Querier interface {
 	ClaimNextBackfillTask(ctx context.Context) (BackfillQueue, error)
 	CreateAsset(ctx context.Context, arg CreateAssetParams) (Asset, error)
 	CreateDividend(ctx context.Context, arg CreateDividendParams) (Dividend, error)
-	CreatePortfolioSnapshot(ctx context.Context, arg CreatePortfolioSnapshotParams) (PortfolioSnapshot, error)
 	CreatePriceAlert(ctx context.Context, arg CreatePriceAlertParams) (PriceAlert, error)
 	CreatePriceHistory(ctx context.Context, arg CreatePriceHistoryParams) (PriceHistory, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
@@ -80,6 +79,9 @@ type Querier interface {
 	UpdateTransactionRealizedPnL(ctx context.Context, arg UpdateTransactionRealizedPnLParams) error
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error)
 	UpsertAsset(ctx context.Context, arg UpsertAssetParams) (Asset, error)
+	// Aynı kullanıcı için aynı İstanbul gününde ikinci yazım yeni satır açmaz, o günün satırını günceller.
+	// Böylece yeniden başlatma ya da hata sonrası tekrar deneme güvenli olur.
+	UpsertPortfolioSnapshot(ctx context.Context, arg UpsertPortfolioSnapshotParams) error
 	UpsertPriceHistory(ctx context.Context, arg UpsertPriceHistoryParams) error
 }
 

@@ -1,6 +1,13 @@
--- name: CreatePortfolioSnapshot :one
-INSERT INTO portfolio_snapshots(user_id, total_value, total_cost, profit_loss, recorded_at)
-values ($1, $2, $3, $4, $5) RETURNING *;
+-- name: UpsertPortfolioSnapshot :exec
+-- Aynı kullanıcı için aynı İstanbul gününde ikinci yazım yeni satır açmaz, o günün satırını günceller.
+-- Böylece yeniden başlatma ya da hata sonrası tekrar deneme güvenli olur.
+INSERT INTO portfolio_snapshots (user_id, total_value, total_cost, profit_loss, recorded_at)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (user_id, (timezone('Europe/Istanbul', recorded_at)::date)) DO UPDATE
+SET total_value = EXCLUDED.total_value,
+    total_cost  = EXCLUDED.total_cost,
+    profit_loss = EXCLUDED.profit_loss,
+    recorded_at = EXCLUDED.recorded_at;
 
 -- name: GetUserPortfolioHistory :many
 SELECT *
