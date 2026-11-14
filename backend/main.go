@@ -116,7 +116,7 @@ func main() {
 
 	// 2. Arka Plan Scraper Worker'ı context ile Başlat
 	var scraperWg sync.WaitGroup
-	scraper.StartScraperWorker(serverCtx, queries, 1*time.Minute, &scraperWg)
+	scraper.StartScraperWorker(serverCtx, queries, &scraperWg)
 	srv := &http.Server{
 		Handler:      r,
 		Addr:         ":" + port,

@@ -13,7 +13,8 @@ import (
 )
 
 // StartScraperWorker, tüm arka plan görevlerini (TEFAS, BIST, Backfill, Portfolio Snapshot) asenkron olarak başlatan ana yöneticidir.
-func StartScraperWorker(ctx context.Context, db *database.Queries, interval time.Duration, wg *sync.WaitGroup) {
+// Her işçinin süresi kendi içinde: TEFAS saat hesabıyla, BIST 5 dk, backfill 2 sn, portföy özeti 1 saat.
+func StartScraperWorker(ctx context.Context, db *database.Queries, wg *sync.WaitGroup) {
 	slog.Info("Yeni Mimari (v2) Scraper Yöneticisi Başlatılıyor...")
 
 	// 1. TEFAS günlük fiyatları: sabah 09:00, akşam 18:15 ve 18:00-21:00 arasında yarım saatte bir
