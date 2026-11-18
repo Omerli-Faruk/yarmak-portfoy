@@ -62,8 +62,13 @@ type GateConfig struct {
 	MaxWait         time.Duration // bir isteğin sıra bekleme süresi; dolarsa eski veri ya da hata döner
 	BreakerCooldown time.Duration // 429 alındıktan sonra hiç istek atılmayan süre
 	MaxEntries      int           // önbellekteki en fazla kayıt
-	StaleFor        time.Duration // süresi dolmuş kaydın yedek olarak tutulduğu süre
+	StaleFor        time.Duration // süresi dolmuş kaydın yedek olarak tutulabileceği en uzun süre (tavan)
 }
+
+// staleMultiplier: süresi dolmuş kayıt, taze kaldığı sürenin bu katı kadar yedek olarak gösterilir (en fazla StaleFor).
+// 1 günlük grafik 3 dk taze, 30 dk yedek; günlük mumlar 2 sa taze, 20 sa yedek. Yedek de bitince grafikler
+// veritabanındaki fiyatlara düşer (handler_asset.go, portfolio_history_service.go).
+const staleMultiplier = 10
 
 // DefaultGateConfig: kullanıcı sayısından bağımsız olarak dışarıya ortalama saniyede 2 istek (saatte 7.200),
 // ani ihtiyaçta 20 istek hemen. Yahoo'nun resmî bir sınırı yok; 429 gelirse devre kesici devreye girer.
@@ -79,9 +84,10 @@ func DefaultGateConfig() GateConfig {
 }
 
 type gateEntry struct {
-	value     any
-	fetchedAt time.Time
-	expires   time.Time
+	value      any
+	fetchedAt  time.Time
+	expires    time.Time // bu andan sonra bayat: dışarıya yeniden sorulur
+	staleUntil time.Time // bu ana kadar dış kaynak düşerse yedek olarak gösterilir
 }
 
 // gatedPriceSource, PriceSource'u saran kapı. Kullanıcı isteklerini dış isteklerden koparır:
@@ -217,7 +223,7 @@ func (g *gatedPriceSource) lookup(key string, now time.Time) (v any, fresh bool,
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	e, found := g.entries[key]
-	if !found || now.After(e.expires.Add(g.cfg.StaleFor)) {
+	if !found || now.After(e.staleUntil) {
 		return nil, false, false
 	}
 	return e.value, now.Before(e.expires), true
@@ -225,19 +231,20 @@ func (g *gatedPriceSource) lookup(key string, now time.Time) (v any, fresh bool,
 
 func (g *gatedPriceSource) store(key string, v any, ttl time.Duration) {
 	now := g.now()
+	yedek := min(staleMultiplier*ttl, g.cfg.StaleFor) // taze sürenin 10 katı, en fazla 24 sa
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if len(g.entries) >= g.cfg.MaxEntries {
 		g.evictLocked(now)
 	}
-	g.entries[key] = gateEntry{value: v, fetchedAt: now, expires: now.Add(ttl)}
+	g.entries[key] = gateEntry{value: v, fetchedAt: now, expires: now.Add(ttl), staleUntil: now.Add(ttl + yedek)}
 }
 
 // evictLocked, önce yedek süresi de geçmiş kayıtları siler; tavan hâlâ doluysa en eski çekilmiş kaydı atar.
 // g.mu tutulurken çağrılmalı.
 func (g *gatedPriceSource) evictLocked(now time.Time) {
 	for k, e := range g.entries {
-		if now.After(e.expires.Add(g.cfg.StaleFor)) {
+		if now.After(e.staleUntil) {
 			delete(g.entries, k)
 		}
 	}

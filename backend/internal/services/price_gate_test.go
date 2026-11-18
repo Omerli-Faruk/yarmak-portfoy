@@ -191,6 +191,40 @@ func TestGateServesStaleDataWhenSourceFails(t *testing.T) {
 	}
 }
 
+// #54: yedek süre taze sürenin staleMultiplier katı, en fazla StaleFor (24 sa). Önceden her kayıt 24 sa yedekte kalıyordu;
+// 1 günlük grafikte bu, bütün grafiğin dünden kalması demekti.
+func TestGateStaleWindowScalesWithTTL(t *testing.T) {
+	tests := []struct {
+		name  string
+		get   func(g *gatedPriceSource) error
+		ttl   time.Duration
+		yedek time.Duration
+	}{
+		{"güncel fiyat: 1 dk taze, 10 dk yedek", func(g *gatedPriceSource) error { _, err := g.Price("USDTRY"); return err }, priceTTL, 10 * time.Minute},
+		{"1 günlük grafik: 3 dk taze, 30 dk yedek", func(g *gatedPriceSource) error { _, err := g.History("THYAO", "1d", "5m"); return err }, historyTTL("5m"), 30 * time.Minute},
+		{"haftalık mum: 6 sa taze, 60 sa değil 24 sa yedek (tavan)", func(g *gatedPriceSource) error { _, err := g.History("THYAO", "10y", "1wk"); return err }, historyTTL("1wk"), 24 * time.Hour},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := &gateFakeSource{}
+			g, clock := newTestGate(src)
+			if err := tt.get(g); err != nil {
+				t.Fatal(err)
+			}
+			src.setErr(errors.New("bağlantı koptu"))
+
+			clock.advance(tt.ttl + tt.yedek - time.Second) // yedeğin bitmesine 1 sn var
+			if err := tt.get(g); err != nil {
+				t.Errorf("yedek süre içinde eski veri bekleniyordu, gelen hata: %v", err)
+			}
+			clock.advance(2 * time.Second) // yedek bitti
+			if err := tt.get(g); err == nil {
+				t.Error("yedek süre bitince hata bekleniyordu (çağıran veritabanına düşsün), eski veri geldi")
+			}
+		})
+	}
+}
+
 func TestGateReturnsCopyOfHistory(t *testing.T) {
 	src := &gateFakeSource{}
 	g, _ := newTestGate(src)
