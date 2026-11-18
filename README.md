@@ -169,7 +169,7 @@ Tüm uç noktalar `/v1` altındadır; ayrıntılar Swagger arayüzündedir. Kiml
 | Hesap | `POST /register`, `POST /login`, `POST /refresh`, `POST /revoke`, `GET /me` |
 | Varlıklar | `GET /assets`, `GET /assets/lookup`, `GET /assets/daily-changes`, `GET /assets/{id}/summary`, `GET /assets/{id}/price-history`, `POST /assets/{id}/backfill` |
 | İşlemler | `GET/POST /transactions`, `PUT/DELETE /transactions/{id}` |
-| Portföy | `GET /portfolio/holdings`, `GET /portfolio/summary`, `GET /portfolio/history`, `GET /portfolio/value-history`, `DELETE /portfolio/holdings/{symbol}` |
+| Portföy | `GET /portfolio/holdings`, `GET /portfolio/summary`, `GET /portfolio/value-history`, `DELETE /portfolio/holdings/{symbol}` |
 | Temettü | `GET/POST /dividends`, `PUT/DELETE /dividends/{id}` |
 | Bölünmeler | `GET /assets/{id}/splits` |
 | Alarmlar | `GET/POST /alerts`, `DELETE /alerts/{id}` |

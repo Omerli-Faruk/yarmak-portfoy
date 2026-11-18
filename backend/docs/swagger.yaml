@@ -42,23 +42,6 @@ definitions:
         format: int64
         type: integer
     type: object
-  database.PortfolioSnapshot:
-    properties:
-      id:
-        format: int64
-        type: integer
-      profitLoss:
-        type: string
-      recordedAt:
-        type: string
-      totalCost:
-        type: string
-      totalValue:
-        type: string
-      userID:
-        format: int64
-        type: integer
-    type: object
   database.PriceAlert:
     properties:
       assetID:
@@ -485,6 +468,12 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
       summary: Fiyat Alarmı Kur
@@ -516,6 +505,18 @@ paths:
             type: object
         "401":
           description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
           schema:
             additionalProperties:
               type: string
@@ -739,6 +740,18 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
       summary: Temettü Kaydını Sil
@@ -846,36 +859,6 @@ paths:
       summary: Giriş Yapmış Kullanıcı Bilgisi
       tags:
       - Auth
-  /portfolio/history:
-    get:
-      description: Kullanıcının portföyünün zaman içindeki gelişimini grafik için
-        döner
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/database.PortfolioSnapshot'
-            type: array
-        "401":
-          description: Unauthorized
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      security:
-      - BearerAuth: []
-      summary: Portföy Tarihsel Grafik Geçmişi
-      tags:
-      - Portfolio
   /portfolio/holdings:
     get:
       description: Kullanıcının sahip olduğu tüm varlıkları, lot sayılarını ve kâr/zararlarını
@@ -1118,6 +1101,12 @@ paths:
             type: object
         "404":
           description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
           schema:
             additionalProperties:
               type: string

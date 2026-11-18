@@ -79,3 +79,16 @@ func TestCheckAndTriggerAlertsSkipsFailedUpdate(t *testing.T) {
 		t.Errorf("%d kez \"tetiklendi\" yazıldı, 2 bekleniyordu:\n%s", n, log.String())
 	}
 }
+
+// #31: işçi turunda panic olursa süreç düşmemeli.
+func TestRunSafelyPanigiYakalar(t *testing.T) {
+	calisti := false
+	runSafely("test", func() {
+		calisti = true
+		var p *float64
+		_ = *p
+	})
+	if !calisti {
+		t.Error("fonksiyon çalışmalıydı")
+	}
+}

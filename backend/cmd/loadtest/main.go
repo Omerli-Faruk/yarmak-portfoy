@@ -160,6 +160,9 @@ func main() {
 	fundIDs := flag.String("funds", "", "geçmişi olan fon ID'leri, virgülle (geçmişi olmayan fon gerçek TEFAS'ı tetikler)")
 	user := flag.String("user", "demo", "portföy grafiği için giriş yapılacak kullanıcı")
 	pass := flag.String("pass", "demo12345", "şifresi (yerel demo verisi)")
+	userPrefix := flag.String("user-prefix", "", "doluysa her sanal kullanıcı kendi hesabıyla girer: <önek>001, <önek>002 ... (şifre -pass)")
+	userCount := flag.Int("user-count", 300, "-user-prefix ile kaç farklı hesap var; sanal kullanıcılar bunlara sırayla dağılır")
+	portfolioShare := flag.Float64("portfolio-share", 0.2, "isteklerin ne kadarı portföy grafiği olsun (0-1)")
 	flag.Parse()
 
 	fy := newFakeYahoo(*latency, *blockAfter)
@@ -211,19 +214,43 @@ func main() {
 		}
 	}
 
-	// Portföy grafiği için oturum
-	jar, _ := cookiejar.New(nil)
-	authClient := &http.Client{Timeout: 30 * time.Second, Jar: jar, Transport: client.Transport}
-	body := fmt.Sprintf(`{"username":%q,"password":%q}`, *user, *pass)
-	if resp, err := authClient.Post(*api+"/login", "application/json", strings.NewReader(body)); err != nil || resp.StatusCode != http.StatusOK {
-		fmt.Fprintln(os.Stderr, "giriş yapılamadı, portföy grafiği testten çıkarıldı")
-		authClient = nil
+	// Portföy grafiği için oturum. -user-prefix verilmişse her sanal kullanıcının kendi hesabı ve portföyü olur;
+	// yoksa hepsi aynı hesabı paylaşır ve kullanıcıya özel önbellek hep dolu kalır (gerçekçi değil).
+	authClients := make([]*http.Client, *users)
+	if *userPrefix == "" {
+		if c, err := login(client.Transport, *api, *user, *pass, "10.255.0.1"); err != nil {
+			fmt.Fprintln(os.Stderr, "giriş yapılamadı, portföy grafiği testten çıkarıldı:", err)
+		} else {
+			for u := range authClients {
+				authClients[u] = c
+			}
+		}
 	} else {
-		resp.Body.Close()
+		failedLogins := 0
+		var lwg sync.WaitGroup
+		var lmu sync.Mutex
+		sem := make(chan struct{}, 20) // bcrypt pahalı; girişleri 20'şer yap
+		for u := range *users {
+			lwg.Go(func() {
+				sem <- struct{}{}
+				defer func() { <-sem }()
+				name := fmt.Sprintf("%s%03d", *userPrefix, u%*userCount+1)
+				c, err := login(client.Transport, *api, name, *pass, vuIP(u))
+				lmu.Lock()
+				defer lmu.Unlock()
+				if err != nil {
+					failedLogins++
+					return
+				}
+				authClients[u] = c
+			})
+		}
+		lwg.Wait()
+		fmt.Printf("Giriş: %d sanal kullanıcı, %d farklı hesap, başarısız %d\n", *users, min(*users, *userCount), failedLogins)
 	}
 
-	fmt.Printf("Başlıyor: %d kullanıcı, %v, %d hisse, %d fon, sahte Yahoo gecikmesi %v\n",
-		*users, *duration, len(stocks), len(funds), *latency)
+	fmt.Printf("Başlıyor: %d kullanıcı, %v, %d hisse, %d fon, portföy payı %.0f%%, sahte Yahoo gecikmesi %v\n",
+		*users, *duration, len(stocks), len(funds), *portfolioShare*100, *latency)
 	yahooBefore := fy.total.Load() // API açılışındaki işçi istekleri ayrı tutulsun
 
 	st := &stats{}
@@ -231,22 +258,28 @@ func main() {
 	var wg sync.WaitGroup
 	for u := range *users {
 		wg.Go(func() {
-			ip := fmt.Sprintf("10.%d.%d.%d", u/65536, (u/256)%256, u%256)
+			ip := vuIP(u)
+			authClient := authClients[u]
 			time.Sleep(time.Duration(u) * *rampUp / time.Duration(*users))
+			// Kalan pay hisse (3/4) ve fon (1/4) grafiklerine bölünür; varsayılan 0,2 ile eski %60/%20/%20 karışımı.
+			stockCut := (1 - *portfolioShare) * 0.75
 			for time.Now().Before(deadline) {
 				r := rand.Float64()
 				var action, url string
 				c := client
 				switch {
-				case r < 0.6 || (authClient == nil && len(funds) == 0):
+				case r >= stockCut && r < stockCut+*portfolioShare && authClient != nil:
+					action = "portföy grafiği"
+					url = fmt.Sprintf("%s/portfolio/value-history?range=%s", *api, portfolioRanges[rand.IntN(len(portfolioRanges))])
+					c = authClient
+				case r < stockCut || len(funds) == 0:
+					if len(stocks) == 0 {
+						continue
+					}
 					// popüler hisselere ağırlıklı: küçük indeksler daha sık
 					a := stocks[int(float64(len(stocks))*rand.Float64()*rand.Float64()*rand.Float64())]
 					action = "hisse grafiği"
 					url = fmt.Sprintf("%s/assets/%d/price-history?range=%s", *api, a.ID, stockRanges[rand.IntN(len(stockRanges))])
-				case r < 0.8 && authClient != nil:
-					action = "portföy grafiği"
-					url = fmt.Sprintf("%s/portfolio/value-history?range=%s", *api, portfolioRanges[rand.IntN(len(portfolioRanges))])
-					c = authClient
 				default:
 					if len(funds) == 0 {
 						continue
@@ -278,6 +311,30 @@ func main() {
 	wg.Wait()
 
 	report(st, fy, yahooBefore, *duration)
+}
+
+// vuIP, sanal kullanıcının X-Real-IP adresi; API'nin IP başına sınırları her kullanıcıyı ayrı sayar.
+func vuIP(u int) string {
+	return fmt.Sprintf("10.%d.%d.%d", u/65536, (u/256)%256, u%256)
+}
+
+// login, kendi çerez kavanozu olan ve giriş yapmış bir istemci döner.
+func login(tr http.RoundTripper, api, name, pass, ip string) (*http.Client, error) {
+	jar, _ := cookiejar.New(nil)
+	c := &http.Client{Timeout: 30 * time.Second, Jar: jar, Transport: tr}
+	body := fmt.Sprintf(`{"username":%q,"password":%q}`, name, pass)
+	req, _ := http.NewRequest(http.MethodPost, api+"/login", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Real-IP", ip)
+	resp, err := c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s: HTTP %d", name, resp.StatusCode)
+	}
+	return c, nil
 }
 
 func getJSON(c *http.Client, url string, v any) error {

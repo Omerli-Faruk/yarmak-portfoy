@@ -45,8 +45,8 @@ type Querier interface {
 	GetAssetPriceHistoryWeekly(ctx context.Context, arg GetAssetPriceHistoryWeeklyParams) ([]PriceHistory, error)
 	GetAssetReturnsSummary(ctx context.Context, assetID int64) (GetAssetReturnsSummaryRow, error)
 	GetDividendByIDAndUser(ctx context.Context, arg GetDividendByIDAndUserParams) (Dividend, error)
-	GetLatestPortfolioSnapshot(ctx context.Context, userID int64) (PortfolioSnapshot, error)
 	GetPendingAlertsForAsset(ctx context.Context, assetID int64) ([]PriceAlert, error)
+	// Portföyün bugünkü ve dönem başlarındaki (1G, 1H, 1A ... 5Y) değeri, fiyat geçmişinden tek sorguda.
 	GetPortfolioPeriodValues(ctx context.Context, userID int64) (GetPortfolioPeriodValuesRow, error)
 	GetTotalCommission(ctx context.Context, userID int64) (string, error)
 	GetTotalDividendsSummary(ctx context.Context, userID int64) (string, error)
@@ -60,7 +60,6 @@ type Querier interface {
 	GetUserFromRefreshToken(ctx context.Context, token string) (User, error)
 	GetUserHoldingsSummary(ctx context.Context, userID int64) ([]GetUserHoldingsSummaryRow, error)
 	GetUserIDFromRefreshToken(ctx context.Context, token string) (int64, error)
-	GetUserPortfolioHistory(ctx context.Context, userID int64) ([]PortfolioSnapshot, error)
 	GetUserPriceAlert(ctx context.Context, userID int64) ([]GetUserPriceAlertRow, error)
 	GetUserTransactionsForAsset(ctx context.Context, arg GetUserTransactionsForAssetParams) ([]Transaction, error)
 	GetUserTransactionsPaginated(ctx context.Context, arg GetUserTransactionsPaginatedParams) ([]GetUserTransactionsPaginatedRow, error)
@@ -79,9 +78,6 @@ type Querier interface {
 	UpdateTransactionRealizedPnL(ctx context.Context, arg UpdateTransactionRealizedPnLParams) error
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error)
 	UpsertAsset(ctx context.Context, arg UpsertAssetParams) (Asset, error)
-	// Aynı kullanıcı için aynı İstanbul gününde ikinci yazım yeni satır açmaz, o günün satırını günceller.
-	// Böylece yeniden başlatma ya da hata sonrası tekrar deneme güvenli olur.
-	UpsertPortfolioSnapshot(ctx context.Context, arg UpsertPortfolioSnapshotParams) error
 	UpsertPriceHistory(ctx context.Context, arg UpsertPriceHistoryParams) error
 }
 
