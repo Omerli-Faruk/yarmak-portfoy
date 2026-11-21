@@ -11,6 +11,8 @@
     "test:periods": "node --experimental-strip-types --test src/lib/periodReturns.test.ts"
   },
   "dependencies": {
+    "@fontsource-variable/inter-tight": "5.3.0",
+    "@fontsource-variable/space-grotesk": "5.3.0",
     "axios": "^1.20.0",
     "lucide-react": "^1.39.0",
     "motion": "^13.2.0",

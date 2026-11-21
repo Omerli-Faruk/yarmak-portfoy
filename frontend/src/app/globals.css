@@ -100,7 +100,14 @@
   --danger: var(--loss);
 }
 
-/* Yazı tipleri: --font-inter-tight ve --font-space-grotesk, layout.tsx'te next/font ile <html>'e eklenir */
+/* Yazı tipleri: arayüz yazısı ve rakamlar Inter Tight (rakamlar sabit genişlikte), başlıklar ve büyük değerler
+   Space Grotesk. Dosyalar layout.tsx'te fontsource paketlerinden yüklenir; Türkçe harfler (ğ, ş, İ) latin-ext
+   dosyasında, tarayıcı unicode-range'e bakıp yalnız gerekeni indirir. */
+:root {
+  --font-inter-tight: "Inter Tight Variable";
+  --font-space-grotesk: "Space Grotesk Variable";
+}
+
 @theme {
   --font-sans: var(--font-inter-tight), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   /* Rakamlar için ayrı bir kod yazı tipi yerine Inter Tight'ın sabit genişlikli rakamları kullanılır;

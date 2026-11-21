@@ -1,27 +1,14 @@
 import type {Metadata, Viewport} from "next";
-import {Inter_Tight, Space_Grotesk} from "next/font/google";
+// Yazı tipleri npm paketinden (fontsource) gelir, derlemede ağa çıkılmaz. Eskiden next/font/google derleme
+// anında Google'dan indiriyordu; Google'ın o anki cevabı bozuk gelince CI kırılıyordu (#57).
+import "@fontsource-variable/inter-tight";
+import "@fontsource-variable/space-grotesk";
 import "./globals.css";
 import {AuthProvider} from "@/context/AuthContext";
 import {ThemeProvider} from "@/components/ui/ThemeProvider";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import {THEME_BG, THEME_INIT_SCRIPT} from "@/lib/theme";
-
-// Arayüz yazısı ve rakamlar Inter Tight (rakamlar sabit genişlikte), başlıklar ve büyük değerler Space Grotesk.
-// Türkçe harfler (ğ, ş, İ) için latin-ext de yüklenir.
-// globals.css bu değişkenlerden --font-sans, --font-mono ve --font-display'i (font-sans / font-mono / font-display) üretir.
-const interTight = Inter_Tight({
-    variable: "--font-inter-tight",
-    subsets: ["latin", "latin-ext"],
-    display: "swap",
-});
-
-const spaceGrotesk = Space_Grotesk({
-    variable: "--font-space-grotesk",
-    weight: ["500", "700"],
-    subsets: ["latin", "latin-ext"],
-    display: "swap",
-});
 
 
 export const metadata: Metadata = {
@@ -58,7 +45,7 @@ export default function RootLayout({children}: LayoutProps<"/">) {
     return (
         <html
             lang="tr"
-            className={`${interTight.variable} ${spaceGrotesk.variable} h-full antialiased`}
+            className="h-full antialiased"
             suppressHydrationWarning
         >
         <head>
