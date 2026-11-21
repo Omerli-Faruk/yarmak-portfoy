@@ -25,6 +25,8 @@ type Querier interface {
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteDividend(ctx context.Context, arg DeleteDividendParams) error
+	// İptal edilmiş token'lar 7 gün tutulur: bu sürede yeniden kullanılırsa çalınmış sayılıp kullanıcının bütün
+	// oturumları kapatılır (GetUserFromRevokedToken). Eskiden iptal edilenler saatlik temizlikte hemen siliniyordu.
 	DeleteExpiredRefreshTokens(ctx context.Context) error
 	DeletePriceAlert(ctx context.Context, arg DeletePriceAlertParams) error
 	DeleteTransaction(ctx context.Context, arg DeleteTransactionParams) error
@@ -63,8 +65,12 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetUserDividends(ctx context.Context, userID int64) ([]GetUserDividendsRow, error)
+	// Son 30 saniyede DÖNDÜRÜLMÜŞ token: paralel istekte oturum düşmesin. Çıkışla iptal edilen token buraya girmez.
 	GetUserFromRecentlyRevokedToken(ctx context.Context, token string) (int64, error)
 	GetUserFromRefreshToken(ctx context.Context, token string) (User, error)
+	// Tolerans süresi (30 sn) dışında iptal edilmiş bir token'ın sahibi. Döndürülmüş bir token'ın tekrar gelmesi,
+	// token'ın başka birinin elinde olabileceği anlamına gelir.
+	GetUserFromRevokedToken(ctx context.Context, token string) (int64, error)
 	GetUserHoldingsSummary(ctx context.Context, userID int64) ([]GetUserHoldingsSummaryRow, error)
 	GetUserIDFromRefreshToken(ctx context.Context, token string) (int64, error)
 	GetUserPriceAlert(ctx context.Context, userID int64) ([]GetUserPriceAlertRow, error)
@@ -75,7 +81,9 @@ type Querier interface {
 	ListUserIDs(ctx context.Context) ([]int64, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	MarkAlertTriggered(ctx context.Context, id int64) error
+	RevokeAllUserRefreshTokens(ctx context.Context, userID int64) (int64, error)
 	RevokeRefreshToken(ctx context.Context, token string) error
+	// Döndürme: token yenisiyle değiştirilirken iptal edilir ve rotated işaretlenir (tolerans yalnız bunlara).
 	RevokeValidRefreshToken(ctx context.Context, token string) (int64, error)
 	UpdateAssetPrice(ctx context.Context, arg UpdateAssetPriceParams) (Asset, error)
 	UpdateAssetType(ctx context.Context, arg UpdateAssetTypeParams) (Asset, error)

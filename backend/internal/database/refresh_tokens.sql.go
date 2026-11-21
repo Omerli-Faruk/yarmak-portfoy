@@ -13,7 +13,7 @@ import (
 const createRefreshToken = `-- name: CreateRefreshToken :one
 INSERT INTO refresh_tokens (token, user_id, expires_at, created_at, updated_at)
 VALUES ($1, $2, $3, NOW(), NOW())
-    RETURNING token, user_id, expires_at, revoked_at, created_at, updated_at
+    RETURNING token, user_id, expires_at, revoked_at, created_at, updated_at, rotated
 `
 
 type CreateRefreshTokenParams struct {
@@ -32,25 +32,29 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 		&i.RevokedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Rotated,
 	)
 	return i, err
 }
 
 const deleteExpiredRefreshTokens = `-- name: DeleteExpiredRefreshTokens :exec
 DELETE FROM refresh_tokens
-WHERE expires_at < NOW() OR revoked_at IS NOT NULL
+WHERE expires_at < NOW() OR revoked_at < NOW() - INTERVAL '7 days'
 `
 
+// İptal edilmiş token'lar 7 gün tutulur: bu sürede yeniden kullanılırsa çalınmış sayılıp kullanıcının bütün
+// oturumları kapatılır (GetUserFromRevokedToken). Eskiden iptal edilenler saatlik temizlikte hemen siliniyordu.
 func (q *Queries) DeleteExpiredRefreshTokens(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, deleteExpiredRefreshTokens)
 	return err
 }
 
 const getUserFromRecentlyRevokedToken = `-- name: GetUserFromRecentlyRevokedToken :one
-SELECT user_id FROM refresh_tokens 
-WHERE token = $1 AND revoked_at > NOW() - INTERVAL '30 seconds' AND expires_at > NOW()
+SELECT user_id FROM refresh_tokens
+WHERE token = $1 AND rotated AND revoked_at > NOW() - INTERVAL '30 seconds' AND expires_at > NOW()
 `
 
+// Son 30 saniyede DÖNDÜRÜLMÜŞ token: paralel istekte oturum düşmesin. Çıkışla iptal edilen token buraya girmez.
 func (q *Queries) GetUserFromRecentlyRevokedToken(ctx context.Context, token string) (int64, error) {
 	row := q.db.QueryRowContext(ctx, getUserFromRecentlyRevokedToken, token)
 	var user_id int64
@@ -81,6 +85,20 @@ func (q *Queries) GetUserFromRefreshToken(ctx context.Context, token string) (Us
 	return i, err
 }
 
+const getUserFromRevokedToken = `-- name: GetUserFromRevokedToken :one
+SELECT user_id FROM refresh_tokens
+WHERE token = $1 AND revoked_at IS NOT NULL
+`
+
+// Tolerans süresi (30 sn) dışında iptal edilmiş bir token'ın sahibi. Döndürülmüş bir token'ın tekrar gelmesi,
+// token'ın başka birinin elinde olabileceği anlamına gelir.
+func (q *Queries) GetUserFromRevokedToken(ctx context.Context, token string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getUserFromRevokedToken, token)
+	var user_id int64
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
 const getUserIDFromRefreshToken = `-- name: GetUserIDFromRefreshToken :one
 SELECT user_id FROM refresh_tokens WHERE token = $1
 `
@@ -90,6 +108,20 @@ func (q *Queries) GetUserIDFromRefreshToken(ctx context.Context, token string) (
 	var user_id int64
 	err := row.Scan(&user_id)
 	return user_id, err
+}
+
+const revokeAllUserRefreshTokens = `-- name: RevokeAllUserRefreshTokens :execrows
+UPDATE refresh_tokens
+SET revoked_at = NOW(), updated_at = NOW()
+WHERE user_id = $1 AND revoked_at IS NULL
+`
+
+func (q *Queries) RevokeAllUserRefreshTokens(ctx context.Context, userID int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, revokeAllUserRefreshTokens, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const revokeRefreshToken = `-- name: RevokeRefreshToken :exec
@@ -104,11 +136,12 @@ func (q *Queries) RevokeRefreshToken(ctx context.Context, token string) error {
 }
 
 const revokeValidRefreshToken = `-- name: RevokeValidRefreshToken :execrows
-UPDATE refresh_tokens 
-SET revoked_at = NOW(), updated_at = NOW() 
+UPDATE refresh_tokens
+SET revoked_at = NOW(), rotated = true, updated_at = NOW()
 WHERE token = $1 AND revoked_at IS NULL AND expires_at > NOW()
 `
 
+// Döndürme: token yenisiyle değiştirilirken iptal edilir ve rotated işaretlenir (tolerans yalnız bunlara).
 func (q *Queries) RevokeValidRefreshToken(ctx context.Context, token string) (int64, error) {
 	result, err := q.db.ExecContext(ctx, revokeValidRefreshToken, token)
 	if err != nil {

@@ -162,6 +162,7 @@ func SetupRouter(apiCFG *handlers.ApiConfig) chi.Router {
 	v1Router.Get("/me", apiCFG.MiddleWareAuth(apiCFG.HandlerGetMe))
 	v1Router.With(refreshRateLimiter).Post("/refresh", apiCFG.HandlerRefreshToken)
 	v1Router.Post("/revoke", apiCFG.HandlerRevokeToken)
+	v1Router.Post("/revoke-all", apiCFG.MiddleWareAuth(apiCFG.HandlerRevokeAllTokens))
 
 	// Asset (Hisse/Fon) Rotaları
 	v1Router.Post("/assets", apiCFG.MiddleWareAuth(apiCFG.MiddleWareAdmin(apiCFG.HandlerCreateAsset)))

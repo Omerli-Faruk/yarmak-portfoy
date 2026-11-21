@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"database/sql"
+	"log/slog"
 	"net/http"
 	"time"
 	"yarmak/internal/auth"
@@ -53,6 +55,7 @@ func (cfg *ApiConfig) HandlerRefreshToken(w http.ResponseWriter, r *http.Request
 		// bu tolerans aralığından yararlanır.
 		userID, err = qtx.GetUserFromRecentlyRevokedToken(r.Context(), hashedToken)
 		if err != nil {
+			cfg.revokeAllOnReuse(r, qtx, tx, hashedToken)
 			cfg.clearAuthCookies(w)
 			respondWithError(w, http.StatusUnauthorized, "Geçersiz, süresi dolmuş veya daha önce kullanılmış token", nil)
 			return
@@ -116,4 +119,51 @@ func (cfg *ApiConfig) HandlerRevokeToken(w http.ResponseWriter, r *http.Request)
 	}
 
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Oturum başarıyla kapatıldı"})
+}
+
+// revokeAllOnReuse: tolerans süresi geçtikten sonra iptal edilmiş bir refresh token yeniden geldiyse token
+// başkasının elinde olabilir (çalınan çerez, eski cihaz). Hangisinin gerçek kullanıcı olduğunu bilemediğimiz için
+// kullanıcının bütün oturumları kapatılır; herkes yeniden giriş yapar (refresh token rotation, yeniden kullanım tespiti).
+func (cfg *ApiConfig) revokeAllOnReuse(r *http.Request, qtx *database.Queries, tx *sql.Tx, hashedToken string) {
+	userID, err := qtx.GetUserFromRevokedToken(r.Context(), hashedToken)
+	if err != nil {
+		return // hiç bilinmeyen ya da süresi dolmuş token: yeniden kullanım değil
+	}
+	n, err := qtx.RevokeAllUserRefreshTokens(r.Context(), userID)
+	if err != nil {
+		slog.Error("Yeniden kullanılan token sonrası oturumlar kapatılamadı", "user_id", userID, "error", err)
+		return
+	}
+	if n == 0 {
+		return // oturumlar zaten kapalı (ör. bu tespit az önce yapıldı); yazacak bir şey yok
+	}
+	if err := tx.Commit(); err != nil {
+		slog.Error("Yeniden kullanılan token sonrası oturumlar kapatılamadı", "user_id", userID, "error", err)
+		return
+	}
+	slog.Warn("İptal edilmiş refresh token yeniden kullanıldı; kullanıcının bütün oturumları kapatıldı", "user_id", userID, "kapatilan", n)
+}
+
+// HandlerRevokeAllTokens, kullanıcının bütün cihazlardaki oturumlarını kapatır ("tüm cihazlardan çık").
+// Diğer cihazlar en geç access token'ın süresi (1 saat) dolunca çıkış yapmış olur.
+// @Summary Tüm cihazlardan çıkış
+// @Description Kullanıcının bütün refresh token'larını iptal eder ve bu tarayıcının çerezlerini siler
+// @Tags Auth
+// @Produce json
+// @Success 200 {object} map[string]any
+// @Failure 401 {object} map[string]string
+// @Router /revoke-all [post]
+func (cfg *ApiConfig) HandlerRevokeAllTokens(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(UserIDKey).(int64)
+	if !ok {
+		respondWithError(w, http.StatusUnauthorized, "Yetkisiz erişim", nil)
+		return
+	}
+	n, err := cfg.DB.RevokeAllUserRefreshTokens(r.Context(), userID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Oturumlar kapatılamadı", err)
+		return
+	}
+	cfg.clearAuthCookies(w)
+	respondWithJSON(w, http.StatusOK, map[string]any{"message": "Bütün cihazlardaki oturumlar kapatıldı", "revoked": n})
 }

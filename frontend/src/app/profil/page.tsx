@@ -11,7 +11,7 @@ import Button from '@/components/ui/Button';
 import { LogOut } from 'lucide-react';
 
 export default function ProfilePage() {
-    const { user, loading, logOut } = useAuth();
+    const { user, loading, logOut, logOutEverywhere } = useAuth();
     const router = useRouter();
 
     useEffect(() => {
@@ -36,15 +36,26 @@ export default function ProfilePage() {
                 <PageHeader
                     title={<span className="block truncate">{user.username}</span>}
                     actions={
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => logOut()}
-                            leftIcon={<LogOut />}
-                            className="hover:bg-loss-soft hover:text-loss"
-                        >
-                            Çıkış yap
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => logOut()}
+                                leftIcon={<LogOut />}
+                                className="hover:bg-loss-soft hover:text-loss"
+                            >
+                                Çıkış yap
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => logOutEverywhere()}
+                                title="Bu hesapla giriş yapılmış bütün cihazlarda oturumu kapatır"
+                                className="hover:bg-loss-soft hover:text-loss"
+                            >
+                                Tüm cihazlardan çık
+                            </Button>
+                        </div>
                     }
                 />
                 <SummaryStrip

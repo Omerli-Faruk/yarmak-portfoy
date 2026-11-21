@@ -14,6 +14,7 @@ interface AuthContextType {
     login: (identifier: string, password: string) => Promise<void>;
     register: (email: string, password: string, username: string) => Promise<void>;
     logOut: () => Promise<void>;
+    logOutEverywhere: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -69,13 +70,25 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
         router.push('/giris');
     }
 
+    // Bütün cihazlardaki oturumları kapatır (ör. telefon kaybolduysa). Diğer cihazlar en geç 1 saat içinde çıkar.
+    const logOutEverywhere = async () => {
+        try {
+            await api.post('/revoke-all');
+        } catch (error) {
+            console.log(error)
+        }
+        localStorage.removeItem('is_logged_in');
+        setUser(null);
+        router.push('/giris');
+    }
+
     // Oturum kontrolü bitmeden alt bileşenler render edilmez; bu yüzden useAuth kullananlar loading'i hep false görür.
     if (loading) {
         return <LoadingSpinner withLogo />;
     }
 
     return (
-        <AuthContext.Provider value={{user, loading, login, register, logOut}}>
+        <AuthContext.Provider value={{user, loading, login, register, logOut, logOutEverywhere}}>
             {children}
         </AuthContext.Provider>
     );

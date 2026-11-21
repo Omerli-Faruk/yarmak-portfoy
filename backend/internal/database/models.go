@@ -66,6 +66,7 @@ type RefreshToken struct {
 	RevokedAt sql.NullTime
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	Rotated   bool
 }
 
 type Split struct {
