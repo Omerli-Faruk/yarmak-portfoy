@@ -446,13 +446,16 @@ export async function GET(request: Request) {
                 assetObj = cached.asset || null;
             }
         } else {
+            // POST: sembol veritabanında yoksa (girişli kullanıcı için) eklenir. GET yalnızca arar.
             let assetsRes = await fetch(`${BACKEND_URL}/assets/lookup?symbol=${encodedSymbol}`, {
+                method: 'POST',
                 cache: 'no-store',
                 headers: backendHeaders,
             });
             if (!assetsRes.ok && rawSymbol.length === 3) {
                 // 3 harfli sembol hisse olarak bulunamazsa TEFAS fonu olarak dene
                 assetsRes = await fetch(`${BACKEND_URL}/assets/lookup?symbol=${encodedSymbol}&type=FON`, {
+                    method: 'POST',
                     cache: 'no-store',
                     headers: backendHeaders,
                 });

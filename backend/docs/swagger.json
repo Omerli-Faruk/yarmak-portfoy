@@ -223,7 +223,65 @@
         },
         "/assets/lookup": {
             "get": {
-                "description": "Sembol ve türe göre varlık arar; sistemde yoksa ve kullanıcı giriş yapmışsa piyasadan çekip ekler",
+                "description": "GET: sembol ve türe göre varlık arar, yoksa 404. POST: sistemde yoksa ve kullanıcı giriş yapmışsa piyasadan çekip ekler",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Assets"
+                ],
+                "summary": "Sembolle varlık arama",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "THYAO",
+                        "description": "Varlık sembolü",
+                        "name": "symbol",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "HISSE",
+                            "FON",
+                            "ALTIN",
+                            "DOVIZ"
+                        ],
+                        "type": "string",
+                        "description": "Varlık türü (varsayılan HISSE)",
+                        "name": "type",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/database.Asset"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "GET: sembol ve türe göre varlık arar, yoksa 404. POST: sistemde yoksa ve kullanıcı giriş yapmışsa piyasadan çekip ekler",
                 "produces": [
                     "application/json"
                 ],

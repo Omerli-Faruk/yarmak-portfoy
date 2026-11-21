@@ -61,7 +61,7 @@ export default function CreateAlertModal({ initialSymbol, onClose, onCreated }: 
 
         (async () => {
             try {
-                const lookupRes = await api.get(`/assets/lookup?symbol=${encodeURIComponent(sym)}`);
+                const lookupRes = await api.post(`/assets/lookup?symbol=${encodeURIComponent(sym)}`);
                 if (cancelled) return;
                 if (lookupRes.data) {
                     const d = lookupRes.data;
@@ -120,7 +120,7 @@ export default function CreateAlertModal({ initialSymbol, onClose, onCreated }: 
         // Fiyat yoksa ya da id eksik veya geçici (9900 ve üstü makro id) ise veritabanındaki kaydı al
         if (!assetId || assetId >= 9900 || currentPrice <= 0) {
             try {
-                const lookupRes = await api.get(`/assets/lookup?symbol=${encodeURIComponent(asset.symbol)}`);
+                const lookupRes = await api.post(`/assets/lookup?symbol=${encodeURIComponent(asset.symbol)}`);
                 if (lookupRes.data) {
                     const d = lookupRes.data;
                     assetId = d.ID || d.id || assetId;
@@ -214,7 +214,7 @@ export default function CreateAlertModal({ initialSymbol, onClose, onCreated }: 
             let assetId = selectedAsset?.id;
             // id yoksa veya geçici makro id ise gerçek veritabanı id'si alınır
             if (!assetId || assetId >= 9900) {
-                const lookupRes = await api.get(`/assets/lookup?symbol=${encodeURIComponent(sym)}`);
+                const lookupRes = await api.post(`/assets/lookup?symbol=${encodeURIComponent(sym)}`);
                 assetId = lookupRes.data?.ID || lookupRes.data?.id;
             }
 

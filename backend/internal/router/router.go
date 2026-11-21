@@ -168,6 +168,8 @@ func SetupRouter(apiCFG *handlers.ApiConfig) chi.Router {
 	v1Router.Post("/assets", apiCFG.MiddleWareAuth(apiCFG.MiddleWareAdmin(apiCFG.HandlerCreateAsset)))
 	v1Router.Get("/assets", apiCFG.HandlerListAssets)
 	v1Router.Get("/assets/lookup", apiCFG.HandlerLookupAsset)
+	// Aynı uç POST ile çağrılınca bulunamayan sembol dış kaynaklara sorulup eklenir (giriş zorunlu, kullanıcı başına sınırlı).
+	v1Router.Post("/assets/lookup", apiCFG.HandlerLookupAsset)
 	v1Router.Get("/assets/daily-changes", apiCFG.HandlerGetAssetDailyChanges)
 	v1Router.Post("/splits", apiCFG.MiddleWareAuth(apiCFG.MiddleWareAdmin(apiCFG.HandlerCreateSplit)))
 	v1Router.Get("/assets/{id}/splits", apiCFG.MiddleWareAuth(apiCFG.HandlerListSplitsByAsset))

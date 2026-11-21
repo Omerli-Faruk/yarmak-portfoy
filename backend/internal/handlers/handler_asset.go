@@ -166,9 +166,10 @@ func (cfg *ApiConfig) HandlerTriggerBackfill(w http.ResponseWriter, r *http.Requ
 	respondWithJSON(w, http.StatusOK, map[string]string{"status": "queued"})
 }
 
-// HandlerLookupAsset, sembolle varlık arar. Sistemde olmayan sembol yalnızca giriş yapmış kullanıcı için dış kaynaktan bulunup eklenir.
+// HandlerLookupAsset, sembolle varlık arar. GET yalnızca arar; POST'ta sistemde olmayan sembol, giriş yapmış kullanıcı
+// için dış kaynaktan bulunup eklenir.
 // @Summary Sembolle varlık arama
-// @Description Sembol ve türe göre varlık arar; sistemde yoksa ve kullanıcı giriş yapmışsa piyasadan çekip ekler
+// @Description GET: sembol ve türe göre varlık arar, yoksa 404. POST: sistemde yoksa ve kullanıcı giriş yapmışsa piyasadan çekip ekler
 // @Tags Assets
 // @Produce json
 // @Param symbol query string true "Varlık sembolü" example(THYAO)
@@ -177,6 +178,7 @@ func (cfg *ApiConfig) HandlerTriggerBackfill(w http.ResponseWriter, r *http.Requ
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Router /assets/lookup [get]
+// @Router /assets/lookup [post]
 func (cfg *ApiConfig) HandlerLookupAsset(w http.ResponseWriter, r *http.Request) {
 	symbol := strings.TrimSpace(r.URL.Query().Get("symbol"))
 	assetType := strings.TrimSpace(r.URL.Query().Get("type"))
@@ -191,6 +193,13 @@ func (cfg *ApiConfig) HandlerLookupAsset(w http.ResponseWriter, r *http.Request)
 
 	if asset, err := cfg.Services.Asset.FindAssetBySymbol(r.Context(), symbol); err == nil {
 		respondWithJSON(w, http.StatusOK, asset)
+		return
+	}
+
+	// GET yalnızca arar; durum değiştirmez (#14). Eskiden GET bulamadığı sembolü dış kaynaklara sorup
+	// veritabanına ekliyordu. Ekleme artık POST /assets/lookup ile (HandlerDiscoverAsset).
+	if r.Method != http.MethodPost {
+		respondWithError(w, http.StatusNotFound, "Varlık bulunamadı", nil)
 		return
 	}
 

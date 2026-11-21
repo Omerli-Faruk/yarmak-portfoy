@@ -605,8 +605,49 @@ paths:
       - Splits
   /assets/lookup:
     get:
-      description: Sembol ve türe göre varlık arar; sistemde yoksa ve kullanıcı giriş
-        yapmışsa piyasadan çekip ekler
+      description: 'GET: sembol ve türe göre varlık arar, yoksa 404. POST: sistemde
+        yoksa ve kullanıcı giriş yapmışsa piyasadan çekip ekler'
+      parameters:
+      - description: Varlık sembolü
+        example: THYAO
+        in: query
+        name: symbol
+        required: true
+        type: string
+      - description: Varlık türü (varsayılan HISSE)
+        enum:
+        - HISSE
+        - FON
+        - ALTIN
+        - DOVIZ
+        in: query
+        name: type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/database.Asset'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Sembolle varlık arama
+      tags:
+      - Assets
+    post:
+      description: 'GET: sembol ve türe göre varlık arar, yoksa 404. POST: sistemde
+        yoksa ve kullanıcı giriş yapmışsa piyasadan çekip ekler'
       parameters:
       - description: Varlık sembolü
         example: THYAO
