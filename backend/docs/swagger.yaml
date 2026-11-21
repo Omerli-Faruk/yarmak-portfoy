@@ -409,8 +409,11 @@ definitions:
     type: object
 info:
   contact: {}
-  description: BIST 100 hisseleri, TEFAS yatırım fonları, altın ve döviz portföy takip
-    sistemi REST API dokümantasyonu.
+  description: |-
+    BIST 100 hisseleri, TEFAS yatırım fonları, altın ve döviz portföy takip sistemi REST API dokümantasyonu.
+    Kimlik doğrulama HttpOnly çerezlerle yapılır (access_token, refresh_token); Authorization başlığı kullanılmaz.
+    Giriş gerektiren uçları denemek için önce bu sayfadan /login'i çalıştırın: tarayıcı çerezi saklar ve
+    sonraki istekler aynı adrese gittiği için çerezi kendisi gönderir.
   title: Yarmak Borsa & Portföy Takip API
   version: "1.0"
 paths:
@@ -432,8 +435,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: Kullanıcının Alarmlarını Listele
       tags:
       - Alerts
@@ -474,8 +475,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: Fiyat Alarmı Kur
       tags:
       - Alerts
@@ -521,8 +520,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: Fiyat Alarmını Sil
       tags:
       - Alerts
@@ -560,8 +557,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: Yeni Varlık Tanımla (Admin)
       tags:
       - Assets
@@ -605,8 +600,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: Hissenin Bölünme Geçmişi
       tags:
       - Splits
@@ -670,8 +663,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: Kullanıcının Temettü Geçmişi
       tags:
       - Dividends
@@ -705,8 +696,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: Temettü Geliri Kaydet
       tags:
       - Dividends
@@ -752,8 +741,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: Temettü Kaydını Sil
       tags:
       - Dividends
@@ -804,8 +791,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: Temettü Kaydını Güncelle
       tags:
       - Dividends
@@ -854,8 +839,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: Giriş Yapmış Kullanıcı Bilgisi
       tags:
       - Auth
@@ -878,8 +861,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: Kullanıcının Varlıklarını (Holdings) Listele
       tags:
       - Portfolio
@@ -920,8 +901,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: Varlığı Portföyden Tamamen Sil
       tags:
       - Portfolio
@@ -942,8 +921,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: Portföy Özeti (TL ve Dolar)
       tags:
       - Portfolio
@@ -992,8 +969,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: Portföy Değer Geçmişi
       tags:
       - Portfolio
@@ -1073,6 +1048,27 @@ paths:
       summary: Oturumu Kapat / Token İptal Et (Revoke)
       tags:
       - Auth
+  /revoke-all:
+    post:
+      description: Kullanıcının bütün refresh token'larını iptal eder ve bu tarayıcının
+        çerezlerini siler
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Tüm cihazlardan çıkış
+      tags:
+      - Auth
   /splits:
     post:
       consumes:
@@ -1111,8 +1107,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: Bedelsiz/Ters Bölünme Uygula (Admin)
       tags:
       - Splits
@@ -1145,8 +1139,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: İşlem Geçmişi (Pagination)
       tags:
       - Transactions
@@ -1181,8 +1173,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: Alım/Satım İşlemi Yap
       tags:
       - Transactions
@@ -1222,8 +1212,6 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: Alım/Satım İşlemini Sil
       tags:
       - Transactions
@@ -1275,15 +1263,7 @@ paths:
             additionalProperties:
               type: string
             type: object
-      security:
-      - BearerAuth: []
       summary: Alım/Satım İşlemini Güncelle
       tags:
       - Transactions
-securityDefinitions:
-  BearerAuth:
-    description: JWT Token'ınızı 'Bearer <token>' formatında giriniz.
-    in: header
-    name: Authorization
-    type: apiKey
 swagger: "2.0"

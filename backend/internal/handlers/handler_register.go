@@ -54,11 +54,11 @@ func (cfg *ApiConfig) HandlerRegister(w http.ResponseWriter, r *http.Request) {
 	user, err := cfg.DB.CreateUser(r.Context(), database.CreateUserParams{Email: req.Email, PasswordHash: hashedPassword, Username: req.Username})
 	if err != nil {
 		if strings.Contains(err.Error(), "users_username_key") {
-			respondWithError(w, http.StatusBadRequest, "Bu kullanıcı adı zaten kullanımda", err)
+			respondWithError(w, http.StatusConflict, "Bu kullanıcı adı zaten kullanımda", err)
 			return
 		}
 		if strings.Contains(err.Error(), "users_email_key") || strings.Contains(err.Error(), "unique") {
-			respondWithError(w, http.StatusBadRequest, "Bu e-posta adresi zaten kullanımda", err)
+			respondWithError(w, http.StatusConflict, "Bu e-posta adresi zaten kullanımda", err)
 			return
 		}
 		respondWithError(w, http.StatusInternalServerError, "Kullanıcı kaydı oluşturulurken bir hata meydana geldi", err)

@@ -107,7 +107,6 @@ func (cfg *ApiConfig) amountFromPerShare(w http.ResponseWriter, r *http.Request,
 // @Summary Temettü Geliri Kaydet
 // @Description Kullanıcının aldığı nakit temettü ödemesini kaydeder
 // @Tags Dividends
-// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param request body createDividendRequest true "Temettü Bilgileri"
@@ -176,7 +175,6 @@ func (cfg *ApiConfig) HandlerCreateDividend(w http.ResponseWriter, r *http.Reque
 // @Summary Kullanıcının Temettü Geçmişi
 // @Description Kullanıcının aldığı tüm temettü ödemelerini listeler
 // @Tags Dividends
-// @Security BearerAuth
 // @Produce json
 // @Success 200 {array} database.Dividend
 // @Failure 401 {object} map[string]string
@@ -203,7 +201,6 @@ func (cfg *ApiConfig) HandlerGetUserDividends(w http.ResponseWriter, r *http.Req
 // @Summary Temettü Kaydını Güncelle
 // @Description Kullanıcının kaydettiği bir temettü gelirini günceller
 // @Tags Dividends
-// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param id path int true "Temettü ID"
@@ -300,7 +297,6 @@ func (cfg *ApiConfig) HandlerUpdateDividend(w http.ResponseWriter, r *http.Reque
 // @Summary Temettü Kaydını Sil
 // @Description Kullanıcının kaydettiği bir temettü gelirini siler
 // @Tags Dividends
-// @Security BearerAuth
 // @Produce json
 // @Param id path int true "Temettü ID"
 // @Success 200 {object} map[string]string

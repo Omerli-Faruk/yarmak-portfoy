@@ -14,7 +14,6 @@ import (
 // @Summary Fiyat Alarmı Kur
 // @Description Belirli bir hisse veya fon hedef fiyata ulaştığında tetiklenecek alarm kurar
 // @Tags Alerts
-// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param request body createPriceAlertRequest true "Alarm Bilgileri"
@@ -73,7 +72,6 @@ func (cfg *ApiConfig) HandlerCreatePriceAlert(w http.ResponseWriter, r *http.Req
 // @Summary Kullanıcının Alarmlarını Listele
 // @Description Kullanıcının aktif ve tetiklenmiş tüm fiyat alarmlarını listeler
 // @Tags Alerts
-// @Security BearerAuth
 // @Produce json
 // @Success 200 {array} database.PriceAlert
 // @Failure 401 {object} map[string]string
@@ -99,7 +97,6 @@ func (cfg *ApiConfig) HandlerGetUserPriceAlerts(w http.ResponseWriter, r *http.R
 // @Summary Fiyat Alarmını Sil
 // @Description Kullanıcının kurduğu bir fiyat alarmını iptal eder/siler
 // @Tags Alerts
-// @Security BearerAuth
 // @Produce json
 // @Param id path int true "Alarm ID"
 // @Success 200 {object} map[string]string

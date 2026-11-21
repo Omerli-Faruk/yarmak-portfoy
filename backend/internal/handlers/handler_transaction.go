@@ -23,7 +23,6 @@ import (
 // @Summary Alım/Satım İşlemi Yap
 // @Description Kullanıcı portföyüne yeni bir alım (BUY) veya satım (SELL) işlemi kaydeder
 // @Tags Transactions
-// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param request body createTransactionRequest true "İşlem Bilgileri"
@@ -102,7 +101,6 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 // @Summary Kullanıcının Varlıklarını (Holdings) Listele
 // @Description Kullanıcının sahip olduğu tüm varlıkları, lot sayılarını ve kâr/zararlarını döner
 // @Tags Portfolio
-// @Security BearerAuth
 // @Produce json
 // @Success 200 {array} userHoldingResponse
 // @Failure 401 {object} map[string]string
@@ -129,7 +127,6 @@ func (cfg *ApiConfig) HandlerGetUserHoldings(w http.ResponseWriter, r *http.Requ
 // @Summary İşlem Geçmişi (Pagination)
 // @Description Kullanıcının geçmiş alım/satım işlemlerini sayfalanmış olarak listeler
 // @Tags Transactions
-// @Security BearerAuth
 // @Produce json
 // @Param page query int false "Sayfa Numarası" default(1)
 // @Param limit query int false "Sayfa Başına Kayıt Sayısı" default(10)
@@ -174,7 +171,6 @@ func (cfg *ApiConfig) HandlerGetUserTransactions(w http.ResponseWriter, r *http.
 // @Summary Alım/Satım İşlemini Sil
 // @Description Kullanıcının gerçekleştirdiği bir alım veya satım işlemini siler
 // @Tags Transactions
-// @Security BearerAuth
 // @Produce json
 // @Param id path int true "İşlem ID"
 // @Success 200 {object} map[string]string
@@ -235,7 +231,6 @@ type updateTransactionRequest struct {
 // @Summary Alım/Satım İşlemini Güncelle
 // @Description Kullanıcının gerçekleştirdiği bir alım veya satım işleminin adet, fiyat, komisyon veya tarihini günceller
 // @Tags Transactions
-// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param id path int true "İşlem ID"
@@ -331,7 +326,6 @@ func (cfg *ApiConfig) HandlerUpdateTransaction(w http.ResponseWriter, r *http.Re
 // @Summary Varlığı Portföyden Tamamen Sil
 // @Description Kullanıcının belirtilen sembole ait tüm işlemlerini soft-delete yaparak portföyünden kaldırır.
 // @Tags Portfolio
-// @Security BearerAuth
 // @Produce json
 // @Param symbol path string true "Varlık Sembolü (örn. THYAO, ASELS)"
 // @Success 200 {object} map[string]string

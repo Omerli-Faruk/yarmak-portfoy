@@ -11,7 +11,6 @@ import (
 // @Summary Portföy Özeti (TL ve Dolar)
 // @Description Toplam portföy değeri, toplam maliyet, kâr/zarar, dolar karşılığı ve kategori dağılımını döner
 // @Tags Portfolio
-// @Security BearerAuth
 // @Produce json
 // @Success 200 {object} portfolioSummaryResponse
 // @Failure 401 {object} map[string]string
@@ -38,7 +37,6 @@ func (cfg *ApiConfig) HandlerGetPortfolioSummary(w http.ResponseWriter, r *http.
 // @Summary Portföy Değer Geçmişi
 // @Description Seçilen aralıkta portföy değeri, maliyeti ve toplam kâr/zararının (gerçekleşen kâr ve temettü dahil) zaman serisini döner. Aralık portföyden uzunsa seri ilk işlemden başlar.
 // @Tags Portfolio
-// @Security BearerAuth
 // @Produce json
 // @Param range query string false "Aralık (varsayılan 1Y)" Enums(1D, 1W, 1M, 3M, 6M, YTD, 1Y, 3Y, 5Y)
 // @Success 200 {object} portfolioValueHistoryResponse

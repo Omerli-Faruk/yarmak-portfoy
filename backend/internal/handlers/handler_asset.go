@@ -17,7 +17,6 @@ import (
 // @Summary Yeni Varlık Tanımla (Admin)
 // @Description Sisteme yeni bir hisse, fon, altın veya döviz varlığı ekler
 // @Tags Assets
-// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param request body createAssetRequest true "Varlık Bilgileri"

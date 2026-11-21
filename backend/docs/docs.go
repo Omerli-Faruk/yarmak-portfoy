@@ -17,11 +17,6 @@ const docTemplate = `{
     "paths": {
         "/alerts": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Kullanıcının aktif ve tetiklenmiş tüm fiyat alarmlarını listeler",
                 "produces": [
                     "application/json"
@@ -52,11 +47,6 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Belirli bir hisse veya fon hedef fiyata ulaştığında tetiklenecek alarm kurar",
                 "consumes": [
                     "application/json"
@@ -118,11 +108,6 @@ const docTemplate = `{
         },
         "/alerts/{id}": {
             "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Kullanıcının kurduğu bir fiyat alarmını iptal eder/siler",
                 "produces": [
                     "application/json"
@@ -202,11 +187,6 @@ const docTemplate = `{
                 "responses": {}
             },
             "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Sisteme yeni bir hisse, fon, altın veya döviz varlığı ekler",
                 "consumes": [
                     "application/json"
@@ -323,11 +303,6 @@ const docTemplate = `{
         },
         "/assets/{id}/splits": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Belirli bir hissenin geçmişte yaşadığı tüm bedelsiz bölünmeleri listeler",
                 "produces": [
                     "application/json"
@@ -378,11 +353,6 @@ const docTemplate = `{
         },
         "/dividends": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Kullanıcının aldığı tüm temettü ödemelerini listeler",
                 "produces": [
                     "application/json"
@@ -413,11 +383,6 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Kullanıcının aldığı nakit temettü ödemesini kaydeder",
                 "consumes": [
                     "application/json"
@@ -470,11 +435,6 @@ const docTemplate = `{
         },
         "/dividends/{id}": {
             "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Kullanıcının kaydettiği bir temettü gelirini günceller",
                 "consumes": [
                     "application/json"
@@ -550,11 +510,6 @@ const docTemplate = `{
                 }
             },
             "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Kullanıcının kaydettiği bir temettü gelirini siler",
                 "produces": [
                     "application/json"
@@ -666,11 +621,6 @@ const docTemplate = `{
         },
         "/me": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "JWT token ile doğrulanmış kullanıcının profil bilgilerini döner",
                 "produces": [
                     "application/json"
@@ -700,11 +650,6 @@ const docTemplate = `{
         },
         "/portfolio/holdings": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Kullanıcının sahip olduğu tüm varlıkları, lot sayılarını ve kâr/zararlarını döner",
                 "produces": [
                     "application/json"
@@ -737,11 +682,6 @@ const docTemplate = `{
         },
         "/portfolio/holdings/{symbol}": {
             "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Kullanıcının belirtilen sembole ait tüm işlemlerini soft-delete yaparak portföyünden kaldırır.",
                 "produces": [
                     "application/json"
@@ -801,11 +741,6 @@ const docTemplate = `{
         },
         "/portfolio/summary": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Toplam portföy değeri, toplam maliyet, kâr/zarar, dolar karşılığı ve kategori dağılımını döner",
                 "produces": [
                     "application/json"
@@ -835,11 +770,6 @@ const docTemplate = `{
         },
         "/portfolio/value-history": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Seçilen aralıkta portföy değeri, maliyeti ve toplam kâr/zararının (gerçekleşen kâr ve temettü dahil) zaman serisini döner. Aralık portföyden uzunsa seri ilk işlemden başlar.",
                 "produces": [
                     "application/json"
@@ -1020,13 +950,38 @@ const docTemplate = `{
                 }
             }
         },
+        "/revoke-all": {
+            "post": {
+                "description": "Kullanıcının bütün refresh token'larını iptal eder ve bu tarayıcının çerezlerini siler",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Tüm cihazlardan çıkış",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/splits": {
             "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Hissede bölünme uygular ve tüm kullanıcıların geçmiş işlemlerini günceller",
                 "consumes": [
                     "application/json"
@@ -1088,11 +1043,6 @@ const docTemplate = `{
         },
         "/transactions": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Kullanıcının geçmiş alım/satım işlemlerini sayfalanmış olarak listeler",
                 "produces": [
                     "application/json"
@@ -1139,11 +1089,6 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Kullanıcı portföyüne yeni bir alım (BUY) veya satım (SELL) işlemi kaydeder",
                 "consumes": [
                     "application/json"
@@ -1196,11 +1141,6 @@ const docTemplate = `{
         },
         "/transactions/{id}": {
             "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Kullanıcının gerçekleştirdiği bir alım veya satım işleminin adet, fiyat, komisyon veya tarihini günceller",
                 "consumes": [
                     "application/json"
@@ -1276,11 +1216,6 @@ const docTemplate = `{
                 }
             },
             "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Kullanıcının gerçekleştirdiği bir alım veya satım işlemini siler",
                 "produces": [
                     "application/json"
@@ -1927,14 +1862,6 @@ const docTemplate = `{
                 }
             }
         }
-    },
-    "securityDefinitions": {
-        "BearerAuth": {
-            "description": "JWT Token'ınızı 'Bearer \u003ctoken\u003e' formatında giriniz.",
-            "type": "apiKey",
-            "name": "Authorization",
-            "in": "header"
-        }
     }
 }`
 
@@ -1945,7 +1872,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/v1",
 	Schemes:          []string{},
 	Title:            "Yarmak Borsa & Portföy Takip API",
-	Description:      "BIST 100 hisseleri, TEFAS yatırım fonları, altın ve döviz portföy takip sistemi REST API dokümantasyonu.",
+	Description:      "BIST 100 hisseleri, TEFAS yatırım fonları, altın ve döviz portföy takip sistemi REST API dokümantasyonu.\nKimlik doğrulama HttpOnly çerezlerle yapılır (access_token, refresh_token); Authorization başlığı kullanılmaz.\nGiriş gerektiren uçları denemek için önce bu sayfadan /login'i çalıştırın: tarayıcı çerezi saklar ve\nsonraki istekler aynı adrese gittiği için çerezi kendisi gönderir.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

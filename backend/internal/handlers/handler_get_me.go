@@ -5,7 +5,6 @@ import "net/http"
 // @Summary Giriş Yapmış Kullanıcı Bilgisi
 // @Description JWT token ile doğrulanmış kullanıcının profil bilgilerini döner
 // @Tags Auth
-// @Security BearerAuth
 // @Produce json
 // @Success 200 {object} userResponse
 // @Failure 401 {object} map[string]string
