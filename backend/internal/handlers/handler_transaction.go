@@ -75,9 +75,8 @@ func (cfg *ApiConfig) HandlerCreateTransaction(w http.ResponseWriter, r *http.Re
 
 	transaction, err := cfg.Services.Transaction.CreateTransaction(r.Context(), userID, dto)
 	if err != nil {
-		msg := err.Error()
-		if strings.Contains(msg, "0'dan büyük olmalıdır") || strings.Contains(msg, "Yetersiz bakiye") || strings.Contains(msg, "eksiye düşürüyor") {
-			respondWithError(w, http.StatusBadRequest, msg, nil)
+		if userErr, ok := asUserError(err); ok {
+			respondWithError(w, http.StatusBadRequest, userErr.Msg, nil)
 		} else {
 			respondWithError(w, http.StatusInternalServerError, "İşlem kaydedilemedi, lütfen biraz sonra tekrar deneyin", err)
 		}
@@ -207,8 +206,8 @@ func (cfg *ApiConfig) HandlerDeleteTransaction(w http.ResponseWriter, r *http.Re
 
 	err = cfg.Services.Transaction.DeleteTransaction(r.Context(), userID, transactionID)
 	if err != nil {
-		if strings.Contains(err.Error(), "bakiye eksiye düşecektir") {
-			respondWithError(w, http.StatusBadRequest, err.Error(), nil)
+		if userErr, ok := asUserError(err); ok {
+			respondWithError(w, http.StatusBadRequest, userErr.Msg, nil)
 		} else {
 			respondWithError(w, http.StatusInternalServerError, "İşlem silinemedi, lütfen biraz sonra tekrar deneyin", err)
 		}
@@ -311,8 +310,8 @@ func (cfg *ApiConfig) HandlerUpdateTransaction(w http.ResponseWriter, r *http.Re
 
 	updatedTx, err := cfg.Services.Transaction.UpdateTransaction(r.Context(), userID, transactionID, dto)
 	if err != nil {
-		if strings.Contains(err.Error(), "eksiye düşürmektedir") {
-			respondWithError(w, http.StatusBadRequest, err.Error(), nil)
+		if userErr, ok := asUserError(err); ok {
+			respondWithError(w, http.StatusBadRequest, userErr.Msg, nil)
 		} else {
 			respondWithError(w, http.StatusInternalServerError, "İşlem güncellenemedi, lütfen biraz sonra tekrar deneyin", err)
 		}

@@ -17,6 +17,15 @@ func CalculateAssetHoldingAndCost(transactions []database.Transaction) (currentL
 	return wac.HoldingAndCost(transactions)
 }
 
+// UserError, kullanıcının düzeltebileceği bir işlem hatası (yetersiz bakiye, eksiye düşen bakiye, geçersiz miktar).
+// Mesajı kullanıcıya olduğu gibi gösterilir, handler 400 döner. Eskiden handler mesajın içinde "Yetersiz bakiye" gibi
+// parçalar arıyordu; mesajın bir kelimesi değişince hata sessizce 500'e dönüşüyordu (#22). Artık errors.As ile tanınıyor.
+type UserError struct {
+	Msg string
+}
+
+func (e *UserError) Error() string { return e.Msg }
+
 // lotEvent, bakiye kontrolünde kullandığımız sade işlem kaydı.
 type lotEvent struct {
 	ID   int64
@@ -71,12 +80,12 @@ func scanNegativeLot(events []lotEvent, startID int64, started bool) (int64, boo
 func (s *TransactionService) CreateTransaction(ctx context.Context, userID int64, params CreateTransactionDTO) (database.Transaction, error) {
 	amountVal, err := strconv.ParseFloat(params.Amount, 64)
 	if err != nil || amountVal <= 0 {
-		return database.Transaction{}, fmt.Errorf("İşlem miktarı 0'dan büyük olmalıdır")
+		return database.Transaction{}, &UserError{"İşlem miktarı 0'dan büyük olmalıdır"}
 	}
 
 	priceVal, err := strconv.ParseFloat(params.Price, 64)
 	if err != nil || priceVal <= 0 {
-		return database.Transaction{}, fmt.Errorf("İşlem fiyatı 0'dan büyük olmalıdır")
+		return database.Transaction{}, &UserError{"İşlem fiyatı 0'dan büyük olmalıdır"}
 	}
 
 	commissionVal, _ := strconv.ParseFloat(params.Commission, 64)
@@ -118,9 +127,9 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, userID int64
 			events = append(events, lotEvent{ID: newSellID, Date: params.TransactionDate, Type: "SELL", Lot: amountVal})
 			if failedID, negative := firstNegativeLotEventFrom(events, newSellID); negative {
 				if failedID == newSellID {
-					return fmt.Errorf("Yetersiz bakiye: Elinizdeki miktardan fazlasını satamazsınız")
+					return &UserError{"Yetersiz bakiye: Elinizdeki miktardan fazlasını satamazsınız"}
 				}
-				return fmt.Errorf("Geçmiş tarihli bu işlem, sonraki günlerde bakiyeyi eksiye düşürüyor")
+				return &UserError{"Geçmiş tarihli bu işlem, sonraki günlerde bakiyeyi eksiye düşürüyor"}
 			}
 			realizedPnL = 0
 		}
@@ -188,7 +197,7 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, userID int64
 			events = append(events, lotEvent{ID: t.ID, Date: t.TransactionDate, Type: t.Type, Lot: lot})
 		}
 		if _, negative := firstNegativeLotEvent(events); negative {
-			return fmt.Errorf("Bu güncelleme, ilgili tarihteki veya sonraki satış işlemleri için bakiyeyi eksiye düşürmektedir")
+			return &UserError{"Bu güncelleme, ilgili tarihteki veya sonraki satış işlemleri için bakiyeyi eksiye düşürmektedir"}
 		}
 
 		cleanAmount := fmt.Sprintf("%.6f", params.Amount)
@@ -246,7 +255,7 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, userID int64
 				events = append(events, lotEvent{ID: t.ID, Date: t.TransactionDate, Type: t.Type, Lot: lot})
 			}
 			if _, negative := firstNegativeLotEvent(events); negative {
-				return fmt.Errorf("Bu alım işlemini silemezsiniz; geçmişteki satış işlemleriniz için bakiye eksiye düşecektir")
+				return &UserError{"Bu alım işlemini silemezsiniz; geçmişteki satış işlemleriniz için bakiye eksiye düşecektir"}
 			}
 		}
 		err = q.DeleteTransaction(ctx, database.DeleteTransactionParams{

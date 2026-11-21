@@ -6,6 +6,7 @@ import (
 	"net/mail"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 	"yarmak/internal/auth"
 	"yarmak/internal/database"
 )
@@ -35,8 +36,14 @@ func (cfg *ApiConfig) HandlerRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Email = strings.ToLower(strings.TrimSpace(parsedAddr.Address))
 
-	if len(req.Password) < 8 || len(req.Password) > 72 {
-		respondWithError(w, http.StatusBadRequest, "Şifre 8 ile 72 karakter arasında olmalıdır", nil)
+	// En az 8 karakter (harf sayısı); bcrypt'in sınırı ise 72 bayt ve Türkçe harfler (ğ, ş, ı) 2 bayt sayılır.
+	// Eskiden ikisi de bayt sayıyordu ama mesaj "karakter" diyordu: "şğüçöıİŞ" 8 harf olduğu hâlde 16 bayt (#23).
+	if utf8.RuneCountInString(req.Password) < 8 {
+		respondWithError(w, http.StatusBadRequest, "Şifre en az 8 karakter olmalıdır", nil)
+		return
+	}
+	if len(req.Password) > 72 {
+		respondWithError(w, http.StatusBadRequest, "Şifre çok uzun: en fazla 72 bayt olabilir (Türkçe harfler 2 bayt sayılır)", nil)
 		return
 	}
 
@@ -53,12 +60,12 @@ func (cfg *ApiConfig) HandlerRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := cfg.DB.CreateUser(r.Context(), database.CreateUserParams{Email: req.Email, PasswordHash: hashedPassword, Username: req.Username})
 	if err != nil {
-		if strings.Contains(err.Error(), "users_username_key") {
-			respondWithError(w, http.StatusConflict, "Bu kullanıcı adı zaten kullanımda", err)
-			return
-		}
-		if strings.Contains(err.Error(), "users_email_key") || strings.Contains(err.Error(), "unique") {
-			respondWithError(w, http.StatusConflict, "Bu e-posta adresi zaten kullanımda", err)
+		if constraint, ok := uniqueViolation(err); ok {
+			if constraint == "users_username_key" {
+				respondWithError(w, http.StatusConflict, "Bu kullanıcı adı zaten kullanımda", err)
+			} else {
+				respondWithError(w, http.StatusConflict, "Bu e-posta adresi zaten kullanımda", err)
+			}
 			return
 		}
 		respondWithError(w, http.StatusInternalServerError, "Kullanıcı kaydı oluşturulurken bir hata meydana geldi", err)

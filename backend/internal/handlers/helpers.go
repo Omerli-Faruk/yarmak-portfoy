@@ -1,11 +1,15 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+	"yarmak/internal/services"
+
+	"github.com/lib/pq"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -114,4 +118,23 @@ func parseCommaSeparatedIDs(param string) []int64 {
 		}
 	}
 	return ids
+}
+
+// asUserError, hata zincirinde kullanıcıya gösterilecek bir işlem hatası (services.UserError) varsa onu döner.
+func asUserError(err error) (*services.UserError, bool) {
+	var userErr *services.UserError
+	if errors.As(err, &userErr) {
+		return userErr, true
+	}
+	return nil, false
+}
+
+// uniqueViolation, Postgres "benzersizlik ihlali" (23505) hatasıysa ihlal edilen kısıtın adını döner.
+// Hata metninde "unique" aramak yerine hata kodu ve kısıt adı okunur (#22).
+func uniqueViolation(err error) (constraint string, ok bool) {
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+		return pqErr.Constraint, true
+	}
+	return "", false
 }
