@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"yarmak/internal/database"
@@ -88,85 +89,95 @@ func main() {
 		}
 	}
 
-	for currentStart.Before(today) {
-		currentEnd := currentStart.AddDate(0, 1, 0) // 1 aylık bloklar (TEFAS çok veri döndürdüğü için patlamasın)
-		if currentEnd.After(today) {
-			currentEnd = today
-		}
-
-		log.Printf(">>> Tüm Piyasa Çekiliyor: %s -> %s", currentStart.Format("2006-01-02"), currentEnd.Format("2006-01-02"))
-
-		reqBody := map[string]interface{}{
-			"fonTipi":  "YAT",
-			"fonKodu":  "",
-			"basTarih": currentStart.Format("20060102"),
-			"bitTarih": currentEnd.Format("20060102"),
-			"basSira":  1,
-			"bitSira":  100000,
-			"dil":      "TR",
-		}
-		jsonBytes, _ := json.Marshal(reqBody)
-
-		req, _ := http.NewRequest("POST", "https://www.tefas.gov.tr/api/funds/fonGnlBlgSiraliGetir", bytes.NewBuffer(jsonBytes))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("User-Agent", "Mozilla/5.0")
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			log.Printf("    ! Ağ Hatası. 15 DAKİKA zorunlu dinlenme... (%v)", err)
-			time.Sleep(15 * time.Minute)
-			continue // aynı bloğu tekrar dener
-		}
-
-		if resp.StatusCode == 429 {
-			log.Printf("    ! 429 Throttling Yedik! TEFAS IP Ban. 15 DAKİKA zorunlu dinlenme...")
-			resp.Body.Close()
-			time.Sleep(15 * time.Minute)
-			continue
-		}
-
-		if resp.StatusCode == 200 {
-			bodyBytes, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
-
-			var tefasRes tefasResponse
-			if err := json.Unmarshal(bodyBytes, &tefasRes); err == nil {
-				inserted := 0
-				for _, rec := range tefasRes.ResultList {
-					assetID, exists := assetMap[rec.FonKodu]
-					if !exists {
-						continue // We don't care about funds not in our DB
-					}
-
-					var parsedDate time.Time
-					if pt, err := time.Parse("2006-01-02", rec.Tarih); err == nil {
-						parsedDate = pt
-					} else {
-						continue
-					}
-
-					err := db.UpsertPriceHistory(ctx, database.UpsertPriceHistoryParams{
-						AssetID:    assetID,
-						Price:      fmt.Sprintf("%.6f", rec.Fiyat),
-						RecordedAt: parsedDate.UTC(),
-					})
-					if err == nil {
-						inserted++
-					}
-				}
-				log.Printf("    - Başarılı! %d fiyat kaydı eklendi. 15 saniye dinleniliyor...", inserted)
-			} else {
-				log.Printf("    ! JSON parse hatası: %v", err)
+	// Yatırım (YAT) ve emeklilik (EMK) fonları ayrı ayrı istenir. Eskiden yalnız YAT çekiliyordu; 397 emeklilik
+	// fonunun geçmişi yoktu, kullanıcı ekleyince backfill tek fonu ~3 dk'da dolduruyordu (#41). EMK geçmişini ilk kez
+	// doldurmak için: FON_TIPLERI=EMK FORCE_FULL_BACKFILL=true ile bir kez çalıştırın.
+	fonTipleri := []string{"YAT", "EMK"}
+	if v := os.Getenv("FON_TIPLERI"); v != "" {
+		fonTipleri = strings.Split(v, ",")
+	}
+	for _, fonTipi := range fonTipleri {
+		fonTipi = strings.TrimSpace(fonTipi)
+		for start := currentStart; start.Before(today); {
+			currentEnd := start.AddDate(0, 1, 0) // 1 aylık bloklar (TEFAS çok veri döndürdüğü için patlamasın)
+			if currentEnd.After(today) {
+				currentEnd = today
 			}
-		} else {
-			resp.Body.Close()
-			log.Printf("    ! Beklenmeyen HTTP Kodu: %d. 1 DAKİKA dinleniliyor...", resp.StatusCode)
-			time.Sleep(time.Minute)
-			continue
-		}
 
-		currentStart = currentEnd.AddDate(0, 0, 1)
-		time.Sleep(15 * time.Second)
+			log.Printf(">>> %s fonları çekiliyor: %s -> %s", fonTipi, start.Format("2006-01-02"), currentEnd.Format("2006-01-02"))
+
+			reqBody := map[string]interface{}{
+				"fonTipi":  fonTipi,
+				"fonKodu":  "",
+				"basTarih": start.Format("20060102"),
+				"bitTarih": currentEnd.Format("20060102"),
+				"basSira":  1,
+				"bitSira":  100000,
+				"dil":      "TR",
+			}
+			jsonBytes, _ := json.Marshal(reqBody)
+
+			req, _ := http.NewRequest("POST", "https://www.tefas.gov.tr/api/funds/fonGnlBlgSiraliGetir", bytes.NewBuffer(jsonBytes))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("User-Agent", "Mozilla/5.0")
+
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				log.Printf("    ! Ağ Hatası. 15 DAKİKA zorunlu dinlenme... (%v)", err)
+				time.Sleep(15 * time.Minute)
+				continue // aynı bloğu tekrar dener
+			}
+
+			if resp.StatusCode == 429 {
+				log.Printf("    ! 429 Throttling Yedik! TEFAS IP Ban. 15 DAKİKA zorunlu dinlenme...")
+				resp.Body.Close()
+				time.Sleep(15 * time.Minute)
+				continue
+			}
+
+			if resp.StatusCode == 200 {
+				bodyBytes, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+
+				var tefasRes tefasResponse
+				if err := json.Unmarshal(bodyBytes, &tefasRes); err == nil {
+					inserted := 0
+					for _, rec := range tefasRes.ResultList {
+						assetID, exists := assetMap[rec.FonKodu]
+						if !exists {
+							continue // We don't care about funds not in our DB
+						}
+
+						var parsedDate time.Time
+						if pt, err := time.Parse("2006-01-02", rec.Tarih); err == nil {
+							parsedDate = pt
+						} else {
+							continue
+						}
+
+						err := db.UpsertPriceHistory(ctx, database.UpsertPriceHistoryParams{
+							AssetID:    assetID,
+							Price:      fmt.Sprintf("%.6f", rec.Fiyat),
+							RecordedAt: parsedDate.UTC(),
+						})
+						if err == nil {
+							inserted++
+						}
+					}
+					log.Printf("    - Başarılı! %d fiyat kaydı eklendi. 15 saniye dinleniliyor...", inserted)
+				} else {
+					log.Printf("    ! JSON parse hatası: %v", err)
+				}
+			} else {
+				resp.Body.Close()
+				log.Printf("    ! Beklenmeyen HTTP Kodu: %d. 1 DAKİKA dinleniliyor...", resp.StatusCode)
+				time.Sleep(time.Minute)
+				continue
+			}
+
+			start = currentEnd.AddDate(0, 0, 1)
+			time.Sleep(15 * time.Second)
+		}
 	}
 
 	log.Println("Fon fiyat geçmişi güncellendi")
