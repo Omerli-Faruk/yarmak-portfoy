@@ -113,14 +113,17 @@ function formatLargeNumberTR(num: number): string {
     return num.toLocaleString('tr-TR');
 }
 
-// Hisse temel verileri (piyasa değeri, F/K, temettü...), 5 dakika bellekte tutulur
+// Hisse temel verileri (piyasa değeri, F/K, temettü...), 15 dakika bellekte tutulur. BIST verisi zaten 15 dk gecikmeli;
+// 5 dk'dan 15 dk'ya çıkınca aynı hisse için Yahoo'ya giden istek 3 kat azaldı (#50). Hacim ve piyasa değeri en fazla
+// 15 dk geriden gelir, fiyat ve grafik bu önbellekten etkilenmez.
+const FUNDAMENTALS_TTL_MS = 15 * 60 * 1000;
 const fundamentalsCache = new Map<string, { data: Record<string, string>; timestamp: number }>();
 
 async function fetchFundamentals(ticker: string, isTefas: boolean): Promise<Record<string, string>> {
     if (isTefas) return {};
 
     const cached = fundamentalsCache.get(ticker);
-    if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+    if (cached && Date.now() - cached.timestamp < FUNDAMENTALS_TTL_MS) {
         return cached.data;
     }
 
