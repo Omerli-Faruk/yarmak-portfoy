@@ -55,6 +55,10 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       # Swagger arayüzü (/swagger/index.html) yerelde açık; kapatmak için false.
       ENABLE_SWAGGER: ${ENABLE_SWAGGER:-true}
+      # X-Real-IP başlığına yalnızca bu adresten (Next.js sunucusu) gelen isteklerde güvenilir. Verilmezse API yalnız
+      # 127.0.0.1'e güvenir; Docker'da ön yüz başka adresten bağlandığı için bütün kullanıcılar tek IP sayılıp hız
+      # sınırını paylaşıyordu (#15). Sabit adres aşağıda frontend servisinde.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.20.0.10}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -79,7 +83,9 @@ services:
     depends_on:
       - api
     networks:
-      - yarmak-network
+      yarmak-network:
+        # Sabit adres: API yalnızca bu adresin gönderdiği X-Real-IP'ye güveniyor (TRUSTED_PROXIES).
+        ipv4_address: 172.20.0.10
     restart: unless-stopped
 
   # İsteğe bağlı: BIST 100 ve popüler fon listesi. docker compose run --rm seed
@@ -140,3 +146,6 @@ networks:
   yarmak-network:
     name: yarmak_network
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
