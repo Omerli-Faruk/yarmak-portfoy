@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -24,6 +25,9 @@ var ErrRateLimited = errors.New("yahoo istek sınırı aşıldı (429)")
 // YAHOO_BASE_URL ortam değişkeni yük testinde sunucuyu sahte Yahoo'ya yönlendirir; verilmezse gerçek adres.
 var yahooBaseURL = envOrDefault("YAHOO_BASE_URL", "https://query1.finance.yahoo.com")
 
+// bigparaBaseURL, Bigpara adresi; testler sahte sunucuya yönlendirir.
+var bigparaBaseURL = "https://bigpara.hurriyet.com.tr"
+
 func envOrDefault(key, def string) string {
 	if v := strings.TrimRight(strings.TrimSpace(os.Getenv(key)), "/"); v != "" {
 		return v
@@ -31,7 +35,37 @@ func envOrDefault(key, def string) string {
 	return def
 }
 
+// yahooCooldown: Yahoo 429 döndükten sonra bu süre boyunca Yahoo'ya hiç istek atılmaz. Bu fiyat kapısındaki devre
+// kesiciden ayrı: BIST işçisi FetchBISTPrice'ı kapıdan geçmeden çağırıyor ve güncel fiyatta Bigpara yedeği başarılı
+// olunca kapı 429'u hiç görmüyordu; Yahoo bizi sınırlarken her istek önce Yahoo'ya iki kez gidiyordu (#58).
+const yahooCooldown = 5 * time.Minute
+
+var yahooBlock struct {
+	mu    sync.Mutex
+	until time.Time
+}
+
+// yahooBlocked, bekleme süresi dolmadıysa ErrRateLimited'i saran bir hata döner; dolduysa nil.
+func yahooBlocked(ticker string) error {
+	yahooBlock.mu.Lock()
+	defer yahooBlock.mu.Unlock()
+	if time.Now().Before(yahooBlock.until) {
+		return fmt.Errorf("%w: %s (bekleme süresi bitmedi)", ErrRateLimited, ticker)
+	}
+	return nil
+}
+
+// blockYahoo, 429 alındığında çağrılır: yahooCooldown boyunca Yahoo'ya istek atılmaz.
+func blockYahoo() {
+	yahooBlock.mu.Lock()
+	defer yahooBlock.mu.Unlock()
+	yahooBlock.until = time.Now().Add(yahooCooldown)
+}
+
 func fetchYahooPrice(ticker string) (float64, error) {
+	if err := yahooBlocked(ticker); err != nil {
+		return 0, err
+	}
 	for attempt := 0; attempt < 2; attempt++ {
 		req, err := http.NewRequest("GET", yahooBaseURL+"/v8/finance/chart/"+ticker, nil)
 		if err != nil {
@@ -51,7 +85,8 @@ func fetchYahooPrice(ticker string) (float64, error) {
 				time.Sleep(350 * time.Millisecond)
 				continue
 			}
-			return 0, fmt.Errorf("Yahoo Finance rate limit aşıldı (HTTP 429)")
+			blockYahoo()
+			return 0, fmt.Errorf("%w: %s", ErrRateLimited, ticker)
 		}
 
 		if resp.StatusCode != http.StatusOK {
@@ -165,7 +200,7 @@ func fetchBigparaStockPrice(symbol string) (float64, error) {
 		slug = strings.ToLower(symbol) + "-detay"
 	}
 
-	url := fmt.Sprintf("https://bigpara.hurriyet.com.tr/borsa/hisse-fiyatlari/%s/", slug)
+	url := fmt.Sprintf("%s/borsa/hisse-fiyatlari/%s/", bigparaBaseURL, slug)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return 0, err
@@ -251,7 +286,15 @@ func FetchBISTPrice(symbol string) (float64, error) {
 	}
 
 	// İki kaynak da denendi; hangisinin neden düştüğü loglarda görünsün diye ikisinin hatası da yazılır.
-	return 0, fmt.Errorf("hisse fiyatı alınamadı (%s): yahoo: %v; bigpara: %v", symbol, err, bpErr)
+	// %w ile sarmalanır: Yahoo 429 verdiyse çağıran (fiyat kapısı) errors.Is(err, ErrRateLimited) ile tanıyabilsin.
+	// %v zinciri koparıyordu (#58).
+	if err == nil {
+		err = fmt.Errorf("yahoo fiyatı geçersiz: %v", price)
+	}
+	if bpErr == nil {
+		bpErr = fmt.Errorf("bigpara fiyatı geçersiz: %v", bpPrice)
+	}
+	return 0, fmt.Errorf("hisse fiyatı alınamadı (%s): yahoo: %w; bigpara: %w", symbol, err, bpErr)
 }
 
 type StockHistoricalRecord struct {
@@ -409,6 +452,9 @@ func FetchBISTHistoryInterval(symbol, rangeStr, interval string) (currentPrice f
 		ticker += ".IS"
 	}
 
+	if err := yahooBlocked(ticker); err != nil {
+		return 0, nil, err
+	}
 	url := fmt.Sprintf("%s/v8/finance/chart/%s?interval=%s&range=%s", yahooBaseURL, ticker, interval, rangeStr)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -425,6 +471,7 @@ func FetchBISTHistoryInterval(symbol, rangeStr, interval string) (currentPrice f
 	// Geçmiş alınamıyorsa hata dönüyoruz. Eskiden Bigpara'dan tek anlık fiyat "geçmiş" diye dönülüyordu;
 	// çağıran hata görmediği için veritabanı yedeğine düşmüyor, kullanıcı tek noktalık grafik görüyordu.
 	if resp.StatusCode == http.StatusTooManyRequests {
+		blockYahoo()
 		return 0, nil, fmt.Errorf("%w: %s", ErrRateLimited, ticker)
 	}
 	if resp.StatusCode != http.StatusOK {
