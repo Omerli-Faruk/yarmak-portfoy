@@ -10,7 +10,7 @@ import {
 } from '@/lib/marketData';
 import { formatTRY } from '@/lib/formatters';
 import { gatedFetch } from '@/lib/externalGate';
-import { periodReturnsFromPoints } from '@/lib/periodReturns';
+import { periodReturnsFromPoints, type PricePoint } from '@/lib/periodReturns';
 
 export const dynamic = 'force-dynamic';
 
@@ -387,34 +387,14 @@ async function getAccurateGoldSummary(assetId: number, headers: Record<string, s
         const current = points[points.length - 1].price;
         const now = points[points.length - 1].time;
 
-        const calcRet = (targetTime: number) => {
-            const pt = points.find(p => p.time >= targetTime);
-            if (!pt || pt.price === 0) return 0;
-            return ((current - pt.price) / pt.price) * 100;
-        };
-
         const ret1D = points.length >= 2 ? ((current - points[points.length - 2].price) / points[points.length - 2].price) * 100 : 0;
         const prevClose = points.length >= 2 ? points[points.length - 2].price : current;
 
-        const ret1W = calcRet(now - 7 * 86400000);
-        const ret1M = calcRet(now - 30 * 86400000);
-        const ret3M = calcRet(now - 90 * 86400000);
-        const ret6M = calcRet(now - 180 * 86400000);
-        const startOfYear = new Date(new Date(now).getFullYear(), 0, 1).getTime();
-        const retYTD = calcRet(startOfYear);
-        const ret1Y = ((current - points[0].price) / points[0].price) * 100;
-
+        // Geçmiş 1 yıllık çekiliyor: 3Y ve 5Y burada yazılmaz (eskiden %0 yazılıyordu, #10); aşağıda tüm geçmişten tamamlanır.
         const summaryResult: Record<string, number> = {
             '1D': ret1D,
-            '1W': ret1W,
-            '1M': ret1M,
-            '3M': ret3M,
-            '6M': ret6M,
-            'YTD': retYTD,
-            '1Y': ret1Y,
-            '3Y': 0,
-            '5Y': 0,
-            'ALL': ret1Y,
+            ...periodReturnsFromPoints(current, points, now),
+            'ALL': ((current - points[0].price) / points[0].price) * 100,
         };
 
         const result: AccurateSummaryResult = {
@@ -646,8 +626,10 @@ export async function GET(request: Request) {
             }
         }
 
-        // Özette 3Y yoksa (fonlarda olduğu gibi) 3Y ve 5Y'yi tüm fiyat geçmişinden hesapla
-        if (summaryData && (!summaryData['3Y'] || summaryData['3Y'] === 0)) {
+        // Özette 3Y ya da 5Y yoksa (altında geçmiş 1 yıllık çekiliyor) veritabanındaki tüm geçmişten tamamlanır.
+        // Kural özetle aynı (periodReturns.ts): geçmiş o tarihe uzanmıyorsa dönem yazılmaz. Eskiden 3Y için
+        // 3 yıl sonraki ilk fiyat, 5Y için ilk fiyat alınıyordu; kısa geçmişte ikisi de yanlış etiketti (#10).
+        if (summaryData && (summaryData['3Y'] === undefined || summaryData['5Y'] === undefined)) {
             try {
                 const allHistRes = await fetch(`${BACKEND_URL}/assets/${assetId}/price-history?range=ALL`, {
                     cache: 'no-store',
@@ -655,33 +637,25 @@ export async function GET(request: Request) {
                 });
                 if (allHistRes.ok) {
                     const allHist = await allHistRes.json();
-                    if (allHist && allHist.length > 0) {
-                        const nowTime = Date.now();
-                        const threeYearsAgo = nowTime - 3 * 365 * 86400000;
-                        const lastPoint = allHist[allHist.length - 1];
-                        const currP = parseFloat(lastPoint.Price || lastPoint.price || '0');
-                        
-                        let p3y: number | null = null;
-                        for (const h of allHist) {
-                            const t = new Date(h.RecordedAt || h.recorded_at).getTime();
-                            if (t >= threeYearsAgo) {
-                                p3y = parseFloat(h.Price || h.price || '0');
-                                break;
-                            }
-                        }
-                        if (p3y && p3y > 0 && currP > 0) {
-                            summaryData['3Y'] = ((currP - p3y) / p3y) * 100;
-                        }
-                        if (!summaryData['5Y'] && allHist.length > 0) {
-                            const firstP = parseFloat(allHist[0].Price || allHist[0].price || '0');
-                            if (firstP > 0 && currP > 0) {
-                                summaryData['5Y'] = ((currP - firstP) / firstP) * 100;
+                    const points: PricePoint[] = [];
+                    for (const h of Array.isArray(allHist) ? allHist : []) {
+                        const price = parseFloat(h.Price || h.price || '0');
+                        const time = new Date(h.RecordedAt || h.recorded_at).getTime();
+                        if (price > 0 && !isNaN(time)) points.push({ time, price });
+                    }
+                    points.sort((a, b) => a.time - b.time);
+                    if (points.length > 0) {
+                        const last = points[points.length - 1];
+                        const fromHistory = periodReturnsFromPoints(last.price, points, last.time);
+                        for (const key of ['3Y', '5Y']) {
+                            if (summaryData[key] === undefined && fromHistory[key] !== undefined) {
+                                summaryData[key] = fromHistory[key];
                             }
                         }
                     }
                 }
             } catch (calcErr) {
-                console.error('3Y hesaplama hatası:', calcErr);
+                console.error('3Y/5Y hesaplama hatası:', calcErr);
             }
         }
 
