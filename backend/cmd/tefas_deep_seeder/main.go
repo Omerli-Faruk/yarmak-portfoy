@@ -89,10 +89,10 @@ func main() {
 		}
 	}
 
-	// Yatırım (YAT) ve emeklilik (EMK) fonları ayrı ayrı istenir. Eskiden yalnız YAT çekiliyordu; 397 emeklilik
-	// fonunun geçmişi yoktu, kullanıcı ekleyince backfill tek fonu ~3 dk'da dolduruyordu (#41). EMK geçmişini ilk kez
-	// doldurmak için: FON_TIPLERI=EMK FORCE_FULL_BACKFILL=true ile bir kez çalıştırın.
-	fonTipleri := []string{"YAT", "EMK"}
+	// Varsayılan yalnızca yatırım fonları (YAT). Emeklilik fonlarının (EMK) geçmişi istenirse FON_TIPLERI=YAT,EMK;
+	// EMK geçmişini sonradan ilk kez doldurmak için FON_TIPLERI=EMK FORCE_FULL_BACKFILL=true (#41). Uygulama emeklilik
+	// fonu geçmişini öne çıkarmadığı için ilk kurulum süresi iki katına çıkmasın diye varsayılana alınmadı.
+	fonTipleri := []string{"YAT"}
 	if v := os.Getenv("FON_TIPLERI"); v != "" {
 		fonTipleri = strings.Split(v, ",")
 	}

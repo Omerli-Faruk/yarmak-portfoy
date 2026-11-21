@@ -59,10 +59,16 @@ Hazır işlemleri olan bir hesapla denemek isterseniz demo hesabını oluşturun
 docker compose run --rm demo_seed
 ```
 
-Fonların geçmiş fiyatları ilk açılışta yoktur; bir fon görüntülendiğinde arka planda indirilir. Tüm fonların 5 yıllık geçmişini baştan indirmek için (20-30 dakika sürer):
+Fonların geçmiş fiyatları ilk açılışta yoktur; bir fon görüntülendiğinde arka planda indirilir. Tüm yatırım fonlarının 5 yıllık geçmişini baştan indirmek için (20-30 dakika sürer):
 
 ```bash
 docker compose run --rm deep_seeder
+```
+
+Emeklilik fonlarının geçmişi de istenirse `FON_TIPLERI` ile seçilir (süre yaklaşık iki katına çıkar):
+
+```bash
+docker compose run --rm -e FON_TIPLERI=YAT,EMK deep_seeder
 ```
 
 Durdurmak için `docker compose down`, veritabanını da silmek için `docker compose down -v`.
@@ -87,6 +93,7 @@ cp .env.example .env
 | `ALLOWED_ORIGINS` | `http://localhost:3000,...` | API'nin kabul ettiği arayüz adresleri (CORS) |
 | `COOKIE_SECURE` | `false` | HTTPS arkasında `true` olmalı |
 | `ENABLE_SWAGGER` | `true` | Swagger arayüzünü kapatmak için `false` |
+| `TRUSTED_PROXIES` | `172.20.0.10` | API'nin `X-Real-IP` başlığına güvendiği adresler (virgülle ayrılır, CIDR yazılabilir). Varsayılan, Docker'da arayüz konteynerinin sabit adresi; böylece hız sınırı her kullanıcının kendi IP'sine uygulanır. Başka adreslerden gelen başlık yok sayılır. |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8080/v1` | Tarayıcının API adresi. Derleme anında koda gömülür, değiştirince `docker compose up -d --build frontend` gerekir. |
 
 Bu ayarlarla kurulum yerel kullanım içindir. İnternete açık bir sunucuda çalıştıracaksanız en azından `JWT_SECRET`, `POSTGRES_PASSWORD`, `COOKIE_SECURE=true` ve `ENABLE_SWAGGER=false` ayarlayın ve önüne HTTPS sağlayan bir ters proxy koyun.
@@ -166,8 +173,8 @@ Tüm uç noktalar `/v1` altındadır; ayrıntılar Swagger arayüzündedir. Kiml
 
 | Grup | Uç noktalar |
 | --- | --- |
-| Hesap | `POST /register`, `POST /login`, `POST /refresh`, `POST /revoke`, `GET /me` |
-| Varlıklar | `GET /assets`, `GET /assets/lookup`, `GET /assets/daily-changes`, `GET /assets/{id}/summary`, `GET /assets/{id}/price-history`, `POST /assets/{id}/backfill` |
+| Hesap | `POST /register`, `POST /login`, `POST /refresh`, `POST /revoke`, `POST /revoke-all`, `GET /me` |
+| Varlıklar | `GET /assets`, `GET/POST /assets/lookup`, `GET /assets/daily-changes`, `GET /assets/{id}/summary`, `GET /assets/{id}/price-history`, `POST /assets/{id}/backfill` |
 | İşlemler | `GET/POST /transactions`, `PUT/DELETE /transactions/{id}` |
 | Portföy | `GET /portfolio/holdings`, `GET /portfolio/summary`, `GET /portfolio/value-history`, `DELETE /portfolio/holdings/{symbol}` |
 | Temettü | `GET/POST /dividends`, `PUT/DELETE /dividends/{id}` |
@@ -176,7 +183,9 @@ Tüm uç noktalar `/v1` altındadır; ayrıntılar Swagger arayüzündedir. Kiml
 | Yönetici | `POST /assets`, `POST /splits` |
 | Sağlık | `GET /healthz` |
 
-Sistemde olmayan bir sembol `GET /assets/lookup` ile yalnızca giriş yapmış kullanıcılar için dış kaynaklardan aranıp eklenir.
+`GET /assets/lookup` yalnızca veritabanında arar. Sistemde olmayan bir sembol `POST /assets/lookup` ile, yalnızca giriş yapmış kullanıcılar için ve kullanıcı başına sınırlı sayıda, dış kaynaklardan aranıp eklenir.
+
+Refresh token her yenilemede değiştirilir. İptal edilmiş eski bir token yeniden kullanılırsa token çalınmış sayılır ve kullanıcının bütün oturumları kapatılır. `POST /revoke-all` ile kullanıcı bütün cihazlardan çıkış yapabilir.
 
 Yeni hesaplar `USER` rolüyle açılır. Yönetici uç noktalarını kullanmak için hesabın rolünü veritabanında değiştirin:
 
