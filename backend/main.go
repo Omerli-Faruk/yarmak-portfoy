@@ -9,7 +9,9 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"yarmak/internal/auth"
@@ -31,11 +33,10 @@ import (
 // @title Yarmak Borsa & Portföy Takip API
 // @version 1.0
 // @description BIST 100 hisseleri, TEFAS yatırım fonları, altın ve döviz portföy takip sistemi REST API dokümantasyonu.
+// @description Kimlik doğrulama HttpOnly çerezlerle yapılır (access_token, refresh_token); Authorization başlığı kullanılmaz.
+// @description Giriş gerektiren uçları denemek için önce bu sayfadan /login'i çalıştırın: tarayıcı çerezi saklar ve
+// @description sonraki istekler aynı adrese gittiği için çerezi kendisi gönderir.
 // @BasePath /v1
-// @securityDefinitions.apikey BearerAuth
-// @in header
-// @name Authorization
-// @description JWT Token'ınızı 'Bearer <token>' formatında giriniz.
 func main() {
 	if err := godotenv.Load(".env"); err != nil {
 		slog.Info(".env dosyası bulunamadı, sistem ortam değişkenleri kullanılacak")
@@ -96,7 +97,11 @@ func main() {
 	servicesPkg := services.NewServices(queries, conn)
 
 	// HTTPS arkasında COOKIE_SECURE=true verilmeli; yerelde http://localhost için false kalır.
-	cookieSecure, _ := strconv.ParseBool(os.Getenv("COOKIE_SECURE"))
+	cookieSecure, err := parseCookieSecure(os.Getenv("COOKIE_SECURE"))
+	if err != nil {
+		slog.Error("COOKIE_SECURE okunamadı; true ya da false yazın", "value", os.Getenv("COOKIE_SECURE"))
+		os.Exit(1)
+	}
 
 	apiCFG := &handlers.ApiConfig{
 		DB:           queries,
@@ -125,10 +130,13 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 	slog.Info("Server Başlatılıyor...", "port", port)
+	// Sunucu açılamazsa (ör. port dolu) düzgün kapanılır ama çıkış kodu 1 olur; Docker ve izleme araçları hatayı görsün.
+	var serverFailed atomic.Bool
 	go func() {
 		// Kendi err'i: dıştaki err'e yazsaydı main'in Shutdown'daki err'iyle aynı anda yazılıp yarış olurdu.
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("Server hata verdi", "error", err)
+			serverFailed.Store(true)
 			stop()
 		}
 	}()
@@ -146,5 +154,19 @@ func main() {
 	if err := conn.Close(); err != nil {
 		slog.Error("Veritabanı kapatılırken hata oluştu", "error", err)
 	}
+	if serverFailed.Load() {
+		slog.Error("Server hatayla kapandı")
+		os.Exit(1)
+	}
 	slog.Info("Server başarıyla kapatıldı")
+}
+
+// parseCookieSecure: boş değer false. "evet" gibi okunamayan bir değer hata döner; eskiden sessizce false
+// sayılıyordu ve HTTPS'te oturum çerezleri Secure bayrağı olmadan yazılıyordu (#17).
+func parseCookieSecure(raw string) (bool, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return false, nil
+	}
+	return strconv.ParseBool(raw)
 }
