@@ -126,8 +126,8 @@ func main() {
 	}
 	slog.Info("Server Başlatılıyor...", "port", port)
 	go func() {
-		err = srv.ListenAndServe()
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		// Kendi err'i: dıştaki err'e yazsaydı main'in Shutdown'daki err'iyle aynı anda yazılıp yarış olurdu.
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("Server hata verdi", "error", err)
 			stop()
 		}
