@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:gate": "node --experimental-strip-types --test src/lib/externalGate.test.ts"
+    "test:gate": "node --experimental-strip-types --test src/lib/externalGate.test.ts",
+    "test:periods": "node --experimental-strip-types --test src/lib/periodReturns.test.ts"
   },
   "dependencies": {
     "axios": "^1.20.0",

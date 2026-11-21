@@ -220,7 +220,8 @@ func (cfg *ApiConfig) HandlerLookupAsset(w http.ResponseWriter, r *http.Request)
 	respondWithJSON(w, http.StatusOK, asset)
 }
 
-// HandlerGetAssetSummary, bir varlığın 1G, 1H, 1A, YTD, 1Y, 3Y, ALL periyotlarındaki getiri yüzdelerini döner.
+// HandlerGetAssetSummary, bir varlığın 1G, 1H, 1A, 3A, 6A, YBB, 1Y, 3Y, 5Y ve Tümü getiri yüzdelerini döner.
+// Fiyat geçmişi bir dönemin başına uzanmıyorsa o dönem cevapta yer almaz.
 func (cfg *ApiConfig) HandlerGetAssetSummary(w http.ResponseWriter, r *http.Request) {
 	assetID, err := parseAssetIDParam(r)
 	if err != nil {
@@ -234,37 +235,18 @@ func (cfg *ApiConfig) HandlerGetAssetSummary(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// DRY & Güvenli Parse: Hataları sessizce yutmak yerine varsayılan 0.0 değeriyle koruma
-	currentP := parseFloatSafe(summary.CurrentP)
-	p1d := parseFloatSafe(summary.P1d)
-	p1w := parseFloatSafe(summary.P1w)
-	p1m := parseFloatSafe(summary.P1m)
-	p3m := parseFloatSafe(summary.P3m)
-	p6m := parseFloatSafe(summary.P6m)
-	pYtd := parseFloatSafe(summary.PYtd)
-	p1y := parseFloatSafe(summary.P1y)
-	pAll := parseFloatSafe(summary.PAll)
-
-	// SQLC ile 3 Yıllık Fiyat Sorgusu
-	p3yStr, err := cfg.DB.GetAssetPrice3Y(r.Context(), assetID)
-	if err != nil {
-		slog.Debug("3 yıllık fiyat verisi sorgulanamadı", "asset_id", assetID, "error", err)
-	}
-	p3y := parseFloatSafe(p3yStr)
-
-	// API sözleşmesini birebir koruyan getiri haritası
-	returns := map[string]float64{
-		"1D":  calculatePercentageReturn(currentP, p1d),
-		"1W":  calculatePercentageReturn(currentP, p1w),
-		"1M":  calculatePercentageReturn(currentP, p1m),
-		"3M":  calculatePercentageReturn(currentP, p3m),
-		"6M":  calculatePercentageReturn(currentP, p6m),
-		"YTD": calculatePercentageReturn(currentP, pYtd),
-		"1Y":  calculatePercentageReturn(currentP, p1y),
-		"3Y":  calculatePercentageReturn(currentP, p3y),
-		"5Y":  calculatePercentageReturn(currentP, pAll),
-		"ALL": calculatePercentageReturn(currentP, pAll),
-	}
+	returns := periodReturns(summary.CurrentP, map[string]float64{
+		"1D":  summary.P1d,
+		"1W":  summary.P1w,
+		"1M":  summary.P1m,
+		"3M":  summary.P3m,
+		"6M":  summary.P6m,
+		"YTD": summary.PYtd,
+		"1Y":  summary.P1y,
+		"3Y":  summary.P3y,
+		"5Y":  summary.P5y,
+		"ALL": summary.PAll,
+	})
 
 	respondWithJSON(w, http.StatusOK, returns)
 }

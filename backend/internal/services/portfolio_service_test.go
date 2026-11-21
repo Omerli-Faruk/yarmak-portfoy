@@ -28,7 +28,12 @@ func summaryFixture() *fakeQuerier {
 
 func TestCalculatePortfolioSummary_Totals(t *testing.T) {
 	q := summaryFixture()
-	q.periodValues = &database.GetPortfolioPeriodValuesRow{ValCur: 7850, Val1d: 7800}
+	// dün: 10×125 + 10×55 + 2×3000 = 7800
+	q.periodPrices = []database.GetPortfolioPeriodPricesRow{
+		{AssetID: 1, Qty: 10, PCur: 130, P1d: 125},
+		{AssetID: 2, Qty: 10, PCur: 55, P1d: 55},
+		{AssetID: 3, Qty: 2, PCur: 3000, P1d: 3000},
+	}
 	s := NewPortfolioService(q, &fakePrices{})
 
 	got, err := s.CalculatePortfolioSummary(context.Background(), 1)

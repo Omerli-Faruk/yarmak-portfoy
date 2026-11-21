@@ -23,7 +23,7 @@ type fakeQuerier struct {
 	dividends    []database.GetUserDividendsRow
 	priceHistory map[int64][]database.PriceHistory
 	splits       map[int64][]database.Split
-	periodValues *database.GetPortfolioPeriodValuesRow
+	periodPrices []database.GetPortfolioPeriodPricesRow
 	nextTxID     int64
 }
 
@@ -175,11 +175,8 @@ func (f *fakeQuerier) GetTotalDividendsSummary(_ context.Context, _ int64) (stri
 	return fmt.Sprintf("%.6f", sum), nil
 }
 
-func (f *fakeQuerier) GetPortfolioPeriodValues(_ context.Context, _ int64) (database.GetPortfolioPeriodValuesRow, error) {
-	if f.periodValues == nil {
-		return database.GetPortfolioPeriodValuesRow{}, sql.ErrNoRows
-	}
-	return *f.periodValues, nil
+func (f *fakeQuerier) GetPortfolioPeriodPrices(_ context.Context, _ int64) ([]database.GetPortfolioPeriodPricesRow, error) {
+	return f.periodPrices, nil
 }
 
 // fakePrices, ağa çıkmayan PriceSource. Geçmiş "SEMBOL|aralık|sıklık" anahtarıyla aranır.

@@ -9,74 +9,97 @@ import (
 	"context"
 )
 
-const getPortfolioPeriodValues = `-- name: GetPortfolioPeriodValues :one
+const getPortfolioPeriodPrices = `-- name: GetPortfolioPeriodPrices :many
 WITH user_holdings AS (
     SELECT asset_id, SUM(CASE WHEN type = 'BUY' THEN amount ELSE -amount END) as qty
     FROM transactions
     WHERE user_id = $1 AND deleted_at IS NULL
     GROUP BY asset_id
     HAVING SUM(CASE WHEN type = 'BUY' THEN amount ELSE -amount END) > 0
-),
-latest_prices AS (
-    SELECT uh.asset_id, uh.qty,
-        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id ORDER BY ph.recorded_at DESC LIMIT 1), 0) as p_cur,
+)
+SELECT uh.asset_id,
+        uh.qty::float AS qty,
+        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id ORDER BY ph.recorded_at DESC LIMIT 1), 0)::float AS p_cur,
         COALESCE(
             (SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at < CURRENT_DATE ORDER BY ph.recorded_at DESC LIMIT 1),
             (SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id ORDER BY ph.recorded_at DESC OFFSET 1 LIMIT 1),
-            0
-        ) as p_1d,
-        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= CURRENT_DATE - INTERVAL '7 days' ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_1w,
-        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= CURRENT_DATE - INTERVAL '30 days' ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_1m,
-        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= CURRENT_DATE - INTERVAL '90 days' ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_3m,
-        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= CURRENT_DATE - INTERVAL '180 days' ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_6m,
-        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= date_trunc('year', CURRENT_DATE) ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_ytd,
-        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= CURRENT_DATE - INTERVAL '1 year' ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_1y,
-        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= CURRENT_DATE - INTERVAL '3 years' ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_3y,
-        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= CURRENT_DATE - INTERVAL '5 years' ORDER BY ph.recorded_at ASC LIMIT 1), 0) as p_5y
-    FROM user_holdings uh
-)
-SELECT 
-    COALESCE(SUM(qty * CASE WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_cur,
-    COALESCE(SUM(qty * CASE WHEN p_1d > 0 THEN p_1d WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_1d,
-    COALESCE(SUM(qty * CASE WHEN p_1w > 0 THEN p_1w WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_1w,
-    COALESCE(SUM(qty * CASE WHEN p_1m > 0 THEN p_1m WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_1m,
-    COALESCE(SUM(qty * CASE WHEN p_3m > 0 THEN p_3m WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_3m,
-    COALESCE(SUM(qty * CASE WHEN p_6m > 0 THEN p_6m WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_6m,
-    COALESCE(SUM(qty * CASE WHEN p_ytd > 0 THEN p_ytd WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_ytd,
-    COALESCE(SUM(qty * CASE WHEN p_1y > 0 THEN p_1y WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_1y,
-    COALESCE(SUM(qty * CASE WHEN p_3y > 0 THEN p_3y WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_3y,
-    COALESCE(SUM(qty * CASE WHEN p_5y > 0 THEN p_5y WHEN p_cur > 0 THEN p_cur ELSE 0 END), 0)::float as val_5y
-FROM latest_prices
+            0)::float AS p_1d,
+        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at <= (CURRENT_DATE + INTERVAL '1 day' - INTERVAL '7 days') ORDER BY ph.recorded_at DESC LIMIT 1), 0)::float AS p_1w,
+        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at <= (CURRENT_DATE + INTERVAL '1 day' - INTERVAL '30 days') ORDER BY ph.recorded_at DESC LIMIT 1), 0)::float AS p_1m,
+        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at <= (CURRENT_DATE + INTERVAL '1 day' - INTERVAL '90 days') ORDER BY ph.recorded_at DESC LIMIT 1), 0)::float AS p_3m,
+        COALESCE((SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at <= (CURRENT_DATE + INTERVAL '1 day' - INTERVAL '180 days') ORDER BY ph.recorded_at DESC LIMIT 1), 0)::float AS p_6m,
+        COALESCE(
+            (SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at < date_trunc('year', CURRENT_DATE) ORDER BY ph.recorded_at DESC LIMIT 1),
+            (SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at >= date_trunc('year', CURRENT_DATE) AND ph.recorded_at <= date_trunc('year', CURRENT_DATE) + INTERVAL '7 days' ORDER BY ph.recorded_at ASC LIMIT 1),
+            0)::float AS p_ytd,
+        COALESCE(
+            (SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at <= (CURRENT_DATE + INTERVAL '1 day' - INTERVAL '1 year') ORDER BY ph.recorded_at DESC LIMIT 1),
+            (SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at > (CURRENT_DATE + INTERVAL '1 day' - INTERVAL '1 year') AND ph.recorded_at <= (CURRENT_DATE + INTERVAL '1 day' - INTERVAL '1 year') + INTERVAL '7 days' ORDER BY ph.recorded_at ASC LIMIT 1),
+            0)::float AS p_1y,
+        COALESCE(
+            (SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at <= (CURRENT_DATE + INTERVAL '1 day' - INTERVAL '3 years') ORDER BY ph.recorded_at DESC LIMIT 1),
+            (SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at > (CURRENT_DATE + INTERVAL '1 day' - INTERVAL '3 years') AND ph.recorded_at <= (CURRENT_DATE + INTERVAL '1 day' - INTERVAL '3 years') + INTERVAL '7 days' ORDER BY ph.recorded_at ASC LIMIT 1),
+            0)::float AS p_3y,
+        COALESCE(
+            (SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at <= (CURRENT_DATE + INTERVAL '1 day' - INTERVAL '5 years') ORDER BY ph.recorded_at DESC LIMIT 1),
+            (SELECT price::float FROM price_history ph WHERE ph.asset_id = uh.asset_id AND ph.recorded_at > (CURRENT_DATE + INTERVAL '1 day' - INTERVAL '5 years') AND ph.recorded_at <= (CURRENT_DATE + INTERVAL '1 day' - INTERVAL '5 years') + INTERVAL '7 days' ORDER BY ph.recorded_at ASC LIMIT 1),
+            0)::float AS p_5y
+FROM user_holdings uh
+ORDER BY uh.asset_id
 `
 
-type GetPortfolioPeriodValuesRow struct {
-	ValCur float64
-	Val1d  float64
-	Val1w  float64
-	Val1m  float64
-	Val3m  float64
-	Val6m  float64
-	ValYtd float64
-	Val1y  float64
-	Val3y  float64
-	Val5y  float64
+type GetPortfolioPeriodPricesRow struct {
+	AssetID int64
+	Qty     float64
+	PCur    float64
+	P1d     float64
+	P1w     float64
+	P1m     float64
+	P3m     float64
+	P6m     float64
+	PYtd    float64
+	P1y     float64
+	P3y     float64
+	P5y     float64
 }
 
-// Portföyün bugünkü ve dönem başlarındaki (1G, 1H, 1A ... 5Y) değeri, fiyat geçmişinden tek sorguda.
-func (q *Queries) GetPortfolioPeriodValues(ctx context.Context, userID int64) (GetPortfolioPeriodValuesRow, error) {
-	row := q.db.QueryRowContext(ctx, getPortfolioPeriodValues, userID)
-	var i GetPortfolioPeriodValuesRow
-	err := row.Scan(
-		&i.ValCur,
-		&i.Val1d,
-		&i.Val1w,
-		&i.Val1m,
-		&i.Val3m,
-		&i.Val6m,
-		&i.ValYtd,
-		&i.Val1y,
-		&i.Val3y,
-		&i.Val5y,
-	)
-	return i, err
+// Elde tutulan her varlık için bugünkü fiyat ve dönem başlarındaki (1G, 1H, 1A ... 5Y) fiyat. Dönem başı fiyatı,
+// kesim gününün sonundaki ya da öncesindeki son kayıttır; geçmiş o tarihe uzanmıyorsa 0 (= veri yok). Eskiden kesimden
+// SONRAKİ ilk kayıt alınıyordu: 1 yıllık geçmişi olan varlıkta "5Y getirisi" aslında 1 yıllık getiriydi (#10).
+// YBB, 1Y, 3Y ve 5Y'de kesimden sonraki 7 gün içindeki ilk kayıt da kabul edilir: 5 yıllık geçmiş tam 5 yıl önce
+// tatile denk gelen bir günde başlıyorsa 5Y kaybolmasın. Dönem getirisi Go'da, o dönemde fiyatı olan varlıklarla hesaplanır.
+func (q *Queries) GetPortfolioPeriodPrices(ctx context.Context, userID int64) ([]GetPortfolioPeriodPricesRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPortfolioPeriodPrices, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPortfolioPeriodPricesRow
+	for rows.Next() {
+		var i GetPortfolioPeriodPricesRow
+		if err := rows.Scan(
+			&i.AssetID,
+			&i.Qty,
+			&i.PCur,
+			&i.P1d,
+			&i.P1w,
+			&i.P1m,
+			&i.P3m,
+			&i.P6m,
+			&i.PYtd,
+			&i.P1y,
+			&i.P3y,
+			&i.P5y,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

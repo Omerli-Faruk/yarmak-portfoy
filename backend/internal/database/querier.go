@@ -38,16 +38,23 @@ type Querier interface {
 	GetAssetDailyChangesAll(ctx context.Context) ([]GetAssetDailyChangesAllRow, error)
 	// İki fiyat kaydı olmayan varlıklar atlanır; LEFT JOIN'de NULL dönen prev_p tüm isteği 500'e düşürüyordu
 	GetAssetDailyChangesByIDs(ctx context.Context, dollar_1 []int64) ([]GetAssetDailyChangesByIDsRow, error)
-	GetAssetPrice3Y(ctx context.Context, assetID int64) (string, error)
 	GetAssetPriceHistory(ctx context.Context, assetID int64) ([]PriceHistory, error)
 	GetAssetPriceHistoryMonthly(ctx context.Context, arg GetAssetPriceHistoryMonthlyParams) ([]PriceHistory, error)
 	GetAssetPriceHistoryRange(ctx context.Context, arg GetAssetPriceHistoryRangeParams) ([]PriceHistory, error)
 	GetAssetPriceHistoryWeekly(ctx context.Context, arg GetAssetPriceHistoryWeeklyParams) ([]PriceHistory, error)
+	// Varlığın en son fiyatı ve dönem başlarındaki fiyatı. Dönem başı = kesim gününün sonundaki ya da öncesindeki son kayıt
+	// (YBB, 1Y, 3Y, 5Y'de yoksa kesimden sonraki 7 gün içindeki ilk kayıt); geçmiş o kadar eskiye uzanmıyorsa 0
+	// (= veri yok). Eskiden kesimden sonraki ilk kayıt alınıyordu, kısa geçmişte dönem etiketi yanlıştı (#10).
+	// p_all varlığın bilinen ilk fiyatı ("Tümü").
 	GetAssetReturnsSummary(ctx context.Context, assetID int64) (GetAssetReturnsSummaryRow, error)
 	GetDividendByIDAndUser(ctx context.Context, arg GetDividendByIDAndUserParams) (Dividend, error)
 	GetPendingAlertsForAsset(ctx context.Context, assetID int64) ([]PriceAlert, error)
-	// Portföyün bugünkü ve dönem başlarındaki (1G, 1H, 1A ... 5Y) değeri, fiyat geçmişinden tek sorguda.
-	GetPortfolioPeriodValues(ctx context.Context, userID int64) (GetPortfolioPeriodValuesRow, error)
+	// Elde tutulan her varlık için bugünkü fiyat ve dönem başlarındaki (1G, 1H, 1A ... 5Y) fiyat. Dönem başı fiyatı,
+	// kesim gününün sonundaki ya da öncesindeki son kayıttır; geçmiş o tarihe uzanmıyorsa 0 (= veri yok). Eskiden kesimden
+	// SONRAKİ ilk kayıt alınıyordu: 1 yıllık geçmişi olan varlıkta "5Y getirisi" aslında 1 yıllık getiriydi (#10).
+	// YBB, 1Y, 3Y ve 5Y'de kesimden sonraki 7 gün içindeki ilk kayıt da kabul edilir: 5 yıllık geçmiş tam 5 yıl önce
+	// tatile denk gelen bir günde başlıyorsa 5Y kaybolmasın. Dönem getirisi Go'da, o dönemde fiyatı olan varlıklarla hesaplanır.
+	GetPortfolioPeriodPrices(ctx context.Context, userID int64) ([]GetPortfolioPeriodPricesRow, error)
 	GetTotalCommission(ctx context.Context, userID int64) (string, error)
 	GetTotalDividendsSummary(ctx context.Context, userID int64) (string, error)
 	GetTotalRealizedPnL(ctx context.Context, userID int64) (string, error)

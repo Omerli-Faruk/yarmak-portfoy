@@ -120,42 +120,18 @@ func (s *PortfolioService) CalculatePortfolioSummary(ctx context.Context, userID
 		totalProfitUSD = totalCombinedProfit / usdRate
 	}
 
-	periodReturns := make(map[string]float64)
-	periodValues := make(map[string]float64)
+	periodReturns := map[string]float64{}
+	periodValues := map[string]float64{}
 
 	if len(holdings) > 0 && totalPortfolioValue > 0 {
-		pv, err := s.DB.GetPortfolioPeriodValues(ctx, userID)
-		if err == nil && pv.ValCur > 0 {
-			calcPct := func(baseVal float64) float64 {
-				if baseVal <= 0 {
-					return 0.0
-				}
-				return round2(((pv.ValCur - baseVal) / baseVal) * 100.0)
+		rows, err := s.DB.GetPortfolioPeriodPrices(ctx, userID)
+		if err == nil {
+			periodReturns, periodValues = portfolioPeriodReturns(rows)
+			if _, ok := periodValues["CURRENT"]; ok {
+				periodReturns["ALL"] = round2(capitalProfitLossPercentage)
 			}
-
-			periodValues["CURRENT"] = round2(pv.ValCur)
-			periodValues["1D"] = round2(pv.Val1d)
-			periodValues["1W"] = round2(pv.Val1w)
-			periodValues["1M"] = round2(pv.Val1m)
-			periodValues["3M"] = round2(pv.Val3m)
-			periodValues["6M"] = round2(pv.Val6m)
-			periodValues["YTD"] = round2(pv.ValYtd)
-			periodValues["1Y"] = round2(pv.Val1y)
-			periodValues["3Y"] = round2(pv.Val3y)
-			periodValues["5Y"] = round2(pv.Val5y)
-
-			periodReturns["1D"] = calcPct(pv.Val1d)
-			periodReturns["1W"] = calcPct(pv.Val1w)
-			periodReturns["1M"] = calcPct(pv.Val1m)
-			periodReturns["3M"] = calcPct(pv.Val3m)
-			periodReturns["6M"] = calcPct(pv.Val6m)
-			periodReturns["YTD"] = calcPct(pv.ValYtd)
-			periodReturns["1Y"] = calcPct(pv.Val1y)
-			periodReturns["3Y"] = calcPct(pv.Val3y)
-			periodReturns["5Y"] = calcPct(pv.Val5y)
-			periodReturns["ALL"] = round2(capitalProfitLossPercentage)
-		} else if err != nil {
-			slog.Debug("Portföy dönemsel değerleri sorgulanamadı", "user_id", userID, "error", err)
+		} else {
+			slog.Debug("Portföy dönem fiyatları sorgulanamadı", "user_id", userID, "error", err)
 		}
 	}
 
@@ -178,4 +154,55 @@ func (s *PortfolioService) CalculatePortfolioSummary(ctx context.Context, userID
 		PeriodReturns:               periodReturns,
 		PeriodValues:                periodValues,
 	}, nil
+}
+
+// portfolioPeriods, dönem kodu ve satırdan o dönemin başındaki fiyatı okuyan fonksiyon.
+var portfolioPeriods = []struct {
+	key  string
+	base func(database.GetPortfolioPeriodPricesRow) float64
+}{
+	{"1D", func(r database.GetPortfolioPeriodPricesRow) float64 { return r.P1d }},
+	{"1W", func(r database.GetPortfolioPeriodPricesRow) float64 { return r.P1w }},
+	{"1M", func(r database.GetPortfolioPeriodPricesRow) float64 { return r.P1m }},
+	{"3M", func(r database.GetPortfolioPeriodPricesRow) float64 { return r.P3m }},
+	{"6M", func(r database.GetPortfolioPeriodPricesRow) float64 { return r.P6m }},
+	{"YTD", func(r database.GetPortfolioPeriodPricesRow) float64 { return r.PYtd }},
+	{"1Y", func(r database.GetPortfolioPeriodPricesRow) float64 { return r.P1y }},
+	{"3Y", func(r database.GetPortfolioPeriodPricesRow) float64 { return r.P3y }},
+	{"5Y", func(r database.GetPortfolioPeriodPricesRow) float64 { return r.P5y }},
+}
+
+// portfolioPeriodReturns, eldeki varlıkların bugünkü ve dönem başı fiyatlarından portföyün dönem getirilerini hesaplar.
+// Bir dönemin getirisi yalnızca o dönemin başında fiyatı bilinen varlıklarla hesaplanır. Hiçbir varlığın fiyatı yoksa
+// dönem haritaya yazılmaz: arayüz "veri yok" der, %0 göstermez (#10). Eskiden fiyatı olmayan varlık "değişmedi"
+// sayılıp getiriyi sulandırıyordu. periodValues[dönem]: o varlıkların dönem başındaki toplam değeri.
+func portfolioPeriodReturns(rows []database.GetPortfolioPeriodPricesRow) (returns, values map[string]float64) {
+	returns = map[string]float64{}
+	values = map[string]float64{}
+
+	var current float64
+	for _, r := range rows {
+		if r.PCur > 0 {
+			current += r.Qty * r.PCur
+		}
+	}
+	if current <= 0 {
+		return returns, values
+	}
+	values["CURRENT"] = round2(current)
+
+	for _, p := range portfolioPeriods {
+		var then, now float64
+		for _, r := range rows {
+			if base := p.base(r); base > 0 && r.PCur > 0 {
+				then += r.Qty * base
+				now += r.Qty * r.PCur
+			}
+		}
+		if then > 0 {
+			values[p.key] = round2(then)
+			returns[p.key] = round2((now - then) / then * 100)
+		}
+	}
+	return returns, values
 }

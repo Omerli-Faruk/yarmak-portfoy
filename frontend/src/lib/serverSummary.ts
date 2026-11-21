@@ -2,6 +2,7 @@
 // Sonuçlar birkaç dakika bellekte tutulur.
 
 import { gatedFetch } from './externalGate';
+import { periodReturnsFromPoints } from './periodReturns';
 
 const BACKEND_URL = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080/v1';
 
@@ -123,12 +124,6 @@ export async function getAccurateYahooSummary(ticker: string): Promise<AccurateS
         const current = Number(meta?.regularMarketPrice) || points[points.length - 1].price;
         const now = points[points.length - 1].time;
 
-        const calcRet = (targetTime: number) => {
-            const pt = points.find(p => p.time >= targetTime);
-            if (!pt || pt.price === 0) return 0;
-            return ((current - pt.price) / pt.price) * 100;
-        };
-
         let ret1D = meta?.regularMarketChangePercent !== undefined ? meta.regularMarketChangePercent : 0;
         if (!ret1D && points.length >= 2) {
             const prev = points[points.length - 2].price;
@@ -142,27 +137,12 @@ export async function getAccurateYahooSummary(ticker: string): Promise<AccurateS
             prevClose = points[points.length - 2].price;
         }
 
-        const ret1W = calcRet(now - 7 * 86400000);
-        const ret1M = calcRet(now - 30 * 86400000);
-        const ret3M = calcRet(now - 90 * 86400000);
-        const ret6M = calcRet(now - 180 * 86400000);
-        const startOfYear = new Date(new Date(now).getFullYear(), 0, 1).getTime();
-        const retYTD = calcRet(startOfYear);
-        const ret1Y = calcRet(now - 365 * 86400000);
-        const ret3Y = calcRet(now - 3 * 365 * 86400000);
-        const ret5Y = calcRet(now - 5 * 365 * 86400000);
         const retALL = ((current - points[0].price) / points[0].price) * 100;
 
+        // Geçmişi dönemin başına uzanmayan dönem yazılmaz (#10); eskiden 5Y yoksa Tümü yazılıyordu.
         const summaryResult: Record<string, number> = {
             '1D': ret1D,
-            '1W': ret1W,
-            '1M': ret1M,
-            '3M': ret3M,
-            '6M': ret6M,
-            'YTD': retYTD,
-            '1Y': ret1Y,
-            '3Y': ret3Y,
-            '5Y': ret5Y || retALL,
+            ...periodReturnsFromPoints(current, points, now),
             'ALL': retALL,
         };
 
@@ -212,34 +192,14 @@ export async function getAccurateGoldSummary(assetId: number): Promise<AccurateS
         const current = points[points.length - 1].price;
         const now = points[points.length - 1].time;
 
-        const calcRet = (targetTime: number) => {
-            const pt = points.find(p => p.time >= targetTime);
-            if (!pt || pt.price === 0) return 0;
-            return ((current - pt.price) / pt.price) * 100;
-        };
-
         const ret1D = points.length >= 2 ? ((current - points[points.length - 2].price) / points[points.length - 2].price) * 100 : 0;
         const prevClose = points.length >= 2 ? points[points.length - 2].price : current;
 
-        const ret1W = calcRet(now - 7 * 86400000);
-        const ret1M = calcRet(now - 30 * 86400000);
-        const ret3M = calcRet(now - 90 * 86400000);
-        const ret6M = calcRet(now - 180 * 86400000);
-        const startOfYear = new Date(new Date(now).getFullYear(), 0, 1).getTime();
-        const retYTD = calcRet(startOfYear);
-        const ret1Y = ((current - points[0].price) / points[0].price) * 100;
-
+        // Geçmiş 1 yıllık çekiliyor: 3Y ve 5Y verisi yok, yazılmaz (eskiden %0 yazılıyordu, #10).
         const summaryResult: Record<string, number> = {
             '1D': ret1D,
-            '1W': ret1W,
-            '1M': ret1M,
-            '3M': ret3M,
-            '6M': ret6M,
-            'YTD': retYTD,
-            '1Y': ret1Y,
-            '3Y': 0,
-            '5Y': 0,
-            'ALL': ret1Y,
+            ...periodReturnsFromPoints(current, points, now),
+            'ALL': ((current - points[0].price) / points[0].price) * 100,
         };
 
         const result: AccurateSummaryResult = {

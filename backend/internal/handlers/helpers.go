@@ -48,6 +48,22 @@ func calculatePercentageReturn(current, previous float64) float64 {
 	return ((current - previous) / previous) * 100.0
 }
 
+// periodReturns, bugünkü fiyat ve dönem başı fiyatlarından getiri yüzdelerini üretir. Dönem başı fiyatı bilinmeyen (0)
+// dönem haritaya hiç yazılmaz: arayüz o dönemi göstermez. Eskiden %0 yazılıyordu, "hiç değişmedi" ile "veri yok"
+// ayırt edilemiyordu (#10).
+func periodReturns(current float64, bases map[string]float64) map[string]float64 {
+	out := make(map[string]float64, len(bases))
+	if current <= 0 {
+		return out
+	}
+	for period, base := range bases {
+		if base > 0 {
+			out[period] = calculatePercentageReturn(current, base)
+		}
+	}
+	return out
+}
+
 // mapRangeToYahooFinance, frontend'den gelen aralık kodunu (örn: 1W, 1M, 1Y) Yahoo Finance API'sinin beklediği parametreye eşler.
 func mapRangeToYahooFinance(rangeParam string) string {
 	switch strings.ToUpper(strings.TrimSpace(rangeParam)) {
