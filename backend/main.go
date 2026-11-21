@@ -119,6 +119,10 @@ func main() {
 	serverCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Piyasalar sayfasının ilk isteği soğuk veritabanı önbelleğinde 10 sn'yi buluyordu (#51). Aynı sorgu işçiler
+	// başlamadan bir kez çalıştırılır; sonraki istekler ~30 ms.
+	warmUpQueries(serverCtx, queries)
+
 	// 2. Arka Plan Scraper Worker'ı context ile Başlat
 	var scraperWg sync.WaitGroup
 	scraper.StartScraperWorker(serverCtx, queries, &scraperWg)
@@ -159,6 +163,19 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("Server başarıyla kapatıldı")
+}
+
+// warmUpQueries, sık kullanılan ağır sorguyu açılışta bir kez çalıştırıp veritabanı önbelleğini ısıtır.
+// En fazla 20 sn bekler; başaramazsa yalnızca uyarı yazar, açılışı durdurmaz.
+func warmUpQueries(ctx context.Context, q *database.Queries) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	start := time.Now()
+	if _, err := q.GetAssetDailyChangesAll(ctx); err != nil {
+		slog.Warn("Açılış ısıtma sorgusu tamamlanamadı", "error", err)
+		return
+	}
+	slog.Info("Veritabanı önbelleği ısıtıldı", "sure", time.Since(start).Round(time.Millisecond))
 }
 
 // parseCookieSecure: boş değer false. "evet" gibi okunamayan bir değer hata döner; eskiden sessizce false

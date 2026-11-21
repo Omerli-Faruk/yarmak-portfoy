@@ -34,7 +34,7 @@ func processNextBackfill(ctx context.Context, db *database.Queries) {
 	// kilit arada açılıyordu; iki sunucu aynı işi alabiliyordu.
 	task, err := db.ClaimNextBackfillTask(ctx)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) { // iş yoksa sessizce bekleriz, veritabanı hatası loglanır
+		if !errors.Is(err, sql.ErrNoRows) && !stopping(ctx) { // iş yoksa sessizce bekleriz, veritabanı hatası loglanır
 			slog.Error("Backfill kuyruğundan iş alınamadı", "error", err)
 		}
 		return
@@ -55,6 +55,11 @@ func processNextBackfill(ctx context.Context, db *database.Queries) {
 		processErr = backfillBIST(ctx, db, asset)
 	}
 
+	if processErr != nil && stopping(ctx) {
+		// Kapanışta yarıda kalan iş FAILED yazılmaz; PROCESSING kalır, 10 dk sonra yeniden alınır.
+		slog.Info("Backfill sunucu kapandığı için yarıda kaldı", "symbol", asset.Symbol)
+		return
+	}
 	if processErr != nil {
 		slog.Error("Backfill başarısız", "symbol", asset.Symbol, "error", processErr)
 		_ = db.UpdateBackfillTaskStatus(ctx, database.UpdateBackfillTaskStatusParams{

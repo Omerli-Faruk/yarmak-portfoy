@@ -9,11 +9,22 @@ import (
 	"yarmak/internal/database"
 )
 
+// tefasStartupDelay, açılıştaki ilk TEFAS turunun ne kadar sonra başlayacağı.
+const tefasStartupDelay = time.Minute
+
 func StartTefasDailyWorker(ctx context.Context, db *database.Queries, wg *sync.WaitGroup) {
 	wg.Go(func() {
 		slog.Info("TEFAS Daily worker başlatıldı")
 
-		// Sunucu ilk açıldığında hemen bir kez güncel verileri çek
+		// Açılışta bir kez güncel verileri çek, ama 1 dakika sonra: ~3.300 fonun yazımı açılıştaki ilk kullanıcı
+		// isteklerinin (piyasalar sayfası) okumalarıyla diskte yarışıyor, ilk istek 10 sn'yi buluyordu (#51).
+		// Fon fiyatları akşam açıklandığı için 1 dakikalık gecikmenin bir bedeli yok.
+		select {
+		case <-ctx.Done():
+			slog.Info("TEFAS Daily worker durduruldu")
+			return
+		case <-time.After(tefasStartupDelay):
+		}
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -87,7 +98,9 @@ func runTefasDailyCycle(ctx context.Context, db *database.Queries) {
 	// Geçmişe yazılacak ve alarmı kontrol edilecek aktif fonlar (işlemi, izleme kaydı ya da bekleyen alarmı olanlar)
 	activeAssets, err := db.GetActiveAssets(ctx)
 	if err != nil {
-		slog.Error("Aktif varlıklar çekilemedi", "error", err)
+		if !stopping(ctx) {
+			slog.Error("Aktif varlıklar çekilemedi", "error", err)
+		}
 		return
 	}
 	activeMap := make(map[string]bool)
@@ -99,6 +112,10 @@ func runTefasDailyCycle(ctx context.Context, db *database.Queries) {
 
 	updateCount, failed := 0, 0
 	for _, fund := range allFunds {
+		if stopping(ctx) {
+			slog.Info("TEFAS yazımı sunucu kapandığı için yarıda bırakıldı", "yazilan", updateCount)
+			return
+		}
 		// Sıfır veya negatif fiyat koruması: TEFAS henüz fiyat açıklamamışsa veya veri eksikse mevcut fiyatı bozma
 		if fund.Price <= 0 {
 			continue

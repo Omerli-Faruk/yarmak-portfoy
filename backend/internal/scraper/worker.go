@@ -33,7 +33,7 @@ func StartScraperWorker(ctx context.Context, db *database.Queries, wg *sync.Wait
 				return
 			case <-ticker.C:
 				runSafely("oturum temizliği", func() {
-					if err := db.DeleteExpiredRefreshTokens(ctx); err != nil {
+					if err := db.DeleteExpiredRefreshTokens(ctx); err != nil && !stopping(ctx) {
 						slog.Warn("Süresi dolmuş oturumlar silinemedi", "error", err)
 					}
 				})
@@ -45,7 +45,7 @@ func StartScraperWorker(ctx context.Context, db *database.Queries, wg *sync.Wait
 // checkAndTriggerAlerts, varlığın yeni fiyatı, kullanıcıların belirlediği fiyat alarmlarını geçiyorsa bu alarmları tetikler ve loglar.
 func checkAndTriggerAlerts(ctx context.Context, db database.Querier, asset database.Asset, newPrice float64, priceStr string) {
 	alerts, err := db.GetPendingAlertsForAsset(ctx, asset.ID)
-	if err != nil {
+	if err != nil && !stopping(ctx) {
 		slog.Error("Fiyat alarmı sorgulanırken hata oluştu", "symbol", asset.Symbol, "error", err)
 	}
 
@@ -66,6 +66,12 @@ func checkAndTriggerAlerts(ctx context.Context, db database.Querier, asset datab
 			)
 		}
 	}
+}
+
+// stopping: sunucu kapanırken işçilerin context'i iptal edilir; o andaki veritabanı ve ağ hataları ("context canceled",
+// "canceling statement") gerçek hata değildir, loglanmaz. Eskiden her kapanışta ERROR satırları çıkıyordu (#59).
+func stopping(ctx context.Context) bool {
+	return ctx.Err() != nil
 }
 
 // runSafely, bir işçi turunu panic'e karşı korur. recover olmayan bir goroutine'de panic bütün süreci

@@ -98,11 +98,17 @@ func runBistCycle(ctx context.Context, db *database.Queries, stocks, fx bool) {
 	slog.Info("BIST fiyat taraması başlatılıyor", "stocks", stocks, "fx", fx)
 	assets, err := db.GetActiveAssets(ctx)
 	if err != nil {
-		slog.Error("Aktif hisseler çekilemedi", "error", err)
+		if !stopping(ctx) {
+			slog.Error("Aktif hisseler çekilemedi", "error", err)
+		}
 		return
 	}
 
 	for _, asset := range assets {
+		if stopping(ctx) {
+			slog.Info("BIST taraması sunucu kapandığı için yarıda bırakıldı")
+			return
+		}
 		if asset.AssetType == "FON" {
 			continue // Fon fiyatları TEFAS günlük döngüsünde güncellenir
 		}
